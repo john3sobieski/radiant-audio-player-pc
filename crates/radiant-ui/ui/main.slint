@@ -47,6 +47,8 @@ component IconButton inherits Rectangle {
 // Seek bar: click or drag. Calls `seek` with 0..1 when the mouse is released.
 component SeekBar inherits Rectangle {
     in property <float> ratio;
+    /// Track length in seconds (0 = unknown); the wheel seeks by 5 s per notch.
+    in property <float> duration-secs: 0;
     callback seek(float);
     property <float> drag: 0;
     height: 20px;
@@ -92,6 +94,14 @@ component SeekBar inherits Rectangle {
             if (self.pressed) {
                 root.drag = root.ratio-at(self.mouse-x);
             }
+        }
+        scroll-event(event) => {
+            if (root.duration-secs <= 0) {
+                return reject;
+            }
+            // One wheel notch = 60 px in Slint; wheel up = forward.
+            root.seek(max(0.0, min(1.0, root.ratio + (event.delta-y / 60px) * 5.0 / root.duration-secs)));
+            return accept;
         }
     }
 }
@@ -140,6 +150,11 @@ component VolumeBar inherits Rectangle {
                 root.edited(root.ratio-at(self.mouse-x));
             }
         }
+        scroll-event(event) => {
+            // 5 % per wheel notch, wheel up = louder.
+            root.edited(max(0.0, min(1.0, root.value + (event.delta-y / 60px) * 0.05)));
+            return accept;
+        }
     }
 }
 
@@ -148,6 +163,8 @@ component FxSlider inherits Rectangle {
     in property <float> lo: 0;
     in property <float> hi: 1;
     in property <float> value;
+    /// Change per wheel notch.
+    in property <float> wheel-step: 0.5;
     callback edited(float);
     height: 20px;
 
@@ -190,6 +207,10 @@ component FxSlider inherits Rectangle {
                 root.edited(root.value-at(self.mouse-x));
             }
         }
+        scroll-event(event) => {
+            root.edited(max(root.lo, min(root.hi, root.value + (event.delta-y / 60px) * root.wheel-step)));
+            return accept;
+        }
     }
 }
 
@@ -200,6 +221,7 @@ component FxRow inherits Rectangle {
     in property <float> lo: 0;
     in property <float> hi: 1;
     in property <float> value;
+    in property <float> wheel-step: 0.5;
     callback edited(float);
     height: 22px;
 
@@ -216,6 +238,7 @@ component FxRow inherits Rectangle {
             lo: root.lo;
             hi: root.hi;
             value: root.value;
+            wheel-step: root.wheel-step;
             edited(v) => { root.edited(v); }
         }
         Text {
@@ -301,7 +324,7 @@ export component MainWindow inherits Window {
     title: "Radiant";
     preferred-width: 900px;
     preferred-height: 640px;
-    min-width: 480px;
+    min-width: 640px;
     min-height: 360px;
     background: Theme.bg;
     default-font-size: 14px;
@@ -316,6 +339,8 @@ export component MainWindow inherits Window {
     in property <float> progress;
     in property <string> position-text;
     in property <string> duration-text;
+    /// Track length in seconds, 0 if unknown (used for wheel seeking).
+    in property <float> duration-secs: 0;
     in property <bool> shuffle;
     /// 0 = off, 1 = all, 2 = one.
     in property <int> repeat-mode;
@@ -461,6 +486,7 @@ export component MainWindow inherits Window {
                 }
                 SeekBar {
                     ratio: root.progress;
+                    duration-secs: root.duration-secs;
                     seek(r) => { root.seek(r); }
                 }
                 Text {
@@ -471,117 +497,113 @@ export component MainWindow inherits Window {
                 }
             }
 
-            HorizontalLayout {
-                padding-left: 24px;
-                padding-right: 24px;
-                spacing: 16px;
+            // Control row: every block has an absolute position, so the title length
+            // can never move the buttons. Transport is centered in the window, the title
+            // takes the space to its left, volume sits at the right edge.
+            Rectangle {
+                vertical-stretch: 1;
 
-                // Left: now playing.
                 Text {
+                    x: 24px;
+                    width: max(0px, (parent.width - 348px) / 2 - 24px - 16px);
+                    height: parent.height;
                     text: root.now-playing;
                     color: Theme.text;
                     font-weight: 600;
                     vertical-alignment: center;
-                    horizontal-stretch: 1;
                     overflow: elide;
                 }
 
-                // Center: transport controls (placed by hand so sizes stay fixed).
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 348px;
+                // Center: transport controls.
+                Rectangle {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    width: 348px;
+                    height: 52px;
+                    ToggleText {
+                        x: 0px;
+                        y: 12px;
+                        width: 84px;
+                        height: 28px;
+                        text: "Shuffle";
+                        active: root.shuffle;
+                        clicked => { root.shuffle-changed(!root.shuffle); }
+                    }
+                    IconButton {
+                        x: 96px;
+                        y: 6px;
+                        width: 40px;
+                        height: 40px;
+                        commands: "M 1 0 H 4 V 20 H 1 Z M 19 0 V 20 L 6 10 Z";
+                        clicked => { root.previous-track(); }
+                    }
+                    IconButton {
+                        x: 148px;
+                        y: 0px;
+                        width: 52px;
                         height: 52px;
-                        ToggleText {
-                            x: 0px;
-                            y: 12px;
-                            width: 84px;
-                            height: 28px;
-                            text: "Shuffle";
-                            active: root.shuffle;
-                            clicked => { root.shuffle-changed(!root.shuffle); }
-                        }
-                        IconButton {
-                            x: 96px;
-                            y: 6px;
-                            width: 40px;
-                            height: 40px;
-                            commands: "M 1 0 H 4 V 20 H 1 Z M 19 0 V 20 L 6 10 Z";
-                            clicked => { root.previous-track(); }
-                        }
-                        IconButton {
-                            x: 148px;
-                            y: 0px;
-                            width: 52px;
-                            height: 52px;
-                            icon-size: 20px;
-                            icon-color: #ffffff;
-                            idle-color: Theme.accent;
-                            hover-color: Theme.accent.brighter(0.2);
-                            commands: root.is-playing
-                                ? "M 3 0 H 8 V 20 H 3 Z M 12 0 H 17 V 20 H 12 Z"
-                                : "M 4 0 L 19 10 L 4 20 Z";
-                            clicked => { root.toggle-play(); }
-                        }
-                        IconButton {
-                            x: 212px;
-                            y: 6px;
-                            width: 40px;
-                            height: 40px;
-                            commands: "M 16 0 H 19 V 20 H 16 Z M 1 0 L 14 10 L 1 20 Z";
-                            clicked => { root.next-track(); }
-                        }
-                        ToggleText {
-                            x: 264px;
-                            y: 12px;
-                            width: 84px;
-                            height: 28px;
-                            text: root.repeat-mode == 0 ? "Repeat"
-                                : root.repeat-mode == 1 ? "Repeat all" : "Repeat one";
-                            active: root.repeat-mode != 0;
-                            clicked => { root.repeat-changed(root.repeat-mode >= 2 ? 0 : root.repeat-mode + 1); }
-                        }
+                        icon-size: 20px;
+                        icon-color: #ffffff;
+                        idle-color: Theme.accent;
+                        hover-color: Theme.accent.brighter(0.2);
+                        commands: root.is-playing
+                            ? "M 3 0 H 8 V 20 H 3 Z M 12 0 H 17 V 20 H 12 Z"
+                            : "M 4 0 L 19 10 L 4 20 Z";
+                        clicked => { root.toggle-play(); }
+                    }
+                    IconButton {
+                        x: 212px;
+                        y: 6px;
+                        width: 40px;
+                        height: 40px;
+                        commands: "M 16 0 H 19 V 20 H 16 Z M 1 0 L 14 10 L 1 20 Z";
+                        clicked => { root.next-track(); }
+                    }
+                    ToggleText {
+                        x: 264px;
+                        y: 12px;
+                        width: 84px;
+                        height: 28px;
+                        text: root.repeat-mode == 0 ? "Repeat"
+                            : root.repeat-mode == 1 ? "Repeat all" : "Repeat one";
+                        active: root.repeat-mode != 0;
+                        clicked => { root.repeat-changed(root.repeat-mode >= 2 ? 0 : root.repeat-mode + 1); }
                     }
                 }
 
                 // Right: volume (click the speaker to mute / unmute).
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    alignment: center;
-                    HorizontalLayout {
-                        alignment: end;
-                        Rectangle {
-                            width: 150px;
-                            height: 28px;
-                            IconButton {
-                                x: 0px;
-                                y: 0px;
-                                width: 28px;
-                                height: 28px;
-                                icon-size: 16px;
-                                icon-color: root.volume <= 0.001 ? Theme.muted : Theme.text;
-                                commands: "M 1 7 H 5 L 11 2 V 18 L 5 13 H 1 Z M 13 6 Q 16.5 10 13 14 L 14.5 15.5 Q 19.5 10 14.5 4.5 Z";
-                                clicked => {
-                                    if (root.volume > 0.001) {
-                                        root.volume-before-mute = root.volume;
-                                        root.volume = 0.0;
-                                    } else {
-                                        root.volume = root.volume-before-mute;
-                                    }
-                                    root.volume-changed(root.volume);
-                                }
+                Rectangle {
+                    x: parent.width - 24px - self.width;
+                    y: (parent.height - self.height) / 2;
+                    width: 150px;
+                    height: 28px;
+                    IconButton {
+                        x: 0px;
+                        y: 0px;
+                        width: 28px;
+                        height: 28px;
+                        icon-size: 16px;
+                        icon-color: root.volume <= 0.001 ? Theme.muted : Theme.text;
+                        commands: "M 1 7 H 5 L 11 2 V 18 L 5 13 H 1 Z M 13 6 Q 16.5 10 13 14 L 14.5 15.5 Q 19.5 10 14.5 4.5 Z";
+                        clicked => {
+                            if (root.volume > 0.001) {
+                                root.volume-before-mute = root.volume;
+                                root.volume = 0.0;
+                            } else {
+                                root.volume = root.volume-before-mute;
                             }
-                            VolumeBar {
-                                x: 36px;
-                                y: 4px;
-                                width: 110px;
-                                height: 20px;
-                                value: root.volume;
-                                edited(v) => {
-                                    root.volume = v;
-                                    root.volume-changed(v);
-                                }
-                            }
+                            root.volume-changed(root.volume);
+                        }
+                    }
+                    VolumeBar {
+                        x: 36px;
+                        y: 4px;
+                        width: 110px;
+                        height: 20px;
+                        value: root.volume;
+                        edited(v) => {
+                            root.volume = v;
+                            root.volume-changed(v);
                         }
                     }
                 }
@@ -658,6 +680,7 @@ export component MainWindow inherits Window {
                 label: "Speed";
                 lo: -2;
                 hi: 2;
+                wheel-step: 0.1;
                 value: root.speed-t;
                 // 1x..3x faster, -1x..-3x slower (pitch is kept).
                 value-text: (root.speed-t >= 0 ? "" : "-")
@@ -693,6 +716,7 @@ export component MainWindow inherits Window {
                 label: "Subsonic";
                 lo: 0;
                 hi: 100;
+                wheel-step: 1;
                 value: root.fx-subsonic;
                 value-text: "\{root.fx-subsonic.round()} %";
                 edited(v) => {

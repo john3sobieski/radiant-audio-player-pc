@@ -53,10 +53,12 @@ fn main() -> Result<(), slint::PlatformError> {
             match status.duration_ms {
                 Some(d) if d > 0 => {
                     ui.set_duration_text(fmt_time(d).into());
+                    ui.set_duration_secs(d as f32 / 1000.0);
                     ui.set_progress((status.position_ms as f32 / d as f32).clamp(0.0, 1.0));
                 }
                 _ => {
                     ui.set_duration_text("".into());
+                    ui.set_duration_secs(0.0);
                     ui.set_progress(0.0);
                 }
             }

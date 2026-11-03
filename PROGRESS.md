@@ -29,6 +29,8 @@ from the log the owner pastes.
 - Slint: `VolumeBar` callback renamed `changed` -> `edited` (avoids a possible clash with Slint's `changed` keyword).
 - `radiant-ui`: Slint window, folder button, background scan, restyled dark UI (custom widgets, `Theme` global, current-row highlight, player bar with icon buttons).
 
+- UI fixes (NOT compiled yet): player-bar control row now uses absolute positions (title elides in the space left of the centered transport block, volume pinned right), so a long track title no longer shifts Shuffle/Prev/Play/Next/Repeat; window min-width raised 480 -> 640 so blocks cannot overlap. Mouse wheel over any slider (seek, volume, all sound sliders): `scroll-event` on each slider's TouchArea; 1 notch (= 60 px in Slint) = 5 s seek / 5 % volume / `wheel-step` (0.5 dB EQ/bass/treble, 0.1 speed, 1 % subsonic). `duration-secs` property fed from Rust.
+
 ## Next (order from README section 11)
 1. Playback: test seek (MP3 without a length header has no seek: add a duration fallback), then skip bad files, device change, rubato resampler, measure CPU.
 2. Library UI: tabs, search, sort, player bar, cover, quality badge; tag reading in `radiant-core`.
