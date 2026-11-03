@@ -41,6 +41,9 @@ pub enum Command {
     /// Seek to a position given as 0.0..=1.0 of the track length.
     SeekRatio(f32),
     SetRepeat(RepeatMode),
+    SetShuffle(bool),
+    /// 0.0..=1.0 on the volume slider (a squared curve is applied: sounds more even).
+    SetVolume(f32),
     Quit,
 }
 
@@ -52,6 +55,8 @@ pub struct Status {
     pub position_ms: u64,
     /// `None` when the file does not report its length (seeking is disabled then).
     pub duration_ms: Option<u64>,
+    pub repeat: RepeatMode,
+    pub shuffle: bool,
     pub error: Option<String>,
 }
 
@@ -99,6 +104,8 @@ struct Output {
     flush_ack: Arc<AtomicU32>,
     /// Frames given to the device since the last flush (position tracking).
     played: Arc<AtomicU64>,
+    /// Linear gain as `f32` bits (set by `SetVolume`).
+    volume: Arc<AtomicU32>,
 }
 
 fn open_output() -> Result<Output, String> {
@@ -121,14 +128,19 @@ fn open_output() -> Result<Output, String> {
     let flush_req = Arc::new(AtomicU32::new(0));
     let flush_ack = Arc::new(AtomicU32::new(0));
     let played = Arc::new(AtomicU64::new(0));
+    let volume = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
 
     let cb_playing = playing.clone();
     let cb_req = flush_req.clone();
     let cb_ack = flush_ack.clone();
     let cb_played = played.clone();
+    let cb_volume = volume.clone();
     let up = 1.0 / (FADE_IN_SECS * rate as f32);
     let down = 1.0 / (FADE_OUT_SECS * rate as f32);
     let mut gain = 0.0_f32;
+    // Volume changes are smoothed (about 20 ms) so dragging the slider does not crackle.
+    let mut vol = 1.0_f32;
+    let vol_coef = 1.0 - (-1.0 / (0.02 * rate as f32)).exp();
     let mut seen_req = 0_u32;
 
     let stream = device
@@ -145,6 +157,7 @@ fn open_output() -> Result<Output, String> {
                     cb_ack.store(req, Ordering::Release);
                 }
                 let target = if cb_playing.load(Ordering::Relaxed) { 1.0_f32 } else { 0.0 };
+                let target_vol = f32::from_bits(cb_volume.load(Ordering::Relaxed));
                 let mut frames_out = 0_u64;
                 for frame in data.chunks_mut(channels) {
                     if target == 0.0 && gain <= 0.0 {
@@ -156,8 +169,10 @@ fn open_output() -> Result<Output, String> {
                     } else if gain > target {
                         gain = (gain - down).max(target);
                     }
+                    vol += (target_vol - vol) * vol_coef;
+                    let total = gain * vol;
                     for s in frame.iter_mut() {
-                        *s = cons.pop().unwrap_or(0.0) * gain;
+                        *s = cons.pop().unwrap_or(0.0) * total;
                     }
                     frames_out += 1;
                 }
@@ -172,7 +187,7 @@ fn open_output() -> Result<Output, String> {
     // Some backends start the stream right away; start paused so idle costs nothing.
     let _ = stream.pause();
 
-    Ok(Output { stream, prod, capacity, rate, channels, playing, flush_req, flush_ack, played })
+    Ok(Output { stream, prod, capacity, rate, channels, playing, flush_req, flush_ack, played, volume })
 }
 
 struct Engine {
@@ -209,6 +224,8 @@ fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
                 current: None,
                 position_ms: 0,
                 duration_ms: None,
+                repeat: RepeatMode::Off,
+                shuffle: false,
                 error: Some(e),
             });
             // No audio: just wait until the player is dropped.
@@ -284,6 +301,8 @@ impl Engine {
             current: self.transport.current().map(|p| p.to_path_buf()),
             position_ms: self.position_ms(),
             duration_ms: self.duration_ms,
+            repeat: self.transport.repeat,
+            shuffle: self.transport.shuffle(),
             error: self.error.clone(),
         });
     }
@@ -325,6 +344,11 @@ impl Engine {
             }
             Command::SeekRatio(r) => self.seek_ratio(r),
             Command::SetRepeat(r) => self.transport.repeat = r,
+            Command::SetShuffle(on) => self.transport.set_shuffle(on),
+            Command::SetVolume(v) => {
+                let v = v.clamp(0.0, 1.0);
+                self.out.volume.store((v * v).to_bits(), Ordering::Relaxed);
+            }
             Command::Quit => return false,
         }
         self.notify();

@@ -3,12 +3,12 @@
 
 //! Radiant UI binary.
 //! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine.
-//! TODO: remember the chosen folder (settings file), rescan on start, shuffle/repeat
-//!       buttons, everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
+//! TODO: remember the chosen folder and the volume (settings file), rescan on start,
+//!       everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
 
 slint::include_modules!();
 
-use radiant_audio::{Command, PlayState, Player};
+use radiant_audio::{Command, PlayState, Player, RepeatMode};
 use slint::{ModelRc, SharedString, VecModel};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -38,6 +38,12 @@ fn main() -> Result<(), slint::PlatformError> {
             .map_or(-1, |i| i as i32);
         let _ = weak.upgrade_in_event_loop(move |ui| {
             ui.set_current_index(index);
+            ui.set_shuffle(status.shuffle);
+            ui.set_repeat_mode(match status.repeat {
+                RepeatMode::Off => 0,
+                RepeatMode::All => 1,
+                RepeatMode::One => 2,
+            });
             ui.set_position_text(fmt_time(status.position_ms).into());
             match status.duration_ms {
                 Some(d) if d > 0 => {
@@ -77,6 +83,25 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let player = player.clone();
         ui.on_toggle_play(move || player.send(Command::Toggle));
+    }
+    {
+        let player = player.clone();
+        ui.on_volume_changed(move |v| player.send(Command::SetVolume(v)));
+    }
+    {
+        let player = player.clone();
+        ui.on_shuffle_changed(move |on| player.send(Command::SetShuffle(on)));
+    }
+    {
+        let player = player.clone();
+        ui.on_repeat_changed(move |mode| {
+            let mode = match mode {
+                1 => RepeatMode::All,
+                2 => RepeatMode::One,
+                _ => RepeatMode::Off,
+            };
+            player.send(Command::SetRepeat(mode));
+        });
     }
     {
         let player = player.clone();

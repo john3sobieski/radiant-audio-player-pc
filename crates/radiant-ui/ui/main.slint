@@ -1,5 +1,5 @@
 // Main window.
-// DONE: seek bar with times; header (folder button, status), track list (left-aligned, hover/current highlight, click = play),
+// DONE: volume slider (+ mute), shuffle / repeat toggles, seek bar with times; header (folder button, status), track list (left-aligned, hover/current highlight, click = play),
 //       bottom player bar (prev / play-pause / next, now playing), empty state. Custom widgets, no std-widgets.
 // TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, volume, cover,
 //       quality badge, themes (light / true-black / system), translations via @tr().
@@ -96,6 +96,76 @@ component SeekBar inherits Rectangle {
     }
 }
 
+// Volume slider: sets the value while the mouse is pressed or dragged.
+component VolumeBar inherits Rectangle {
+    in property <float> value;
+    callback changed(float);
+    height: 20px;
+
+    function ratio-at(x: length) -> float {
+        return max(0.0, min(1.0, x / root.width));
+    }
+
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.surface-hover;
+        Rectangle {
+            x: 0px;
+            width: parent.width * root.value;
+            height: parent.height;
+            border-radius: 2px;
+            background: Theme.accent;
+        }
+    }
+    Rectangle {
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: Theme.text;
+        visible: ta.has-hover || ta.pressed;
+        x: root.width * root.value - self.width / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                root.changed(root.ratio-at(self.mouse-x));
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.changed(root.ratio-at(self.mouse-x));
+            }
+        }
+    }
+}
+
+// Text toggle (Shuffle / Repeat): accent color when active.
+component ToggleText inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+
+    border-radius: 14px;
+    background: root.active ? Theme.accent.with-alpha(0.2)
+        : ta.has-hover ? Theme.surface-hover : transparent;
+
+    Text {
+        text: root.text;
+        color: root.active ? Theme.accent : Theme.muted;
+        font-size: 12px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 component PillButton inherits Rectangle {
     in property <string> text;
     callback clicked();
@@ -138,6 +208,11 @@ export component MainWindow inherits Window {
     in property <float> progress;
     in property <string> position-text;
     in property <string> duration-text;
+    in property <bool> shuffle;
+    /// 0 = off, 1 = all, 2 = one.
+    in property <int> repeat-mode;
+    in-out property <float> volume: 1.0;
+    private property <float> volume-before-mute: 0.7;
 
     callback choose-folder();
     callback play-track(int);
@@ -145,6 +220,9 @@ export component MainWindow inherits Window {
     callback next-track();
     callback previous-track();
     callback seek(float);
+    callback volume-changed(float);
+    callback shuffle-changed(bool);
+    callback repeat-changed(int);
 
     VerticalLayout {
         // ---- header ----
@@ -257,6 +335,7 @@ export component MainWindow inherits Window {
                 padding-right: 24px;
                 spacing: 16px;
 
+                // Left: now playing.
                 Text {
                     text: root.now-playing;
                     color: Theme.text;
@@ -266,40 +345,105 @@ export component MainWindow inherits Window {
                     overflow: elide;
                 }
 
-                HorizontalLayout {
-                    spacing: 12px;
+                // Center: transport controls (placed by hand so sizes stay fixed).
+                VerticalLayout {
                     alignment: center;
-                    IconButton {
-                        y: (parent.height - self.height) / 2;
-                        width: 40px;
-                        height: 40px;
-                        commands: "M 1 0 H 4 V 20 H 1 Z M 19 0 V 20 L 6 10 Z";
-                        clicked => { root.previous-track(); }
-                    }
-                    IconButton {
-                        y: (parent.height - self.height) / 2;
-                        width: 52px;
+                    Rectangle {
+                        width: 348px;
                         height: 52px;
-                        icon-size: 20px;
-                        icon-color: #ffffff;
-                        idle-color: Theme.accent;
-                        hover-color: Theme.accent.brighter(0.2);
-                        commands: root.is-playing
-                            ? "M 3 0 H 8 V 20 H 3 Z M 12 0 H 17 V 20 H 12 Z"
-                            : "M 4 0 L 19 10 L 4 20 Z";
-                        clicked => { root.toggle-play(); }
-                    }
-                    IconButton {
-                        y: (parent.height - self.height) / 2;
-                        width: 40px;
-                        height: 40px;
-                        commands: "M 16 0 H 19 V 20 H 16 Z M 1 0 L 14 10 L 1 20 Z";
-                        clicked => { root.next-track(); }
+                        ToggleText {
+                            x: 0px;
+                            y: 12px;
+                            width: 84px;
+                            height: 28px;
+                            text: "Shuffle";
+                            active: root.shuffle;
+                            clicked => { root.shuffle-changed(!root.shuffle); }
+                        }
+                        IconButton {
+                            x: 96px;
+                            y: 6px;
+                            width: 40px;
+                            height: 40px;
+                            commands: "M 1 0 H 4 V 20 H 1 Z M 19 0 V 20 L 6 10 Z";
+                            clicked => { root.previous-track(); }
+                        }
+                        IconButton {
+                            x: 148px;
+                            y: 0px;
+                            width: 52px;
+                            height: 52px;
+                            icon-size: 20px;
+                            icon-color: #ffffff;
+                            idle-color: Theme.accent;
+                            hover-color: Theme.accent.brighter(0.2);
+                            commands: root.is-playing
+                                ? "M 3 0 H 8 V 20 H 3 Z M 12 0 H 17 V 20 H 12 Z"
+                                : "M 4 0 L 19 10 L 4 20 Z";
+                            clicked => { root.toggle-play(); }
+                        }
+                        IconButton {
+                            x: 212px;
+                            y: 6px;
+                            width: 40px;
+                            height: 40px;
+                            commands: "M 16 0 H 19 V 20 H 16 Z M 1 0 L 14 10 L 1 20 Z";
+                            clicked => { root.next-track(); }
+                        }
+                        ToggleText {
+                            x: 264px;
+                            y: 12px;
+                            width: 84px;
+                            height: 28px;
+                            text: root.repeat-mode == 0 ? "Repeat"
+                                : root.repeat-mode == 1 ? "Repeat all" : "Repeat one";
+                            active: root.repeat-mode != 0;
+                            clicked => { root.repeat-changed(root.repeat-mode >= 2 ? 0 : root.repeat-mode + 1); }
+                        }
                     }
                 }
 
-                // Balances the title on the left so the controls stay centered.
-                Rectangle { horizontal-stretch: 1; }
+                // Right: volume (click the speaker to mute / unmute).
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    HorizontalLayout {
+                        alignment: end;
+                        Rectangle {
+                            width: 150px;
+                            height: 28px;
+                            IconButton {
+                                x: 0px;
+                                y: 0px;
+                                width: 28px;
+                                height: 28px;
+                                icon-size: 16px;
+                                icon-color: root.volume <= 0.001 ? Theme.muted : Theme.text;
+                                commands: "M 1 7 H 5 L 11 2 V 18 L 5 13 H 1 Z M 13 6 Q 16.5 10 13 14 L 14.5 15.5 Q 19.5 10 14.5 4.5 Z";
+                                clicked => {
+                                    if (root.volume > 0.001) {
+                                        root.volume-before-mute = root.volume;
+                                        root.volume = 0.0;
+                                    } else {
+                                        root.volume = root.volume-before-mute;
+                                    }
+                                    root.volume-changed(root.volume);
+                                }
+                            }
+                            VolumeBar {
+                                x: 36px;
+                                y: 4px;
+                                width: 110px;
+                                height: 20px;
+                                value: root.volume;
+                                changed(v) => {
+                                    root.volume = v;
+                                    root.volume-changed(v);
+                                }
+                            }
+                        }
+                    }
+                }
             }
             }
         }
