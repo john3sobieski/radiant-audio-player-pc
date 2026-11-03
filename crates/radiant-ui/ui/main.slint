@@ -1,0 +1,38 @@
+// Main window. DONE: folder button + track list.
+// TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, player bar,
+//       themes (light / true-black / system), translations via @tr().
+import { Button, ListView } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "Radiant";
+    preferred-width: 800px;
+    preferred-height: 600px;
+
+    in property <[string]> tracks;
+    in property <string> status;
+    callback choose-folder();
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            Button {
+                text: "Choose music folder";
+                clicked => { root.choose-folder(); }
+            }
+            Text {
+                text: root.status;
+                vertical-alignment: center;
+            }
+        }
+
+        ListView {
+            for t in root.tracks : Text {
+                text: t;
+                height: 24px;
+            }
+        }
+    }
+}

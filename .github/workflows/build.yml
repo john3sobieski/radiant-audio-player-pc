@@ -1,0 +1,26 @@
+# Windows CI: runs tests, builds the release exe, uploads it as an artifact.
+# TODO: add a release job (zip + GitHub Release) when the app is usable.
+# TODO: separate legacy workflow for Windows 7/8.1 only if that stretch goal is pursued.
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace --target x86_64-pc-windows-msvc
+      - name: Build release
+        run: cargo build --release -p radiant-ui --target x86_64-pc-windows-msvc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radiant-windows-x64
+          path: target/x86_64-pc-windows-msvc/release/radiant.exe

@@ -1,0 +1,8 @@
+[package]
+name = "radiant-stems"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+# TODO: add `ort` (optional feature, keeps the base app small), `realfft`, `rubato`, a SHA-256 crate.
+[dependencies]

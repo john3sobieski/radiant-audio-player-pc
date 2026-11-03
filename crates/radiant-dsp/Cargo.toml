@@ -1,0 +1,8 @@
+[package]
+name = "radiant-dsp"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+# TODO: add `realfft` (phase vocoder) and `rubato` (resampler) when those are implemented.
+[dependencies]

@@ -1,0 +1,26 @@
+# Workspace root. One crate per concern (see README.md section 6).
+# STATUS: see PROGRESS.md for what is done and what to do next.
+[workspace]
+resolver = "2"
+members = [
+    "crates/radiant-core",
+    "crates/radiant-dsp",
+    "crates/radiant-audio",
+    "crates/radiant-stems",
+    "crates/radiant-cloud",
+    "crates/radiant-ui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license-file = "LICENSE.md"
+authors = ["john3sobieski"]
+
+# Release profile from README section 6 (size + speed).
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,10 @@
+[package]
+name = "radiant-core"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+# No dependencies on purpose for now (std only).
+# TODO: add `symphonia` (tags, duration, bitrate) when real tag reading is implemented.
+# TODO: add `serde` + `serde_json` (or similar) when settings/playlist persistence is added.
+[dependencies]
