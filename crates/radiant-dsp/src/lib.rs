@@ -7,6 +7,9 @@
 //! Rules: no allocation in `process`, settings replaced whole (version counter), f64 filter state.
 //! Read Android `AudioFx.kt` before porting. Keep the numbers from the README.
 
+pub mod presets;
+pub mod stretch;
+
 /// Centre frequencies of the 12 EQ bands, Hz (README 5.1).
 pub const EQ_BANDS_HZ: [f64; 12] = [
     32.0, 64.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 3500.0, 6000.0, 9000.0, 12500.0, 16000.0,

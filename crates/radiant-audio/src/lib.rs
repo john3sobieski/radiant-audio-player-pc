@@ -27,5 +27,6 @@ mod engine;
 mod transport;
 
 pub use engine::{Command, Player, Status};
+pub use radiant_dsp::presets::{EqPreset, EQ_PRESETS};
 pub use radiant_dsp::AudioFxSettings;
 pub use transport::{PlayState, RepeatMode, Transport};

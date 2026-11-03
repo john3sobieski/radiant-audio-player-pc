@@ -275,6 +275,28 @@ component PillButton inherits Rectangle {
     }
 }
 
+// Small preset chip in the sound panel.
+component PillPreset inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+
+    height: 26px;
+    border-radius: 13px;
+    background: ta.has-hover ? Theme.surface-hover : Theme.bg;
+
+    Text {
+        text: root.text;
+        color: Theme.text;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Radiant";
     preferred-width: 900px;
@@ -326,6 +348,9 @@ export component MainWindow inherits Window {
     callback treble-changed(float);
     callback subsonic-changed(float);
     callback eq-changed(int, float);
+    /// Names of the EQ presets (set by Rust from radiant-dsp).
+    in property <[string]> eq-preset-names;
+    callback eq-preset-selected(int);
     callback fx-reset();
 
     VerticalLayout {
@@ -566,7 +591,7 @@ export component MainWindow inherits Window {
         x: root.width - self.width - 20px;
         y: 60px;
         width: 360px;
-        height: min(root.height - 70px, 520px);
+        height: min(root.height - 70px, 600px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -661,6 +686,19 @@ export component MainWindow inherits Window {
                 font-size: 12px;
                 height: 24px;
                 vertical-alignment: bottom;
+            }
+            // Presets: two rows of five buttons.
+            for row in [0, 1] : Rectangle {
+                height: 30px;
+                // Explicit positions (no layout): 5 chips of 62 px with 4 px gaps = 326 px.
+                for name[k] in root.eq-preset-names : PillPreset {
+                    x: (k - row * 5) * 66px;
+                    y: 2px;
+                    width: 62px;
+                    visible: k >= row * 5 && k < row * 5 + 5;
+                    text: name;
+                    clicked => { root.eq-preset-selected(k); }
+                }
             }
             for g[i] in root.eq-gains : FxRow {
                 label: root.eq-labels[i] + " Hz";

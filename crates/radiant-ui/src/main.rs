@@ -9,7 +9,7 @@
 
 slint::include_modules!();
 
-use radiant_audio::{AudioFxSettings, Command, PlayState, Player, RepeatMode};
+use radiant_audio::{AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -174,6 +174,21 @@ fn main() -> Result<(), slint::PlatformError> {
             eq_model.set_row_data(i, v); // moves the slider
             let mut s = fx.borrow_mut();
             s.eq_gains_db[i] = v;
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
+    let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
+    ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
+    {
+        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        ui.on_eq_preset_selected(move |i| {
+            let Some(preset) = EQ_PRESETS.get(i as usize) else { return };
+            for (band, g) in preset.gains.iter().enumerate() {
+                eq_model.set_row_data(band, *g);
+            }
+            let mut s = fx.borrow_mut();
+            s.eq_gains_db = preset.gains;
             player.send(Command::SetFx(s.clone()));
         });
     }
