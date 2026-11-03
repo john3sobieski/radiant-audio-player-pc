@@ -99,7 +99,7 @@ component SeekBar inherits Rectangle {
 // Volume slider: sets the value while the mouse is pressed or dragged.
 component VolumeBar inherits Rectangle {
     in property <float> value;
-    callback changed(float);
+    callback edited(float);
     height: 20px;
 
     function ratio-at(x: length) -> float {
@@ -132,13 +132,99 @@ component VolumeBar inherits Rectangle {
         mouse-cursor: pointer;
         pointer-event(event) => {
             if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
-                root.changed(root.ratio-at(self.mouse-x));
+                root.edited(root.ratio-at(self.mouse-x));
             }
         }
         moved => {
             if (self.pressed) {
-                root.changed(root.ratio-at(self.mouse-x));
+                root.edited(root.ratio-at(self.mouse-x));
             }
+        }
+    }
+}
+
+// Slider over any range (sound settings): sets the value while the mouse is pressed or dragged.
+component FxSlider inherits Rectangle {
+    in property <float> lo: 0;
+    in property <float> hi: 1;
+    in property <float> value;
+    callback edited(float);
+    height: 20px;
+
+    property <float> fraction: (root.value - root.lo) / (root.hi - root.lo);
+
+    function value-at(x: length) -> float {
+        return root.lo + (root.hi - root.lo) * max(0.0, min(1.0, x / root.width));
+    }
+
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.surface-hover;
+        Rectangle {
+            x: 0px;
+            width: parent.width * max(0.0, min(1.0, root.fraction));
+            height: parent.height;
+            border-radius: 2px;
+            background: Theme.accent;
+        }
+    }
+    Rectangle {
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: Theme.text;
+        x: root.width * max(0.0, min(1.0, root.fraction)) - self.width / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                root.edited(root.value-at(self.mouse-x));
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.edited(root.value-at(self.mouse-x));
+            }
+        }
+    }
+}
+
+// One row of the sound panel: label, slider, value text.
+component FxRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value-text;
+    in property <float> lo: 0;
+    in property <float> hi: 1;
+    in property <float> value;
+    callback edited(float);
+    height: 22px;
+
+    HorizontalLayout {
+        spacing: 10px;
+        Text {
+            text: root.label;
+            width: 64px;
+            color: Theme.muted;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+        FxSlider {
+            lo: root.lo;
+            hi: root.hi;
+            value: root.value;
+            edited(v) => { root.edited(v); }
+        }
+        Text {
+            text: root.value-text;
+            width: 56px;
+            color: Theme.text;
+            font-size: 12px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
         }
     }
 }
@@ -214,6 +300,17 @@ export component MainWindow inherits Window {
     in-out property <float> volume: 1.0;
     private property <float> volume-before-mute: 0.7;
 
+    // Sound settings panel (values are owned here; Rust keeps the same numbers for the engine).
+    in-out property <bool> show-sound: false;
+    in-out property <bool> fx-normalize: false;
+    in-out property <bool> fx-mono: false;
+    in-out property <float> fx-bass: 0;
+    in-out property <float> fx-treble: 0;
+    in-out property <float> fx-subsonic: 0;
+    /// 12 equalizer gains in dB (model owned by Rust).
+    in property <[float]> eq-gains;
+    private property <[string]> eq-labels: ["32", "64", "125", "250", "500", "1k", "2k", "3.5k", "6k", "9k", "12.5k", "16k"];
+
     callback choose-folder();
     callback play-track(int);
     callback toggle-play();
@@ -223,6 +320,13 @@ export component MainWindow inherits Window {
     callback volume-changed(float);
     callback shuffle-changed(bool);
     callback repeat-changed(int);
+    callback normalize-changed(bool);
+    callback mono-changed(bool);
+    callback bass-changed(float);
+    callback treble-changed(float);
+    callback subsonic-changed(float);
+    callback eq-changed(int, float);
+    callback fx-reset();
 
     VerticalLayout {
         // ---- header ----
@@ -245,6 +349,11 @@ export component MainWindow inherits Window {
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                     overflow: elide;
+                }
+                PillButton {
+                    y: (parent.height - self.height) / 2;
+                    text: "Sound";
+                    clicked => { root.show-sound = !root.show-sound; }
                 }
                 PillButton {
                     y: (parent.height - self.height) / 2;
@@ -436,7 +545,7 @@ export component MainWindow inherits Window {
                                 width: 110px;
                                 height: 20px;
                                 value: root.volume;
-                                changed(v) => {
+                                edited(v) => {
                                     root.volume = v;
                                     root.volume-changed(v);
                                 }
@@ -445,6 +554,121 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+            }
+        }
+    }
+
+    // ---- sound panel (overlay): click outside to close ----
+    if root.show-sound : TouchArea {
+        clicked => { root.show-sound = false; }
+    }
+    if root.show-sound : Rectangle {
+        x: root.width - self.width - 20px;
+        y: 60px;
+        width: 360px;
+        height: min(root.height - 70px, 520px);
+        background: Theme.surface;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.surface-hover;
+        clip: true;
+
+        // Swallows clicks so the panel does not close itself.
+        TouchArea { }
+
+        VerticalLayout {
+            padding: 16px;
+            spacing: 4px;
+            alignment: start;
+
+            Text {
+                text: "Sound";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 700;
+                height: 26px;
+            }
+            Rectangle {
+                height: 32px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ToggleText {
+                        width: 96px;
+                        height: 28px;
+                        text: "Normalize";
+                        active: root.fx-normalize;
+                        clicked => {
+                            root.fx-normalize = !root.fx-normalize;
+                            root.normalize-changed(root.fx-normalize);
+                        }
+                    }
+                    ToggleText {
+                        width: 64px;
+                        height: 28px;
+                        text: "Mono";
+                        active: root.fx-mono;
+                        clicked => {
+                            root.fx-mono = !root.fx-mono;
+                            root.mono-changed(root.fx-mono);
+                        }
+                    }
+                    ToggleText {
+                        width: 64px;
+                        height: 28px;
+                        text: "Reset";
+                        active: false;
+                        clicked => { root.fx-reset(); }
+                    }
+                }
+            }
+            FxRow {
+                label: "Bass";
+                lo: 0;
+                hi: 15;
+                value: root.fx-bass;
+                value-text: "\{(root.fx-bass * 2).round() / 2} dB";
+                edited(v) => {
+                    root.fx-bass = v;
+                    root.bass-changed(v);
+                }
+            }
+            FxRow {
+                label: "Treble";
+                lo: 0;
+                hi: 15;
+                value: root.fx-treble;
+                value-text: "\{(root.fx-treble * 2).round() / 2} dB";
+                edited(v) => {
+                    root.fx-treble = v;
+                    root.treble-changed(v);
+                }
+            }
+            FxRow {
+                label: "Subsonic";
+                lo: 0;
+                hi: 100;
+                value: root.fx-subsonic;
+                value-text: "\{root.fx-subsonic.round()} %";
+                edited(v) => {
+                    root.fx-subsonic = v;
+                    root.subsonic-changed(v);
+                }
+            }
+            Text {
+                text: "Equalizer";
+                color: Theme.muted;
+                font-size: 12px;
+                height: 24px;
+                vertical-alignment: bottom;
+            }
+            for g[i] in root.eq-gains : FxRow {
+                label: root.eq-labels[i] + " Hz";
+                lo: -12;
+                hi: 12;
+                value: g;
+                value-text: "\{(g * 2).round() / 2} dB";
+                edited(v) => { root.eq-changed(i, v); }
             }
         }
     }

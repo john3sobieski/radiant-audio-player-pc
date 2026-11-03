@@ -19,8 +19,9 @@ use std::time::{Duration, Instant};
 
 const FADE_IN_SECS: f32 = 0.3;
 const FADE_OUT_SECS: f32 = 0.25;
-/// Ring buffer length in seconds of audio.
-const RING_SECS: usize = 1;
+/// Ring buffer length in milliseconds of audio. The effects run before the ring buffer, so this is
+/// also how long a sound-settings change takes to become audible (was 1000 ms, shortened for that).
+const RING_MS: usize = 400;
 /// How often the engine tops up the ring buffer while playing.
 const FILL_INTERVAL: Duration = Duration::from_millis(50);
 /// After pausing, keep the stream alive this long (fade-out), then pause it (0 % CPU).
@@ -44,6 +45,8 @@ pub enum Command {
     SetShuffle(bool),
     /// 0.0..=1.0 on the volume slider (a squared curve is applied: sounds more even).
     SetVolume(f32),
+    /// Replace the sound settings (EQ, bass, treble, subsonic, normalization, mono).
+    SetFx(AudioFxSettings),
     Quit,
 }
 
@@ -122,7 +125,8 @@ fn open_output() -> Result<Output, String> {
     let channels = config.channels as usize;
     let rate = config.sample_rate.0;
 
-    let capacity = rate as usize * channels * RING_SECS;
+    // Whole frames only (a multiple of `channels`).
+    let capacity = (rate as usize * RING_MS / 1000) * channels;
     let (prod, mut cons) = rtrb::RingBuffer::<f32>::new(capacity);
     let playing = Arc::new(AtomicBool::new(false));
     let flush_req = Arc::new(AtomicU32::new(0));
@@ -349,6 +353,7 @@ impl Engine {
                 let v = v.clamp(0.0, 1.0);
                 self.out.volume.store((v * v).to_bits(), Ordering::Relaxed);
             }
+            Command::SetFx(settings) => self.fx.set_settings(settings),
             Command::Quit => return false,
         }
         self.notify();

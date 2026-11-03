@@ -18,6 +18,13 @@ from the log the owner pastes.
 - `radiant-stems`: constants only (models, sizes, SHA-256, STFT sizes).
 - `radiant-cloud`: empty placeholder.
 - Volume (smoothed, squared curve, mute by clicking the speaker), shuffle, repeat button: written, not compiled yet.
+- Sound settings wired end to end (NOT compiled yet): `Command::SetFx(AudioFxSettings)` in `radiant-audio`
+  (applied on the engine thread, `AudioFxSettings` re-exported from `radiant-audio`); UI "Sound" button opens an
+  overlay panel (Normalize, Mono, Reset, Bass, Treble, Subsonic, 12 EQ sliders). Rust (`main.rs`) owns the settings
+  and sends the whole set on every change. Slider steps: 0.5 dB (EQ/bass/treble), 1 % (subsonic).
+  The ring buffer was shortened from 1000 ms to `RING_MS = 400` so a change is audible within 0.4 s
+  (the DSP runs before the ring buffer). If crackling appears on weak machines, raise `RING_MS` in `engine.rs`.
+- Slint: `VolumeBar` callback renamed `changed` -> `edited` (avoids a possible clash with Slint's `changed` keyword).
 - `radiant-ui`: Slint window, folder button, background scan, restyled dark UI (custom widgets, `Theme` global, current-row highlight, player bar with icon buttons).
 
 ## Next (order from README section 11)
@@ -25,12 +32,12 @@ from the log the owner pastes.
 2. Investigate Windows 7/8.1 quickly and report to the owner.
 3. Playback: test seek (MP3 without a length header has no seek: add a duration fallback), then skip bad files, device change, rubato resampler, measure CPU.
 4. Library UI: tabs, search, sort, player bar, cover, quality badge; tag reading in `radiant-core`.
-5. DSP: AudioFx chain DONE (tests green). Next: wire settings into engine/UI (atomics/version counter or message), then phase vocoder (5.2), EQ presets (EqPresets.kt), per-track EQ.
+5. DSP: AudioFx chain DONE, settings wired to engine/UI (needs CI check). Next: EQ presets (EqPresets.kt, 10 presets), EQ modes OFF/GLOBAL/PER_TRACK, then phase vocoder (5.2).
 6. Lyrics, track details, themes, languages (convert Android strings.xml by script, do not retranslate).
 7. App lock, 8. Stems, 9. Dropbox, 10. SMTC/media keys, installer, user README.
 
 ## Open items
-- Remember volume, shuffle, repeat and the music folder between launches (settings file, not written yet).
+- Remember volume, shuffle, repeat, the music folder and the sound settings between launches (settings file, not written yet).
 - Slint license: royalty-free option needs attribution; add notice.
 - Opus decoder: symphonia has none; choose a solution.
 - Settings persistence format not chosen yet (serde + JSON/TOML is the likely choice).

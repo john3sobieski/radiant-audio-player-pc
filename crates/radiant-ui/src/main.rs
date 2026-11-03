@@ -2,14 +2,16 @@
 #![cfg_attr(all(not(debug_assertions), windows), windows_subsystem = "windows")]
 
 //! Radiant UI binary.
-//! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine.
+//! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine,
+//!       sound panel (EQ, bass, treble, subsonic, normalize, mono) wired to the engine (not saved between launches yet).
 //! TODO: remember the chosen folder and the volume (settings file), rescan on start,
 //!       everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
 
 slint::include_modules!();
 
-use radiant_audio::{Command, PlayState, Player, RepeatMode};
-use slint::{ModelRc, SharedString, VecModel};
+use radiant_audio::{AudioFxSettings, Command, PlayState, Player, RepeatMode};
+use slint::{Model, ModelRc, SharedString, VecModel};
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -114,6 +116,85 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let player = player.clone();
         ui.on_previous_track(move || player.send(Command::Previous));
+    }
+
+    // ---- sound settings (panel in the UI -> engine) ----
+    // Rust owns the current settings; every change sends the whole set to the engine.
+    let fx = Rc::new(RefCell::new(AudioFxSettings::default()));
+    let eq_model: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0_f32; 12]));
+    ui.set_eq_gains(ModelRc::from(eq_model.clone()));
+    {
+        let (player, fx) = (player.clone(), fx.clone());
+        ui.on_normalize_changed(move |on| {
+            let mut s = fx.borrow_mut();
+            s.normalize = on;
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx) = (player.clone(), fx.clone());
+        ui.on_mono_changed(move |on| {
+            let mut s = fx.borrow_mut();
+            s.mono = on;
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx) = (player.clone(), fx.clone());
+        ui.on_bass_changed(move |v| {
+            let mut s = fx.borrow_mut();
+            s.bass_db = (v * 2.0).round() / 2.0; // 0.5 dB steps
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx) = (player.clone(), fx.clone());
+        ui.on_treble_changed(move |v| {
+            let mut s = fx.borrow_mut();
+            s.treble_db = (v * 2.0).round() / 2.0;
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx) = (player.clone(), fx.clone());
+        ui.on_subsonic_changed(move |v| {
+            let mut s = fx.borrow_mut();
+            s.subsonic_percent = v.round(); // whole percent
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        ui.on_eq_changed(move |i, v| {
+            let i = i as usize;
+            if i >= 12 {
+                return;
+            }
+            let v = (v * 2.0).round() / 2.0;
+            eq_model.set_row_data(i, v); // moves the slider
+            let mut s = fx.borrow_mut();
+            s.eq_gains_db[i] = v;
+            player.send(Command::SetFx(s.clone()));
+        });
+    }
+    {
+        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        let weak = ui.as_weak();
+        ui.on_fx_reset(move || {
+            let mut s = fx.borrow_mut();
+            *s = AudioFxSettings::default();
+            for i in 0..12 {
+                eq_model.set_row_data(i, 0.0);
+            }
+            if let Some(ui) = weak.upgrade() {
+                ui.set_fx_normalize(false);
+                ui.set_fx_mono(false);
+                ui.set_fx_bass(0.0);
+                ui.set_fx_treble(0.0);
+                ui.set_fx_subsonic(0.0);
+            }
+            player.send(Command::SetFx(s.clone()));
+        });
     }
 
     let weak = ui.as_weak();

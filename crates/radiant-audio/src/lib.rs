@@ -9,7 +9,8 @@
 //! Data flow: engine thread: decode -> convert -> radiant-dsp -> rtrb ring buffer -> cpal callback.
 //! The cpal callback only pops samples (no alloc, no locks, no I/O) and applies the fade gain.
 //!
-//! DONE: shuffle (random order, current track first), volume (smoothed, squared curve),
+//! DONE: sound settings: `Command::SetFx(AudioFxSettings)` (applied on the engine thread; audible within RING_MS),
+//!       shuffle (random order, current track first), volume (smoothed, squared curve),
 //!       seek + position (frames counted in the callback, UI gets Status every 250 ms while playing),
 //!       play / pause / toggle / next / previous / repeat, 300 ms fade-in and 250 ms fade-out,
 //!       auto-advance at end of track, stream paused when idle (no CPU while paused).
@@ -18,7 +19,7 @@
 //!   - replace the linear resampler with `rubato` (convert.rs)
 //!   - device change (headphones unplugged) -> re-open the stream and resume
 //!   - non-f32 device formats (now: error), skip unreadable files instead of stopping
-//!   - hook real DSP settings (now: default = bypass), measure CPU and report it
+//!   - measure CPU and report it
 
 mod convert;
 mod decode;
@@ -26,4 +27,5 @@ mod engine;
 mod transport;
 
 pub use engine::{Command, Player, Status};
+pub use radiant_dsp::AudioFxSettings;
 pub use transport::{PlayState, RepeatMode, Transport};
