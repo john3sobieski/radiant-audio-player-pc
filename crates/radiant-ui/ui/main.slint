@@ -1,5 +1,5 @@
-// Main window. DONE: folder button + track list.
-// TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, player bar,
+// Main window. DONE: folder button, track list (click = play), prev / play-pause / next, now playing.
+// TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, seek bar, cover, quality badge,
 //       themes (light / true-black / system), translations via @tr().
 import { Button, ListView } from "std-widgets.slint";
 
@@ -10,7 +10,14 @@ export component MainWindow inherits Window {
 
     in property <[string]> tracks;
     in property <string> status;
+    in property <string> now-playing;
+    in property <bool> is-playing;
+
     callback choose-folder();
+    callback play-track(int);
+    callback toggle-play();
+    callback next-track();
+    callback previous-track();
 
     VerticalLayout {
         padding: 8px;
@@ -29,9 +36,35 @@ export component MainWindow inherits Window {
         }
 
         ListView {
-            for t in root.tracks : Text {
-                text: t;
+            for t[i] in root.tracks : Rectangle {
                 height: 24px;
+                Text {
+                    text: t;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    clicked => { root.play-track(i); }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            Button {
+                text: "Prev";
+                clicked => { root.previous-track(); }
+            }
+            Button {
+                text: root.is-playing ? "Pause" : "Play";
+                clicked => { root.toggle-play(); }
+            }
+            Button {
+                text: "Next";
+                clicked => { root.next-track(); }
+            }
+            Text {
+                text: root.now-playing;
+                vertical-alignment: center;
             }
         }
     }
