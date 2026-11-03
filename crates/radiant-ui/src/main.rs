@@ -3,7 +3,7 @@
 
 //! Radiant UI binary.
 //! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine.
-//! TODO: remember the chosen folder (settings file), rescan on start, seek bar, shuffle/repeat
+//! TODO: remember the chosen folder (settings file), rescan on start, shuffle/repeat
 //!       buttons, everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
 
 slint::include_modules!();
@@ -14,6 +14,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+/// 83000 ms -> "1:23"
+fn fmt_time(ms: u64) -> String {
+    let s = ms / 1000;
+    format!("{}:{:02}", s / 60, s % 60)
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
 
@@ -22,8 +28,27 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // The engine reports changes from its own thread; forward them to the UI thread.
     let weak = ui.as_weak();
+    let status_library = library.clone();
     let player = Rc::new(Player::spawn(move |status| {
+        // Position of the playing track in the list (-1 = none), for the row highlight.
+        let index = status
+            .current
+            .as_ref()
+            .and_then(|c| status_library.lock().ok()?.iter().position(|p| p == c))
+            .map_or(-1, |i| i as i32);
         let _ = weak.upgrade_in_event_loop(move |ui| {
+            ui.set_current_index(index);
+            ui.set_position_text(fmt_time(status.position_ms).into());
+            match status.duration_ms {
+                Some(d) if d > 0 => {
+                    ui.set_duration_text(fmt_time(d).into());
+                    ui.set_progress((status.position_ms as f32 / d as f32).clamp(0.0, 1.0));
+                }
+                _ => {
+                    ui.set_duration_text("".into());
+                    ui.set_progress(0.0);
+                }
+            }
             let title = status
                 .current
                 .as_deref()
@@ -52,6 +77,10 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let player = player.clone();
         ui.on_toggle_play(move || player.send(Command::Toggle));
+    }
+    {
+        let player = player.clone();
+        ui.on_seek(move |ratio| player.send(Command::SeekRatio(ratio)));
     }
     {
         let player = player.clone();

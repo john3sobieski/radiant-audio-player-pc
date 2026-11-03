@@ -17,14 +17,13 @@ from the log the owner pastes.
 - `radiant-dsp`: settings struct, EQ band table, bypass skeleton + test. No filters yet.
 - `radiant-stems`: constants only (models, sizes, SHA-256, STFT sizes).
 - `radiant-cloud`: empty placeholder.
-- `radiant-ui`: Slint window, folder button, background scan, track list (click = play), Prev/Play/Next buttons.
+- `radiant-ui`: Slint window, folder button, background scan, restyled dark UI (custom widgets, `Theme` global, current-row highlight, player bar with icon buttons).
 
 ## Next (order from README section 11)
-1. Get CI green. Check `slint` / `rfd` versions still match (Cargo.toml says `slint = "1"`, `rfd = "0.15"`).
+1. CI is green and the app runs (owner's screenshot). Newer code (seek bar) is not compiled yet.
 2. Investigate Windows 7/8.1 quickly and report to the owner.
-3. Playback: verify it compiles and plays (rtrb 0.3 `write_chunk_uninit`, cpal 0.15, symphonia 0.5 APIs
-   were written from memory). Then: seek + position, shuffle, repeat button, skip bad files,
-   device change, rubato resampler, measure CPU.
+3. Playback: test seek (MP3 without a length header has no seek: add a duration fallback), then shuffle,
+   repeat button, skip bad files, device change, rubato resampler, measure CPU.
 4. Library UI: tabs, search, sort, player bar, cover, quality badge; tag reading in `radiant-core`.
 5. DSP: AudioFx chain (README 5.1) with tests, then phase vocoder (5.2).
 6. Lyrics, track details, themes, languages (convert Android strings.xml by script, do not retranslate).

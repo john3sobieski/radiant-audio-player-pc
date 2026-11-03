@@ -9,8 +9,9 @@ use crate::decode::TrackDecoder;
 use crate::transport::{PlayState, RepeatMode, Transport};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use radiant_dsp::{AudioFxProcessor, AudioFxSettings};
+use std::cell::Cell;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -24,6 +25,8 @@ const RING_SECS: usize = 1;
 const FILL_INTERVAL: Duration = Duration::from_millis(50);
 /// After pausing, keep the stream alive this long (fade-out), then pause it (0 % CPU).
 const PAUSE_STREAM_AFTER: Duration = Duration::from_millis(450);
+/// How often the UI gets a position update while playing.
+const POSITION_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug)]
 pub enum Command {
@@ -35,6 +38,8 @@ pub enum Command {
     Stop,
     Next,
     Previous,
+    /// Seek to a position given as 0.0..=1.0 of the track length.
+    SeekRatio(f32),
     SetRepeat(RepeatMode),
     Quit,
 }
@@ -44,6 +49,9 @@ pub enum Command {
 pub struct Status {
     pub state: PlayState,
     pub current: Option<PathBuf>,
+    pub position_ms: u64,
+    /// `None` when the file does not report its length (seeking is disabled then).
+    pub duration_ms: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -89,6 +97,8 @@ struct Output {
     /// The engine bumps `flush_req`; the callback drains the ring buffer and copies it to `flush_ack`.
     flush_req: Arc<AtomicU32>,
     flush_ack: Arc<AtomicU32>,
+    /// Frames given to the device since the last flush (position tracking).
+    played: Arc<AtomicU64>,
 }
 
 fn open_output() -> Result<Output, String> {
@@ -110,10 +120,12 @@ fn open_output() -> Result<Output, String> {
     let playing = Arc::new(AtomicBool::new(false));
     let flush_req = Arc::new(AtomicU32::new(0));
     let flush_ack = Arc::new(AtomicU32::new(0));
+    let played = Arc::new(AtomicU64::new(0));
 
     let cb_playing = playing.clone();
     let cb_req = flush_req.clone();
     let cb_ack = flush_ack.clone();
+    let cb_played = played.clone();
     let up = 1.0 / (FADE_IN_SECS * rate as f32);
     let down = 1.0 / (FADE_OUT_SECS * rate as f32);
     let mut gain = 0.0_f32;
@@ -128,10 +140,12 @@ fn open_output() -> Result<Output, String> {
                 if req != seen_req {
                     while cons.pop().is_ok() {}
                     gain = 0.0;
+                    cb_played.store(0, Ordering::Relaxed);
                     seen_req = req;
                     cb_ack.store(req, Ordering::Release);
                 }
                 let target = if cb_playing.load(Ordering::Relaxed) { 1.0_f32 } else { 0.0 };
+                let mut frames_out = 0_u64;
                 for frame in data.chunks_mut(channels) {
                     if target == 0.0 && gain <= 0.0 {
                         frame.fill(0.0);
@@ -145,6 +159,10 @@ fn open_output() -> Result<Output, String> {
                     for s in frame.iter_mut() {
                         *s = cons.pop().unwrap_or(0.0) * gain;
                     }
+                    frames_out += 1;
+                }
+                if frames_out > 0 {
+                    cb_played.fetch_add(frames_out, Ordering::Relaxed);
                 }
             },
             |err| eprintln!("audio stream error: {err}"),
@@ -154,7 +172,7 @@ fn open_output() -> Result<Output, String> {
     // Some backends start the stream right away; start paused so idle costs nothing.
     let _ = stream.pause();
 
-    Ok(Output { stream, prod, capacity, rate, channels, playing, flush_req, flush_ack })
+    Ok(Output { stream, prod, capacity, rate, channels, playing, flush_req, flush_ack, played })
 }
 
 struct Engine {
@@ -174,13 +192,25 @@ struct Engine {
     /// When set, the stream is paused after this moment (fade-out finished).
     pause_deadline: Option<Instant>,
     error: Option<String>,
+    duration_ms: Option<u64>,
+    /// Where the current track's playback started (after a seek), ms.
+    offset_ms: u64,
+    /// Value of `out.played` when the current track (or seek) started.
+    track_start_frames: u64,
+    last_notify: Cell<Instant>,
 }
 
 fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
     let out = match open_output() {
         Ok(o) => o,
         Err(e) => {
-            on_change(Status { state: PlayState::Stopped, current: None, error: Some(e) });
+            on_change(Status {
+                state: PlayState::Stopped,
+                current: None,
+                position_ms: 0,
+                duration_ms: None,
+                error: Some(e),
+            });
             // No audio: just wait until the player is dropped.
             while let Ok(cmd) = rx.recv() {
                 if matches!(cmd, Command::Quit) {
@@ -203,6 +233,10 @@ fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
         on_change,
         pause_deadline: None,
         error: None,
+        duration_ms: None,
+        offset_ms: 0,
+        track_start_frames: 0,
+        last_notify: Cell::new(Instant::now()),
     };
     loop {
         // Block without polling when there is nothing to do (0 % CPU while paused).
@@ -233,10 +267,23 @@ impl Engine {
         }
     }
 
+    fn position_ms(&self) -> u64 {
+        let frames = self
+            .out
+            .played
+            .load(Ordering::Relaxed)
+            .saturating_sub(self.track_start_frames);
+        let ms = self.offset_ms + frames * 1000 / self.out.rate.max(1) as u64;
+        self.duration_ms.map_or(ms, |d| ms.min(d))
+    }
+
     fn notify(&self) {
+        self.last_notify.set(Instant::now());
         (self.on_change)(Status {
             state: self.transport.state,
             current: self.transport.current().map(|p| p.to_path_buf()),
+            position_ms: self.position_ms(),
+            duration_ms: self.duration_ms,
             error: self.error.clone(),
         });
     }
@@ -276,6 +323,7 @@ impl Engine {
                     self.play_current(true);
                 }
             }
+            Command::SeekRatio(r) => self.seek_ratio(r),
             Command::SetRepeat(r) => self.transport.repeat = r,
             Command::Quit => return false,
         }
@@ -288,6 +336,9 @@ impl Engine {
         match self.transport.state {
             PlayState::Playing => {
                 self.fill();
+                if self.last_notify.get().elapsed() >= POSITION_INTERVAL {
+                    self.notify();
+                }
                 let drained = self.out.prod.slots() == self.out.capacity;
                 if self.eof && self.pending_pos >= self.pending.len() && drained {
                     // Track ended by itself. The ring buffer is empty, so no flush is needed.
@@ -320,6 +371,28 @@ impl Engine {
         {
             thread::sleep(Duration::from_millis(1));
         }
+        if self.transport.state != PlayState::Playing {
+            // The flush woke the stream up; let it sleep again.
+            self.pause_deadline = Some(Instant::now() + PAUSE_STREAM_AFTER);
+        }
+    }
+
+    fn seek_ratio(&mut self, ratio: f32) {
+        let Some(duration) = self.duration_ms else { return };
+        let ms = (duration as f64 * ratio.clamp(0.0, 1.0) as f64) as u64;
+        let Some(dec) = self.decoder.as_mut() else { return };
+        if let Err(e) = dec.seek(ms as f64 / 1000.0) {
+            self.error = Some(e);
+            return;
+        }
+        self.pending.clear();
+        self.pending_pos = 0;
+        self.eof = false;
+        self.conv = None; // restart the resampler
+        self.flush();
+        self.track_start_frames = self.out.played.load(Ordering::Relaxed);
+        self.offset_ms = ms;
+        self.fill();
     }
 
     /// Opens the current track, fills the buffer and starts output.
@@ -330,16 +403,20 @@ impl Engine {
         self.pending_pos = 0;
         self.eof = false;
         self.error = None;
+        self.duration_ms = None;
+        self.offset_ms = 0;
         let Some(path) = self.transport.current().map(|p| p.to_path_buf()) else {
             self.stop();
             return;
         };
         match TrackDecoder::open(&path) {
             Ok(d) => {
+                self.duration_ms = d.duration_ms;
                 self.decoder = Some(d);
                 if flush {
                     self.flush();
                 }
+                self.track_start_frames = self.out.played.load(Ordering::Relaxed);
                 self.fill();
                 self.start();
             }

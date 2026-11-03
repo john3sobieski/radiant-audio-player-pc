@@ -9,10 +9,10 @@
 //! Data flow: engine thread: decode -> convert -> radiant-dsp -> rtrb ring buffer -> cpal callback.
 //! The cpal callback only pops samples (no alloc, no locks, no I/O) and applies the fade gain.
 //!
-//! DONE: play / pause / toggle / next / previous / repeat, 300 ms fade-in and 250 ms fade-out,
+//! DONE: seek + position (frames counted in the callback, UI gets Status every 250 ms while playing),
+//!       play / pause / toggle / next / previous / repeat, 300 ms fade-in and 250 ms fade-out,
 //!       auto-advance at end of track, stream paused when idle (no CPU while paused).
 //! TODO:
-//!   - seek + position reporting (symphonia `format.seek`, count played frames in the callback)
 //!   - shuffle, gapless (now: queue of next file starts when the ring buffer is empty)
 //!   - replace the linear resampler with `rubato` (convert.rs)
 //!   - device change (headphones unplugged) -> re-open the stream and resume

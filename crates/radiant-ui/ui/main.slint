@@ -1,70 +1,304 @@
-// Main window. DONE: folder button, track list (click = play), prev / play-pause / next, now playing.
-// TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, seek bar, cover, quality badge,
-//       themes (light / true-black / system), translations via @tr().
-import { Button, ListView } from "std-widgets.slint";
+// Main window.
+// DONE: seek bar with times; header (folder button, status), track list (left-aligned, hover/current highlight, click = play),
+//       bottom player bar (prev / play-pause / next, now playing), empty state. Custom widgets, no std-widgets.
+// TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, volume, cover,
+//       quality badge, themes (light / true-black / system), translations via @tr().
+//       Colors live in `Theme`: when themes are added, turn it into a switchable set.
+
+global Theme {
+    out property <color> bg: #131316;
+    out property <color> surface: #1b1b20;
+    out property <color> surface-hover: #24242b;
+    out property <color> accent: #8b6cff;
+    out property <color> text: #ececf2;
+    out property <color> muted: #8d8d9b;
+}
+
+// Round icon button drawn from SVG-like path commands (viewbox 20x20), so no font/icon files are needed.
+component IconButton inherits Rectangle {
+    in property <string> commands;
+    in property <length> icon-size: 18px;
+    in property <color> icon-color: Theme.text;
+    in property <color> idle-color: transparent;
+    in property <color> hover-color: Theme.surface-hover;
+    callback clicked();
+
+    border-radius: self.width / 2;
+    background: ta.has-hover ? root.hover-color : root.idle-color;
+
+    Path {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.icon-size;
+        height: root.icon-size;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        commands: root.commands;
+        fill: root.icon-color;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Seek bar: click or drag. Calls `seek` with 0..1 when the mouse is released.
+component SeekBar inherits Rectangle {
+    in property <float> ratio;
+    callback seek(float);
+    property <float> drag: 0;
+    height: 20px;
+
+    function ratio-at(x: length) -> float {
+        return max(0.0, min(1.0, x / root.width));
+    }
+
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.surface-hover;
+        Rectangle {
+            x: 0px;
+            width: parent.width * (ta.pressed ? root.drag : root.ratio);
+            height: parent.height;
+            border-radius: 2px;
+            background: Theme.accent;
+        }
+    }
+    Rectangle {
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: Theme.text;
+        visible: ta.has-hover || ta.pressed;
+        x: root.width * (ta.pressed ? root.drag : root.ratio) - self.width / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left) {
+                if (event.kind == PointerEventKind.down) {
+                    root.drag = root.ratio-at(self.mouse-x);
+                } else if (event.kind == PointerEventKind.up) {
+                    root.seek(root.ratio-at(self.mouse-x));
+                }
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.drag = root.ratio-at(self.mouse-x);
+            }
+        }
+    }
+}
+
+component PillButton inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 17px;
+    background: ta.has-hover ? Theme.surface-hover : Theme.surface;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        Text {
+            text: root.text;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
 
 export component MainWindow inherits Window {
     title: "Radiant";
-    preferred-width: 800px;
-    preferred-height: 600px;
+    preferred-width: 900px;
+    preferred-height: 640px;
+    min-width: 480px;
+    min-height: 360px;
+    background: Theme.bg;
+    default-font-size: 14px;
 
     in property <[string]> tracks;
     in property <string> status;
     in property <string> now-playing;
     in property <bool> is-playing;
+    /// Index of the playing track in `tracks`, -1 if none.
+    in property <int> current-index: -1;
+    /// Playback position 0..1 and its texts ("1:23").
+    in property <float> progress;
+    in property <string> position-text;
+    in property <string> duration-text;
 
     callback choose-folder();
     callback play-track(int);
     callback toggle-play();
     callback next-track();
     callback previous-track();
+    callback seek(float);
 
     VerticalLayout {
-        padding: 8px;
-        spacing: 8px;
-
-        HorizontalLayout {
-            spacing: 8px;
-            Button {
-                text: "Choose music folder";
-                clicked => { root.choose-folder(); }
-            }
-            Text {
-                text: root.status;
-                vertical-alignment: center;
-            }
-        }
-
-        ListView {
-            for t[i] in root.tracks : Rectangle {
-                height: 24px;
+        // ---- header ----
+        Rectangle {
+            height: 64px;
+            HorizontalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                spacing: 16px;
                 Text {
-                    text: t;
+                    text: "Radiant";
+                    color: Theme.text;
+                    font-size: 22px;
+                    font-weight: 700;
                     vertical-alignment: center;
                 }
-                TouchArea {
-                    clicked => { root.play-track(i); }
+                Text {
+                    text: root.status;
+                    color: Theme.muted;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                PillButton {
+                    y: (parent.height - self.height) / 2;
+                    text: "Choose folder";
+                    clicked => { root.choose-folder(); }
                 }
             }
         }
 
-        HorizontalLayout {
-            spacing: 8px;
-            Button {
-                text: "Prev";
-                clicked => { root.previous-track(); }
+        // ---- track list ----
+        Rectangle {
+            vertical-stretch: 1;
+
+            if root.tracks.length == 0 : Text {
+                text: "Choose a music folder to start";
+                color: Theme.muted;
+                font-size: 16px;
             }
-            Button {
-                text: root.is-playing ? "Pause" : "Play";
-                clicked => { root.toggle-play(); }
+
+            ListView {
+                for t[i] in root.tracks : Rectangle {
+                    height: 44px;
+                    background: i == root.current-index ? Theme.accent.with-alpha(0.16)
+                        : row-ta.has-hover ? Theme.surface : transparent;
+
+                    HorizontalLayout {
+                        padding-left: 20px;
+                        padding-right: 20px;
+                        spacing: 14px;
+                        Text {
+                            text: i + 1;
+                            width: 32px;
+                            color: Theme.muted;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: t;
+                            color: i == root.current-index ? Theme.accent : Theme.text;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                    }
+                    row-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.play-track(i); }
+                    }
+                }
             }
-            Button {
-                text: "Next";
-                clicked => { root.next-track(); }
+        }
+
+        // ---- player bar ----
+        Rectangle {
+            height: 112px;
+            background: Theme.surface;
+
+            VerticalLayout {
+            padding-top: 8px;
+            spacing: 0px;
+
+            HorizontalLayout {
+                height: 24px;
+                padding-left: 24px;
+                padding-right: 24px;
+                spacing: 12px;
+                Text {
+                    text: root.position-text;
+                    width: 44px;
+                    color: Theme.muted;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+                SeekBar {
+                    ratio: root.progress;
+                    seek(r) => { root.seek(r); }
+                }
+                Text {
+                    text: root.duration-text;
+                    width: 44px;
+                    color: Theme.muted;
+                    vertical-alignment: center;
+                }
             }
-            Text {
-                text: root.now-playing;
-                vertical-alignment: center;
+
+            HorizontalLayout {
+                padding-left: 24px;
+                padding-right: 24px;
+                spacing: 16px;
+
+                Text {
+                    text: root.now-playing;
+                    color: Theme.text;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: center;
+                    IconButton {
+                        y: (parent.height - self.height) / 2;
+                        width: 40px;
+                        height: 40px;
+                        commands: "M 1 0 H 4 V 20 H 1 Z M 19 0 V 20 L 6 10 Z";
+                        clicked => { root.previous-track(); }
+                    }
+                    IconButton {
+                        y: (parent.height - self.height) / 2;
+                        width: 52px;
+                        height: 52px;
+                        icon-size: 20px;
+                        icon-color: #ffffff;
+                        idle-color: Theme.accent;
+                        hover-color: Theme.accent.brighter(0.2);
+                        commands: root.is-playing
+                            ? "M 3 0 H 8 V 20 H 3 Z M 12 0 H 17 V 20 H 12 Z"
+                            : "M 4 0 L 19 10 L 4 20 Z";
+                        clicked => { root.toggle-play(); }
+                    }
+                    IconButton {
+                        y: (parent.height - self.height) / 2;
+                        width: 40px;
+                        height: 40px;
+                        commands: "M 16 0 H 19 V 20 H 16 Z M 1 0 L 14 10 L 1 20 Z";
+                        clicked => { root.next-track(); }
+                    }
+                }
+
+                // Balances the title on the left so the controls stay centered.
+                Rectangle { horizontal-stretch: 1; }
+            }
             }
         }
     }
