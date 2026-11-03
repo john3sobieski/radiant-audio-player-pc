@@ -6,8 +6,10 @@
 
 use crate::convert::Converter;
 use crate::decode::TrackDecoder;
+use crate::position::PositionTracker;
 use crate::transport::{PlayState, RepeatMode, Transport};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use radiant_dsp::stretch::{TimeStretch, MAX_SPEED, MIN_SPEED};
 use radiant_dsp::{AudioFxProcessor, AudioFxSettings};
 use std::cell::Cell;
 use std::path::PathBuf;
@@ -47,6 +49,9 @@ pub enum Command {
     SetVolume(f32),
     /// Replace the sound settings (EQ, bass, treble, subsonic, normalization, mono).
     SetFx(AudioFxSettings),
+    /// Playback speed, pitch preserved (phase vocoder). 1.0 = normal, clamped to 0.25..=4.
+    /// The UI converts its slider with `slider_to_speed`.
+    SetSpeed(f32),
     Quit,
 }
 
@@ -206,16 +211,18 @@ struct Engine {
     pending_pos: usize,
     /// The decoder has no more data.
     eof: bool,
+    /// Phase vocoder (speed change), runs after the resampler and before the effects.
+    stretch: TimeStretch,
+    /// Resampler output waiting for the vocoder (unused while the vocoder is in pass-through).
+    converted: Vec<f32>,
     fx: AudioFxProcessor,
     on_change: Box<dyn Fn(Status) + Send>,
     /// When set, the stream is paused after this moment (fade-out finished).
     pause_deadline: Option<Instant>,
     error: Option<String>,
     duration_ms: Option<u64>,
-    /// Where the current track's playback started (after a seek), ms.
-    offset_ms: u64,
-    /// Value of `out.played` when the current track (or seek) started.
-    track_start_frames: u64,
+    /// Source-time position (stays correct while the speed changes), see `position.rs`.
+    pos: PositionTracker,
     last_notify: Cell<Instant>,
 }
 
@@ -241,6 +248,7 @@ fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
             return;
         }
     };
+    let (out_rate, out_ch) = (out.rate, out.channels);
     let mut eng = Engine {
         out,
         transport: Transport::default(),
@@ -250,13 +258,14 @@ fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
         pending: Vec::new(),
         pending_pos: 0,
         eof: false,
+        stretch: TimeStretch::new(out_ch, out_rate),
+        converted: Vec::new(),
         fx: AudioFxProcessor::new(AudioFxSettings::default()),
         on_change,
         pause_deadline: None,
         error: None,
         duration_ms: None,
-        offset_ms: 0,
-        track_start_frames: 0,
+        pos: PositionTracker::new(out_rate),
         last_notify: Cell::new(Instant::now()),
     };
     loop {
@@ -289,13 +298,25 @@ impl Engine {
     }
 
     fn position_ms(&self) -> u64 {
-        let frames = self
-            .out
-            .played
-            .load(Ordering::Relaxed)
-            .saturating_sub(self.track_start_frames);
-        let ms = self.offset_ms + frames * 1000 / self.out.rate.max(1) as u64;
+        let ms = self.pos.position_ms(self.out.played.load(Ordering::Relaxed));
         self.duration_ms.map_or(ms, |d| ms.min(d))
+    }
+
+    /// Speed change: the new speed is applied to audio decoded from now on, so it is heard after the
+    /// audio already queued (ring buffer + pending). The position tracker is told where that is.
+    /// (The vocoder's own ~90 ms latency is ignored: the position may be off by that much for a moment.)
+    fn set_speed(&mut self, speed: f32) {
+        let speed = speed.clamp(MIN_SPEED, MAX_SPEED);
+        if (speed - self.stretch.speed()).abs() < 1e-4 {
+            return;
+        }
+        let ch = self.out.channels.max(1);
+        let played = self.out.played.load(Ordering::Relaxed);
+        let queued_ring = (self.out.capacity - self.out.prod.slots()) / ch;
+        let queued_pending = self.pending.len().saturating_sub(self.pending_pos) / ch;
+        self.pos.settle(played);
+        self.pos.push_speed(played + (queued_ring + queued_pending) as u64, speed);
+        self.stretch.set_speed(speed);
     }
 
     fn notify(&self) {
@@ -354,6 +375,7 @@ impl Engine {
                 self.out.volume.store((v * v).to_bits(), Ordering::Relaxed);
             }
             Command::SetFx(settings) => self.fx.set_settings(settings),
+            Command::SetSpeed(speed) => self.set_speed(speed),
             Command::Quit => return false,
         }
         self.notify();
@@ -364,6 +386,7 @@ impl Engine {
     fn tick(&mut self) {
         match self.transport.state {
             PlayState::Playing => {
+                self.pos.settle(self.out.played.load(Ordering::Relaxed));
                 self.fill();
                 if self.last_notify.get().elapsed() >= POSITION_INTERVAL {
                     self.notify();
@@ -418,9 +441,9 @@ impl Engine {
         self.pending_pos = 0;
         self.eof = false;
         self.conv = None; // restart the resampler
+        self.stretch.reset(); // restart the vocoder (no old audio mixed into the new position)
         self.flush();
-        self.track_start_frames = self.out.played.load(Ordering::Relaxed);
-        self.offset_ms = ms;
+        self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, self.stretch.speed());
         self.fill();
     }
 
@@ -433,7 +456,7 @@ impl Engine {
         self.eof = false;
         self.error = None;
         self.duration_ms = None;
-        self.offset_ms = 0;
+        self.stretch.reset();
         let Some(path) = self.transport.current().map(|p| p.to_path_buf()) else {
             self.stop();
             return;
@@ -445,7 +468,7 @@ impl Engine {
                 if flush {
                     self.flush();
                 }
-                self.track_start_frames = self.out.played.load(Ordering::Relaxed);
+                self.pos.reset(self.out.played.load(Ordering::Relaxed), 0, self.stretch.speed());
                 self.fill();
                 self.start();
             }
@@ -515,13 +538,26 @@ impl Engine {
                         self.conv = Some(Converter::new(rate, src_ch, self.out.rate, ch));
                     }
                     if let Some(c) = self.conv.as_mut() {
-                        c.process(&self.raw, &mut self.pending);
+                        if self.stretch.is_passthrough() {
+                            // Speed 1: no vocoder, no extra copy.
+                            c.process(&self.raw, &mut self.pending);
+                        } else {
+                            self.converted.clear();
+                            c.process(&self.raw, &mut self.converted);
+                            self.stretch.process(&self.converted, &mut self.pending);
+                        }
                     }
                     self.fx.process(&mut self.pending, ch, self.out.rate);
                 }
                 Ok(None) => {
                     self.eof = true;
-                    return;
+                    // Play out the vocoder's tail (it holds ~90 ms of audio), then the effects.
+                    self.stretch.finish(&mut self.pending);
+                    if self.pending.is_empty() {
+                        return;
+                    }
+                    self.fx.process(&mut self.pending, ch, self.out.rate);
+                    // Loop again: step 1 pushes the tail, then `eof` ends the loop.
                 }
                 Err(e) => {
                     self.error = Some(e);

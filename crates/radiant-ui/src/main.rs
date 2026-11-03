@@ -3,13 +3,16 @@
 
 //! Radiant UI binary.
 //! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine,
-//!       sound panel (EQ, bass, treble, subsonic, normalize, mono) wired to the engine (not saved between launches yet).
+//!       sound panel (EQ, bass, treble, subsonic, normalize, mono) wired to the engine (not saved between launches yet),
+//!       speed slider (pitch-preserving phase vocoder) wired to the engine.
 //! TODO: remember the chosen folder and the volume (settings file), rescan on start,
 //!       everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
 
 slint::include_modules!();
 
-use radiant_audio::{AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS};
+use radiant_audio::{
+    slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
+};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -116,6 +119,15 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let player = player.clone();
         ui.on_previous_track(move || player.send(Command::Previous));
+    }
+
+    // ---- playback speed (phase vocoder in the engine, pitch preserved) ----
+    {
+        let player = player.clone();
+        ui.on_speed_changed(move |t| {
+            // Slider position -2..=2 -> speed 1/3..3 (same mapping as Android).
+            player.send(Command::SetSpeed(slider_to_speed((t * 10.0).round() / 10.0)));
+        });
     }
 
     // ---- sound settings (panel in the UI -> engine) ----

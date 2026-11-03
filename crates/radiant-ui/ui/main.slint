@@ -329,6 +329,12 @@ export component MainWindow inherits Window {
     in-out property <float> fx-bass: 0;
     in-out property <float> fx-treble: 0;
     in-out property <float> fx-subsonic: 0;
+    // Playback speed slider position, -2 ..= +2 in steps of 0.1 (+2 = 3x faster, -2 = 3x slower).
+    in-out property <float> speed-t: 0;
+    // Label value in tenths (12 = "1.2x"); integer math avoids float noise like 1.2000001.
+    private property <float> speed-n: root.speed-t >= 0
+        ? (10 + root.speed-t * 10).round()
+        : (10 - root.speed-t * 10).round();
     /// 12 equalizer gains in dB (model owned by Rust).
     in property <[float]> eq-gains;
     private property <[string]> eq-labels: ["32", "64", "125", "250", "500", "1k", "2k", "3.5k", "6k", "9k", "12.5k", "16k"];
@@ -347,6 +353,7 @@ export component MainWindow inherits Window {
     callback bass-changed(float);
     callback treble-changed(float);
     callback subsonic-changed(float);
+    callback speed-changed(float);
     callback eq-changed(int, float);
     /// Names of the EQ presets (set by Rust from radiant-dsp).
     in property <[string]> eq-preset-names;
@@ -591,7 +598,7 @@ export component MainWindow inherits Window {
         x: root.width - self.width - 20px;
         y: 60px;
         width: 360px;
-        height: min(root.height - 70px, 600px);
+        height: min(root.height - 70px, 640px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -645,6 +652,19 @@ export component MainWindow inherits Window {
                         active: false;
                         clicked => { root.fx-reset(); }
                     }
+                }
+            }
+            FxRow {
+                label: "Speed";
+                lo: -2;
+                hi: 2;
+                value: root.speed-t;
+                // 1x..3x faster, -1x..-3x slower (pitch is kept).
+                value-text: (root.speed-t >= 0 ? "" : "-")
+                    + "\{Math.floor(root.speed-n / 10)}.\{Math.mod(root.speed-n, 10)}x";
+                edited(v) => {
+                    root.speed-t = (v * 10).round() / 10; // steps of 0.1
+                    root.speed-changed(root.speed-t);
                 }
             }
             FxRow {
