@@ -6,3 +6,4 @@ license-file.workspace = true
 
 # TODO: add `realfft` (phase vocoder) and `rubato` (resampler) when those are implemented.
 [dependencies]
+serde = { version = "1", features = ["derive"] }

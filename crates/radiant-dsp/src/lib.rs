@@ -7,6 +7,8 @@
 //! Rules: no allocation in `process`, settings replaced whole (version counter), f64 filter state.
 //! Read Android `AudioFx.kt` before porting. Keep the numbers from the README.
 
+use serde::{Deserialize, Serialize};
+
 pub mod presets;
 pub mod stretch;
 
@@ -15,7 +17,8 @@ pub const EQ_BANDS_HZ: [f64; 12] = [
     32.0, 64.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 3500.0, 6000.0, 9000.0, 12500.0, 16000.0,
 ];
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AudioFxSettings {
     pub mono: bool,
     pub normalize: bool,

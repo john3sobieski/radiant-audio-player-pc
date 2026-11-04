@@ -46,8 +46,8 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 - 🟡 Opus: подключён `symphonia-adapter-libopus` 0.2.x (libopus, bundled по умолчанию); код написан, нужна первая проверка на реальном `.opus`
 
 ### Этап 4. Сохранение настроек
-- ⬜ Выбрать формат (вероятно serde + JSON или TOML)
-- ⬜ Запоминать между запусками: папку с музыкой, громкость, shuffle, repeat, настройки звука, скорость (решить, сбрасывает ли её кнопка Reset; сейчас нет)
+- 🟡 Выбран формат `serde + JSON` (`%APPDATA%/Radiant/settings.json` на Windows; fallback на `.config` на других системах)
+- 🟡 Между запусками сохраняются: папка с музыкой, громкость, shuffle, repeat, настройки звука, скорость; сохранённая папка пересканируется на старте; `Reset` по-прежнему сбрасывает только sound-настройки, не скорость
 
 ### Этап 5. Библиотека (как на Android: Плейлисты / Альбомы / Треки / Очереди)
 - ⬜ Чтение тегов (название, исполнитель, исполнитель альбома, альбом, номер трека, длительность); пути с Unicode и длинные пути
@@ -108,6 +108,8 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 ## Technical notes for the assistant
 
 **Pipeline:** `symphonia` decode (with `symphonia-adapter-libopus` registered in a custom codec registry for Opus) → `convert.rs` (rubato sinc resampler) → phase vocoder (`radiant-dsp/src/stretch.rs`) → `AudioFx` chain → `rtrb` ring buffer → `cpal`. Engine commands live in `radiant-audio` (`Command::SetFx`, `SetSpeed`, hidden `DurationScanned`).
+
+**Settings:** `radiant-core/src/settings.rs` stores `AppSettings` as pretty JSON. `radiant-ui/src/main.rs` loads them on startup, applies them to the UI + engine, saves after every user change, and rescans the remembered music folder on launch. Missing JSON fields fall back to defaults; out-of-range numbers are clamped on load. A newer folder scan replaces an older one. A failed read or save is shown in the status line.
 
 **Resampler.** `radiant-audio/src/sinc_core.rs` is the only file that uses `rubato` (5.x API: `Async::new_sinc`, chunk 1024, 128 taps, Blackman-Harris², cubic; `rubato = { version = "5", default-features = false }`). If rubato's API causes errors, fix only this file. `convert.rs` trims the filter delay at the start, `finish()` flushes the tail and cuts to `round(frames * ratio)`, `reset()` after seek keeps the tables; falls back to linear interpolation if rubato cannot be created. Resampler tail is played out before the vocoder tail at end of track.
 

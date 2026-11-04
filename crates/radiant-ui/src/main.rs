@@ -3,26 +3,133 @@
 
 //! Radiant UI binary.
 //! DONE: window, folder picker, background scan, track list, playback buttons wired to the engine,
-//!       sound panel (EQ, bass, treble, subsonic, normalize, mono) wired to the engine (not saved between launches yet),
-//!       speed slider (pitch-preserving phase vocoder) wired to the engine.
-//! TODO: remember the chosen folder and the volume (settings file), rescan on start,
-//!       everything in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
+//!       sound panel (EQ, bass, treble, subsonic, normalize, mono) wired to the engine and saved,
+//!       speed slider (pitch-preserving phase vocoder) wired to the engine and saved,
+//!       chosen folder remembered and rescanned on start.
+//! TODO: everything else in PROGRESS.md. Keep this file thin: logic belongs in the other crates.
 
 slint::include_modules!();
 
 use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
 };
+use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// 83000 ms -> "1:23"
 fn fmt_time(ms: u64) -> String {
     let s = ms / 1000;
     format!("{}:{:02}", s / 60, s % 60)
+}
+
+fn repeat_mode_to_ui(mode: RepeatModeSetting) -> i32 {
+    match mode {
+        RepeatModeSetting::Off => 0,
+        RepeatModeSetting::All => 1,
+        RepeatModeSetting::One => 2,
+    }
+}
+
+fn repeat_mode_from_ui(mode: i32) -> RepeatModeSetting {
+    match mode {
+        1 => RepeatModeSetting::All,
+        2 => RepeatModeSetting::One,
+        _ => RepeatModeSetting::Off,
+    }
+}
+
+fn repeat_mode_to_engine(mode: RepeatModeSetting) -> RepeatMode {
+    match mode {
+        RepeatModeSetting::Off => RepeatMode::Off,
+        RepeatModeSetting::All => RepeatMode::All,
+        RepeatModeSetting::One => RepeatMode::One,
+    }
+}
+
+fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>) {
+    let snapshot = settings.borrow().clone();
+    if let Err(e) = settings::save(&snapshot) {
+        if let Some(ui) = weak.upgrade() {
+            ui.set_status(format!("Could not save settings: {e}").into());
+        }
+    }
+}
+
+/// Copies the current effect settings to the engine and to the settings file.
+/// The `fx` borrow ends before `settings` is borrowed, so the two cells never overlap.
+fn commit_fx(
+    weak: &slint::Weak<MainWindow>,
+    player: &Player,
+    fx: &RefCell<AudioFxSettings>,
+    settings: &RefCell<AppSettings>,
+) {
+    let snapshot = fx.borrow().clone();
+    player.send(Command::SetFx(snapshot.clone()));
+    settings.borrow_mut().fx = snapshot;
+    save_settings(weak, settings);
+}
+
+fn apply_settings(
+    ui: &MainWindow,
+    player: &Rc<Player>,
+    fx: &Rc<RefCell<AudioFxSettings>>,
+    eq_model: &Rc<VecModel<f32>>,
+    settings: &AppSettings,
+) {
+    ui.set_volume(settings.volume);
+    ui.set_shuffle(settings.shuffle);
+    ui.set_repeat_mode(repeat_mode_to_ui(settings.repeat_mode));
+    ui.set_speed_t(settings.speed_t);
+    ui.set_fx_normalize(settings.fx.normalize);
+    ui.set_fx_mono(settings.fx.mono);
+    ui.set_fx_bass(settings.fx.bass_db);
+    ui.set_fx_treble(settings.fx.treble_db);
+    ui.set_fx_subsonic(settings.fx.subsonic_percent);
+    for (i, gain) in settings.fx.eq_gains_db.iter().enumerate() {
+        eq_model.set_row_data(i, *gain);
+    }
+    *fx.borrow_mut() = settings.fx.clone();
+    player.send(Command::SetVolume(settings.volume));
+    player.send(Command::SetShuffle(settings.shuffle));
+    player.send(Command::SetRepeat(repeat_mode_to_engine(settings.repeat_mode)));
+    player.send(Command::SetSpeed(slider_to_speed(settings.speed_t)));
+    player.send(Command::SetFx(settings.fx.clone()));
+}
+
+fn scan_folder(
+    weak: slint::Weak<MainWindow>,
+    library: Arc<Mutex<Vec<PathBuf>>>,
+    scan_gen: Arc<AtomicU64>,
+    dir: PathBuf,
+) {
+    // A slower scan must not overwrite the list from a newer one.
+    let ticket = scan_gen.fetch_add(1, Ordering::AcqRel) + 1;
+    if let Some(ui) = weak.upgrade() {
+        ui.set_status("Scanning...".into());
+    }
+    std::thread::spawn(move || {
+        let tracks = radiant_core::library::scan(&dir);
+        let paths: Vec<PathBuf> = tracks.iter().map(|t| t.path.clone()).collect();
+        let titles: Vec<String> = tracks.into_iter().map(|t| t.title).collect();
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            if scan_gen.load(Ordering::Acquire) != ticket {
+                return;
+            }
+            // Update the paths and the titles together, on the UI thread.
+            if let Ok(mut l) = library.lock() {
+                *l = paths;
+            }
+            let count = titles.len();
+            let model: Vec<SharedString> = titles.into_iter().map(Into::into).collect();
+            ui.set_tracks(ModelRc::new(VecModel::from(model)));
+            ui.set_status(format!("{count} tracks").into());
+        });
+    });
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -76,6 +183,27 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }));
 
+    let settings = match settings::load() {
+        Ok(s) => Rc::new(RefCell::new(s)),
+        Err(e) => {
+            ui.set_status(format!("Could not read settings: {e}").into());
+            Rc::new(RefCell::new(AppSettings::default()))
+        }
+    };
+    let ui_weak = ui.as_weak();
+    // Bumped on every folder scan so a late result cannot replace a newer one.
+    let scan_gen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+
+    // ---- sound settings (panel in the UI -> engine) ----
+    // Rust owns the current settings; every change sends the whole set to the engine.
+    let fx = Rc::new(RefCell::new(AudioFxSettings::default()));
+    let eq_model: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0_f32; 12]));
+    ui.set_eq_gains(ModelRc::from(eq_model.clone()));
+    apply_settings(&ui, &player, &fx, &eq_model, &settings.borrow());
+    if let Some(dir) = settings.borrow().music_folder.clone() {
+        scan_folder(ui_weak.clone(), library.clone(), scan_gen.clone(), dir);
+    }
+
     {
         let player = player.clone();
         let library = library.clone();
@@ -92,22 +220,28 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_toggle_play(move || player.send(Command::Toggle));
     }
     {
-        let player = player.clone();
-        ui.on_volume_changed(move |v| player.send(Command::SetVolume(v)));
+        let (player, settings) = (player.clone(), settings.clone());
+        ui.on_volume_changed(move |v| {
+            player.send(Command::SetVolume(v));
+            settings.borrow_mut().volume = v;
+            save_settings(&settings);
+        });
     }
     {
-        let player = player.clone();
-        ui.on_shuffle_changed(move |on| player.send(Command::SetShuffle(on)));
+        let (player, settings) = (player.clone(), settings.clone());
+        ui.on_shuffle_changed(move |on| {
+            player.send(Command::SetShuffle(on));
+            settings.borrow_mut().shuffle = on;
+            save_settings(&settings);
+        });
     }
     {
-        let player = player.clone();
+        let (player, settings) = (player.clone(), settings.clone());
         ui.on_repeat_changed(move |mode| {
-            let mode = match mode {
-                1 => RepeatMode::All,
-                2 => RepeatMode::One,
-                _ => RepeatMode::Off,
-            };
-            player.send(Command::SetRepeat(mode));
+            let repeat = repeat_mode_from_ui(mode);
+            player.send(Command::SetRepeat(repeat_mode_to_engine(repeat)));
+            settings.borrow_mut().repeat_mode = repeat;
+            save_settings(&settings);
         });
     }
     {
@@ -125,60 +259,68 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ---- playback speed (phase vocoder in the engine, pitch preserved) ----
     {
-        let player = player.clone();
+        let (player, settings) = (player.clone(), settings.clone());
         ui.on_speed_changed(move |t| {
+            let t = (t * 10.0).round() / 10.0;
             // Slider position -2..=2 -> speed 1/3..3 (same mapping as Android).
-            player.send(Command::SetSpeed(slider_to_speed((t * 10.0).round() / 10.0)));
+            player.send(Command::SetSpeed(slider_to_speed(t)));
+            settings.borrow_mut().speed_t = t;
+            save_settings(&settings);
         });
     }
 
-    // ---- sound settings (panel in the UI -> engine) ----
-    // Rust owns the current settings; every change sends the whole set to the engine.
-    let fx = Rc::new(RefCell::new(AudioFxSettings::default()));
-    let eq_model: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0_f32; 12]));
-    ui.set_eq_gains(ModelRc::from(eq_model.clone()));
     {
-        let (player, fx) = (player.clone(), fx.clone());
+        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
         ui.on_normalize_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.normalize = on;
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx) = (player.clone(), fx.clone());
+        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
         ui.on_mono_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.mono = on;
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx) = (player.clone(), fx.clone());
+        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
         ui.on_bass_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.bass_db = (v * 2.0).round() / 2.0; // 0.5 dB steps
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx) = (player.clone(), fx.clone());
+        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
         ui.on_treble_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.treble_db = (v * 2.0).round() / 2.0;
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx) = (player.clone(), fx.clone());
+        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
         ui.on_subsonic_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.subsonic_percent = v.round(); // whole percent
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
         ui.on_eq_changed(move |i, v| {
             let i = i as usize;
             if i >= 12 {
@@ -189,13 +331,15 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.eq_gains_db[i] = v;
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
     let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
     {
-        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
         ui.on_eq_preset_selected(move |i| {
             let Some(preset) = EQ_PRESETS.get(i as usize) else { return };
             for (band, g) in preset.gains.iter().enumerate() {
@@ -204,10 +348,12 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.eq_gains_db = preset.gains;
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
     {
-        let (player, fx, eq_model) = (player.clone(), fx.clone(), eq_model.clone());
+        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
         let weak = ui.as_weak();
         ui.on_fx_reset(move || {
             let mut s = fx.borrow_mut();
@@ -223,31 +369,17 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.set_fx_subsonic(0.0);
             }
             player.send(Command::SetFx(s.clone()));
+            settings.borrow_mut().fx = s.clone();
+            save_settings(&settings);
         });
     }
 
     let weak = ui.as_weak();
     ui.on_choose_folder(move || {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
-        if let Some(ui) = weak.upgrade() {
-            ui.set_status("Scanning...".into());
-        }
-        let weak = weak.clone();
-        let library = library.clone();
-        // Scan off the UI thread, then hand the result back to the event loop.
-        std::thread::spawn(move || {
-            let tracks = radiant_core::library::scan(&dir);
-            if let Ok(mut l) = library.lock() {
-                *l = tracks.iter().map(|t| t.path.clone()).collect();
-            }
-            let titles: Vec<String> = tracks.into_iter().map(|t| t.title).collect();
-            let count = titles.len();
-            let _ = weak.upgrade_in_event_loop(move |ui| {
-                let model: Vec<SharedString> = titles.into_iter().map(Into::into).collect();
-                ui.set_tracks(ModelRc::new(VecModel::from(model)));
-                ui.set_status(format!("{count} tracks").into());
-            });
-        });
+        settings.borrow_mut().music_folder = Some(dir.clone());
+        save_settings(&settings);
+        scan_folder(weak.clone(), library.clone(), dir);
     });
 
     ui.run()
