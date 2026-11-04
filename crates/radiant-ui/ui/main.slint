@@ -298,6 +298,35 @@ component PillButton inherits Rectangle {
     }
 }
 
+component SearchField inherits Rectangle {
+    in-out property <string> value;
+    callback edited(string);
+    height: 40px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: Theme.surface-hover;
+    background: Theme.surface;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 8px;
+        Text {
+            text: "⌕";
+            color: Theme.muted;
+            font-size: 20px;
+            vertical-alignment: center;
+        }
+        TextInput {
+            text: root.value;
+            color: Theme.text;
+            font-size: 14px;
+            horizontal-stretch: 1;
+            edited => { root.value = self.text; root.edited(self.text); }
+        }
+    }
+}
+
 // Small preset chip in the sound panel.
 component PillPreset inherits Rectangle {
     in property <string> text;
@@ -431,19 +460,14 @@ export component MainWindow inherits Window {
 
             VerticalLayout {
             HorizontalLayout {
-                height: 44px;
-                padding-left: 20px;
-                padding-right: 20px;
-                spacing: 8px;
-                Text {
-                    text: "Search";
-                    color: Theme.muted;
-                    vertical-alignment: center;
-                }
-                TextInput {
-                    text: root.search-text;
+                height: 56px;
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 10px;
+                SearchField {
+                    value: root.search-text;
                     horizontal-stretch: 1;
-                    edited => { root.search-changed(self.text); }
+                    edited(text) => { root.search-changed(text); }
                 }
                 PillButton {
                     text: "Sort: " + ["Manual", "Name", "Artist", "Album", "Duration", "Date"][root.sort-mode] + (root.sort-descending ? " ↓" : " ↑");
