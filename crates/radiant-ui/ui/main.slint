@@ -325,14 +325,15 @@ component SearchField inherits Rectangle {
                 border-color: Theme.muted;
                 background: transparent;
             }
-            Rectangle {
-                x: 15px;
-                y: 16px;
-                width: 8px;
-                height: 2px;
-                border-radius: 1px;
-                rotation-angle: 45deg;
-                background: Theme.muted;
+            Path {
+                x: 14px;
+                y: 14px;
+                width: 9px;
+                height: 9px;
+                viewbox-width: 9;
+                viewbox-height: 9;
+                commands: "M 0 0 L 2 0 L 9 7 L 7 9 Z";
+                fill: Theme.muted;
             }
         }
         TextInput {
