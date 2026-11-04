@@ -880,9 +880,21 @@ export component MainWindow inherits Window {
             Rectangle {
                 vertical-stretch: 1;
 
-                Text {
+                // Cover of the playing track (or a tile with its first letter), like in the list.
+                if root.now-playing != "" : CoverArt {
                     x: 24px;
-                    width: max(0px, (parent.width - 348px) / 2 - 24px - 16px);
+                    y: (parent.height - self.height) / 2;
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 8px;
+                    art: root.np-cover;
+                    has-image: root.np-has-cover;
+                    letter: root.np-letter;
+                    letter-size: 22px;
+                }
+                Text {
+                    x: root.now-playing != "" ? 88px : 24px;
+                    width: max(0px, (parent.width - 348px) / 2 - (root.now-playing != "" ? 88px : 24px) - 16px);
                     height: parent.height;
                     text: root.now-playing;
                     color: root.show-player ? Theme.accent : Theme.text;
@@ -1269,7 +1281,8 @@ export component MainWindow inherits Window {
                             width: parent.width - 40px;
                             height: parent.height;
                             text: l.text;
-                            font-size: 17px;
+                            font-size: 18px;
+                            horizontal-alignment: center;
                             font-weight: i == root.lyric-index ? 700 : 400;
                             color: i == root.lyric-index ? Theme.text
                                 : i < root.lyric-index ? Theme.muted.with-alpha(0.45) : Theme.muted;
@@ -1287,19 +1300,26 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            // Plain text: a normal scrolling list.
-            if root.eff-tab == 0 && root.lyrics.length > 0 && !root.lyrics-synced : ListView {
-                for l in root.lyrics : Rectangle {
-                    height: l.text == "" ? 16px : 30px;
-                    Text {
-                        x: 20px;
-                        width: parent.width - 40px;
-                        height: parent.height;
-                        text: l.text;
-                        font-size: 15px;
-                        color: Theme.text;
-                        vertical-alignment: center;
-                        overflow: elide;
+            // Plain text: centered, comfortable size, long lines wrap instead of being cut off.
+            if root.eff-tab == 0 && root.lyrics.length > 0 && !root.lyrics-synced : Flickable {
+                VerticalLayout {
+                    padding-left: 28px;
+                    padding-right: 28px;
+                    padding-top: 28px;
+                    padding-bottom: 36px;
+                    spacing: 9px;
+                    alignment: start;
+                    for l in root.lyrics : VerticalLayout {
+                        if l.text == "" : Rectangle {
+                            height: 12px;
+                        }
+                        if l.text != "" : Text {
+                            text: l.text;
+                            font-size: 17px;
+                            color: Theme.text.with-alpha(0.92);
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
                     }
                 }
             }
@@ -1466,13 +1486,14 @@ export component MainWindow inherits Window {
         clicked => { root.show-sound = false; }
     }
     if root.sound-visible : Rectangle {
-        x: root.show-player ? root.card-x + (root.card-w - self.width) / 2 : root.width - self.width - 20px;
+        // In the player view the panel IS the side card (same position and size, no frame of its own).
+        x: root.show-player ? root.card-x : root.width - self.width - 20px;
         y: root.show-player ? root.header-h : 68px;
-        width: 360px;
-        height: root.show-player ? min(root.card-h, 640px) : min(root.height - 78px, 640px);
+        width: root.show-player ? root.card-w : 360px;
+        height: root.show-player ? root.card-h : min(root.height - 78px, 640px);
         background: Theme.surface;
-        border-radius: 12px;
-        border-width: 1px;
+        border-radius: root.show-player ? 14px : 12px;
+        border-width: root.show-player ? 0px : 1px;
         border-color: Theme.surface-hover;
         clip: true;
 
