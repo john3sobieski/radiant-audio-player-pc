@@ -277,24 +277,34 @@ component ToggleText inherits Rectangle {
 
 component PillButton inherits Rectangle {
     in property <string> text;
+    in property <bool> active: false;
     callback clicked();
 
     height: 34px;
     border-radius: 17px;
-    background: ta.has-hover ? Theme.surface-hover : Theme.surface;
+    background: root.active ? Theme.accent.with-alpha(0.2)
+        : ta.has-hover ? Theme.surface-hover : Theme.surface;
 
     HorizontalLayout {
         padding-left: 16px;
         padding-right: 16px;
         Text {
             text: root.text;
-            color: Theme.text;
+            color: root.active ? Theme.accent : Theme.text;
             vertical-alignment: center;
         }
     }
     ta := TouchArea {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
+    }
+}
+
+// Centers a fixed-height child vertically inside a stretching layout.
+component HeaderItem inherits Rectangle {
+    VerticalLayout {
+        alignment: center;
+        @children
     }
 }
 
@@ -312,13 +322,13 @@ component SearchField inherits Rectangle {
         padding-right: 10px;
         spacing: 8px;
         Rectangle {
-            width: 24px;
+            width: 16px;
             height: 40px;
             background: transparent;
             Path {
-                y: 8px;
-                width: 24px;
-                height: 24px;
+                y: (parent.height - self.height) / 2;
+                width: 16px;
+                height: 16px;
                 viewbox-width: 24;
                 viewbox-height: 24;
                 commands: "M 10 2 Q 2 2 2 10 Q 2 18 10 18 Q 18 18 18 10 Q 18 2 10 2 Z M 10 5 Q 15 5 15 10 Q 15 15 10 15 Q 5 15 5 10 Q 5 5 10 5 Z M 16 14 L 23 21 L 21 23 L 14 16 Z";
@@ -451,11 +461,12 @@ export component MainWindow inherits Window {
                     font-weight: 700;
                     vertical-alignment: center;
                 }
-                SearchField {
-                    y: (parent.height - self.height) / 2;
-                    value: root.search-text;
+                HeaderItem {
                     horizontal-stretch: 1;
-                    edited(text) => { root.search-text = text; root.search-changed(text); }
+                    SearchField {
+                        value: root.search-text;
+                        edited(text) => { root.search-text = text; root.search-changed(text); }
+                    }
                 }
                 Text {
                     text: root.status;
@@ -463,20 +474,25 @@ export component MainWindow inherits Window {
                     vertical-alignment: center;
                     overflow: elide;
                 }
-                PillButton {
-                    y: (parent.height - self.height) / 2;
-                    text: "Sort";
-                    clicked => { root.show-sort = !root.show-sort; root.show-sound = false; }
+                HeaderItem {
+                    PillButton {
+                        text: "Sort";
+                        active: root.show-sort;
+                        clicked => { root.show-sort = !root.show-sort; root.show-sound = false; }
+                    }
                 }
-                PillButton {
-                    y: (parent.height - self.height) / 2;
-                    text: "Sound";
-                    clicked => { root.show-sound = !root.show-sound; root.show-sort = false; }
+                HeaderItem {
+                    PillButton {
+                        text: "Sound";
+                        active: root.show-sound;
+                        clicked => { root.show-sound = !root.show-sound; root.show-sort = false; }
+                    }
                 }
-                PillButton {
-                    y: (parent.height - self.height) / 2;
-                    text: "Choose folder";
-                    clicked => { root.choose-folder(); }
+                HeaderItem {
+                    PillButton {
+                        text: "Choose folder";
+                        clicked => { root.choose-folder(); }
+                    }
                 }
             }
         }
@@ -540,6 +556,9 @@ export component MainWindow inherits Window {
                     row-ta := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(event) => {
+                            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                root.suppress-click = false;
+                            }
                             if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down && root.search-text == "") {
                                 root.drag-from = i;
                                 root.drag-to = i;
@@ -728,13 +747,15 @@ export component MainWindow inherits Window {
 
     // ---- sort panel (overlay): click outside to close ----
     if root.show-sort : TouchArea {
+        y: 64px;
+        height: root.height - 64px;
         clicked => { root.show-sort = false; }
     }
     if root.show-sort : Rectangle {
         x: root.width - self.width - 20px;
-        y: 60px;
+        y: 68px;
         width: 260px;
-        height: min(root.height - 70px, 290px);
+        height: min(root.height - 78px, 290px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -769,6 +790,7 @@ export component MainWindow inherits Window {
                     mouse-cursor: pointer;
                     clicked => {
                         root.sort-mode = i;
+                        if (i == 0) { root.sort-descending = false; }
                         root.sort-changed(i, root.sort-descending);
                     }
                 }
@@ -777,6 +799,7 @@ export component MainWindow inherits Window {
                 spacing: 8px;
                 PillButton {
                     text: "Ascending";
+                    active: root.sort-mode != 0 && !root.sort-descending;
                     clicked => {
                         root.sort-descending = false;
                         root.sort-changed(root.sort-mode, false);
@@ -784,6 +807,7 @@ export component MainWindow inherits Window {
                 }
                 PillButton {
                     text: "Descending";
+                    active: root.sort-mode != 0 && root.sort-descending;
                     clicked => {
                         root.sort-descending = true;
                         root.sort-changed(root.sort-mode, true);
@@ -795,13 +819,15 @@ export component MainWindow inherits Window {
 
     // ---- sound panel (overlay): click outside to close ----
     if root.show-sound : TouchArea {
+        y: 64px;
+        height: root.height - 64px;
         clicked => { root.show-sound = false; }
     }
     if root.show-sound : Rectangle {
         x: root.width - self.width - 20px;
-        y: 60px;
+        y: 68px;
         width: 360px;
-        height: min(root.height - 70px, 640px);
+        height: min(root.height - 78px, 640px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
