@@ -14,6 +14,7 @@ use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
 };
 use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
+use radiant_core::models::{SortKey, SortState, Track};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -103,7 +104,10 @@ fn apply_settings(
 
 fn scan_folder(
     weak: slint::Weak<MainWindow>,
-    library: Arc<Mutex<Vec<PathBuf>>>,
+    library: Arc<Mutex<Vec<Track>>>,
+    displayed: Arc<Mutex<Vec<PathBuf>>>,
+    query: Arc<Mutex<String>>,
+    sort: Arc<Mutex<SortState>>,
     scan_gen: Arc<AtomicU64>,
     dir: PathBuf,
 ) {
@@ -114,33 +118,68 @@ fn scan_folder(
     }
     std::thread::spawn(move || {
         let tracks = radiant_core::library::scan(&dir);
-        let paths: Vec<PathBuf> = tracks.iter().map(|t| t.path.clone()).collect();
-        let titles: Vec<String> = tracks.into_iter().map(|t| t.title).collect();
+        let weak_for_ui = weak.clone();
         let _ = weak.upgrade_in_event_loop(move |ui| {
             if scan_gen.load(Ordering::Acquire) != ticket {
                 return;
             }
-            // Update the paths and the titles together, on the UI thread.
-            if let Ok(mut l) = library.lock() {
-                *l = paths;
-            }
-            let count = titles.len();
-            let model: Vec<SharedString> = titles.into_iter().map(Into::into).collect();
-            ui.set_tracks(ModelRc::new(VecModel::from(model)));
-            ui.set_status(format!("{count} tracks").into());
+            if let Ok(mut l) = library.lock() { *l = tracks; }
+            refresh_tracks(&weak_for_ui, &library, &displayed, &query, *sort.lock().unwrap_or_else(|e| e.into_inner()));
         });
     });
+}
+
+fn sort_key_from_ui(mode: i32) -> SortKey {
+    match mode {
+        0 => SortKey::Manual,
+        2 => SortKey::Artist,
+        3 => SortKey::Album,
+        4 => SortKey::Duration,
+        5 => SortKey::FileDate,
+        _ => SortKey::Name,
+    }
+}
+
+fn refresh_tracks(
+    weak: &slint::Weak<MainWindow>,
+    library: &Arc<Mutex<Vec<Track>>>,
+    displayed: &Arc<Mutex<Vec<PathBuf>>>,
+    query: &Arc<Mutex<String>>,
+    state: SortState,
+) {
+    let mut tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
+    radiant_core::sort::sort_tracks(&mut tracks, state);
+    let needle = query.lock().map(|q| q.to_lowercase()).unwrap_or_default();
+    let visible: Vec<_> = tracks.iter().filter(|track| {
+        needle.is_empty()
+            || track.title.to_lowercase().contains(&needle)
+            || track.artist.as_deref().unwrap_or("").to_lowercase().contains(&needle)
+            || track.album.as_deref().unwrap_or("").to_lowercase().contains(&needle)
+    }).collect();
+    let paths: Vec<PathBuf> = visible.iter().map(|t| t.path.clone()).collect();
+    let titles: Vec<SharedString> = visible.iter().map(|t| t.title.clone().into()).collect();
+    let shown_count = visible.len();
+    if let Ok(mut all) = library.lock() { *all = tracks; }
+    if let Ok(mut shown) = displayed.lock() { *shown = paths; }
+    if let Some(ui) = weak.upgrade() {
+        ui.set_tracks(ModelRc::new(VecModel::from(titles)));
+        let count = library.lock().map(|l| l.len()).unwrap_or(0);
+        ui.set_status(format!("{shown_count} of {count} tracks").into());
+    }
 }
 
 fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
 
     // Paths of the tracks shown in the list, in the same order (shared with the scan thread).
-    let library: Arc<Mutex<Vec<PathBuf>>> = Arc::default();
+    let library: Arc<Mutex<Vec<Track>>> = Arc::default();
+    let displayed: Arc<Mutex<Vec<PathBuf>>> = Arc::default();
+    let query: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let sort: Arc<Mutex<SortState>> = Arc::new(Mutex::new(SortState { key: SortKey::Name, descending: false }));
 
     // The engine reports changes from its own thread; forward them to the UI thread.
     let weak = ui.as_weak();
-    let status_library = library.clone();
+    let status_library = displayed.clone();
     let player = Rc::new(Player::spawn(move |status| {
         // Position of the playing track in the list (-1 = none), for the row highlight.
         let index = status
@@ -201,7 +240,24 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_eq_gains(ModelRc::from(eq_model.clone()));
     apply_settings(&ui, &player, &fx, &eq_model, &settings.borrow());
     if let Some(dir) = settings.borrow().music_folder.clone() {
-        scan_folder(ui_weak.clone(), library.clone(), scan_gen.clone(), dir);
+        scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
+    }
+
+    {
+        let (weak, library, displayed, query, sort) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone());
+        ui.on_search_changed(move |value| {
+            if let Ok(mut q) = query.lock() { *q = value.to_string(); }
+            let state = *sort.lock().unwrap_or_else(|e| e.into_inner());
+            refresh_tracks(&weak, &library, &displayed, &query, state);
+        });
+    }
+    {
+        let (weak, library, displayed, query, sort) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone());
+        ui.on_sort_changed(move |mode, descending| {
+            let state = SortState { key: sort_key_from_ui(mode), descending };
+            if let Ok(mut current) = sort.lock() { *current = state; }
+            refresh_tracks(&weak, &library, &displayed, &query, state);
+        });
     }
 
     {
@@ -211,8 +267,10 @@ fn main() -> Result<(), slint::PlatformError> {
             if i < 0 {
                 return;
             }
-            let queue = library.lock().map(|l| l.clone()).unwrap_or_default();
-            player.send(Command::SetQueue { queue, start: i as usize });
+            let Some(path) = displayed.lock().ok().and_then(|l| l.get(i as usize).cloned()) else { return; };
+            let queue = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect::<Vec<_>>()).unwrap_or_default();
+            let Some(start) = queue.iter().position(|p| p == &path) else { return; };
+            player.send(Command::SetQueue { queue, start });
         });
     }
     {
@@ -379,7 +437,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
         save_settings(&weak, &settings);
-        scan_folder(weak.clone(), library.clone(), scan_gen.clone(), dir);
+        scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
     });
 
     ui.run()

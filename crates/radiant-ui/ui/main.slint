@@ -330,6 +330,9 @@ export component MainWindow inherits Window {
     default-font-size: 14px;
 
     in property <[string]> tracks;
+    in-out property <string> search-text: "";
+    in-out property <int> sort-mode: 1;
+    in-out property <bool> sort-descending: false;
     in property <string> status;
     in property <string> now-playing;
     in property <bool> is-playing;
@@ -365,6 +368,8 @@ export component MainWindow inherits Window {
     private property <[string]> eq-labels: ["32", "64", "125", "250", "500", "1k", "2k", "3.5k", "6k", "9k", "12.5k", "16k"];
 
     callback choose-folder();
+    callback search-changed(string);
+    callback sort-changed(int, bool);
     callback play-track(int);
     callback toggle-play();
     callback next-track();
@@ -424,13 +429,36 @@ export component MainWindow inherits Window {
         Rectangle {
             vertical-stretch: 1;
 
+            VerticalLayout {
+            HorizontalLayout {
+                height: 44px;
+                padding-left: 20px;
+                padding-right: 20px;
+                spacing: 8px;
+                TextInput {
+                    text: root.search-text;
+                    placeholder-text: "Search tracks, artists, albums";
+                    horizontal-stretch: 1;
+                    edited => { root.search-changed(self.text); }
+                }
+                PillButton {
+                    text: "Sort: " + ["Manual", "Name", "Artist", "Album", "Duration", "Date"][root.sort-mode] + (root.sort-descending ? " ↓" : " ↑");
+                    clicked => { root.sort-descending = !root.sort-descending; root.sort-changed(root.sort-mode, root.sort-descending); }
+                }
+                PillButton {
+                    text: "Next sort";
+                    clicked => { root.sort-mode = (root.sort-mode + 1) % 6; root.sort-changed(root.sort-mode, root.sort-descending); }
+                }
+            }
+
             if root.tracks.length == 0 : Text {
-                text: "Choose a music folder to start";
+                text: root.search-text == "" ? "Choose a music folder to start" : "No matching tracks";
                 color: Theme.muted;
                 font-size: 16px;
             }
 
             ListView {
+                vertical-stretch: 1;
                 for t[i] in root.tracks : Rectangle {
                     height: 44px;
                     background: i == root.current-index ? Theme.accent.with-alpha(0.16)
@@ -460,6 +488,7 @@ export component MainWindow inherits Window {
                         clicked => { root.play-track(i); }
                     }
                 }
+            }
             }
         }
 
