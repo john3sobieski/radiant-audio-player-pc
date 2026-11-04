@@ -220,28 +220,28 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_toggle_play(move || player.send(Command::Toggle));
     }
     {
-        let (player, settings) = (player.clone(), settings.clone());
+        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
         ui.on_volume_changed(move |v| {
             player.send(Command::SetVolume(v));
             settings.borrow_mut().volume = v;
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, settings) = (player.clone(), settings.clone());
+        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
         ui.on_shuffle_changed(move |on| {
             player.send(Command::SetShuffle(on));
             settings.borrow_mut().shuffle = on;
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, settings) = (player.clone(), settings.clone());
+        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
         ui.on_repeat_changed(move |mode| {
             let repeat = repeat_mode_from_ui(mode);
             player.send(Command::SetRepeat(repeat_mode_to_engine(repeat)));
             settings.borrow_mut().repeat_mode = repeat;
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
@@ -259,68 +259,68 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ---- playback speed (phase vocoder in the engine, pitch preserved) ----
     {
-        let (player, settings) = (player.clone(), settings.clone());
+        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
         ui.on_speed_changed(move |t| {
             let t = (t * 10.0).round() / 10.0;
             // Slider position -2..=2 -> speed 1/3..3 (same mapping as Android).
             player.send(Command::SetSpeed(slider_to_speed(t)));
             settings.borrow_mut().speed_t = t;
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
 
     {
-        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
+        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
         ui.on_normalize_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.normalize = on;
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
+        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
         ui.on_mono_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.mono = on;
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
+        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
         ui.on_bass_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.bass_db = (v * 2.0).round() / 2.0; // 0.5 dB steps
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
+        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
         ui.on_treble_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.treble_db = (v * 2.0).round() / 2.0;
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings) = (player.clone(), fx.clone(), settings.clone());
+        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
         ui.on_subsonic_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.subsonic_percent = v.round(); // whole percent
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
+        let (player, fx, eq_model, settings, weak) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), ui_weak.clone());
         ui.on_eq_changed(move |i, v| {
             let i = i as usize;
             if i >= 12 {
@@ -332,14 +332,14 @@ fn main() -> Result<(), slint::PlatformError> {
             s.eq_gains_db[i] = v;
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
     let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
     {
-        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
+        let (player, fx, eq_model, settings, weak) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), ui_weak.clone());
         ui.on_eq_preset_selected(move |i| {
             let Some(preset) = EQ_PRESETS.get(i as usize) else { return };
             for (band, g) in preset.gains.iter().enumerate() {
@@ -349,7 +349,7 @@ fn main() -> Result<(), slint::PlatformError> {
             s.eq_gains_db = preset.gains;
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
     {
@@ -370,15 +370,15 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             player.send(Command::SetFx(s.clone()));
             settings.borrow_mut().fx = s.clone();
-            save_settings(&settings);
+            save_settings(&weak, &settings);
         });
     }
 
-    let weak = ui.as_weak();
+    let weak = ui_weak.clone();
     ui.on_choose_folder(move || {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
-        save_settings(&settings);
+        save_settings(&weak, &settings);
         scan_folder(weak.clone(), library.clone(), dir);
     });
 
