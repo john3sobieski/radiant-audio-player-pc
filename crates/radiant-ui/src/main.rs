@@ -379,7 +379,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
         save_settings(&weak, &settings);
-        scan_folder(weak.clone(), library.clone(), dir);
+        scan_folder(weak.clone(), library.clone(), scan_gen.clone(), dir);
     });
 
     ui.run()
