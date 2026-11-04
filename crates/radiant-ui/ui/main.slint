@@ -1056,9 +1056,7 @@ export component MainWindow inherits Window {
                 viewbox-width: 1000;
                 viewbox-height: 1000;
                 commands: root.rays-halo;
-                stroke: root.glow-color.with-alpha(0.22);
-                stroke-width: max(3px, stage.ring-d / 40);
-                stroke-line-cap: round;
+                fill: root.glow-color.with-alpha(0.20);
             }
             Path {
                 x: stage.ring-x - stage.ring-d * 0.2;
@@ -1068,9 +1066,7 @@ export component MainWindow inherits Window {
                 viewbox-width: 1000;
                 viewbox-height: 1000;
                 commands: root.rays-body;
-                stroke: root.glow-color.with-alpha(0.85);
-                stroke-width: max(1.5px, stage.ring-d / 90);
-                stroke-line-cap: round;
+                fill: root.glow-color.with-alpha(0.88);
             }
             Path {
                 x: stage.ring-x - stage.ring-d * 0.2;
@@ -1080,9 +1076,7 @@ export component MainWindow inherits Window {
                 viewbox-width: 1000;
                 viewbox-height: 1000;
                 commands: root.rays-tips;
-                stroke: root.glow-color.brighter(0.9);
-                stroke-width: max(1.5px, stage.ring-d / 90);
-                stroke-line-cap: round;
+                fill: root.glow-color.brighter(1.0);
             }
             Path {
                 x: stage.ring-x - stage.ring-d * 0.2;
@@ -1092,9 +1086,7 @@ export component MainWindow inherits Window {
                 viewbox-width: 1000;
                 viewbox-height: 1000;
                 commands: root.rays-peaks;
-                stroke: #ffffffcc;
-                stroke-width: max(1.5px, stage.ring-d / 100);
-                stroke-line-cap: round;
+                fill: #ffffffd0;
             }
             // Ring track.
             Rectangle {

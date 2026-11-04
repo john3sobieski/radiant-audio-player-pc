@@ -816,6 +816,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let tap = player.spectrum();
         let last = std::cell::Cell::new(std::time::Instant::now());
         let was_quiet = std::cell::Cell::new(false);
+        let phase = std::cell::Cell::new(0.0_f32);
         rays_timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(25), move || {
             let Some(ui) = weak.upgrade() else { return };
             let now = std::time::Instant::now();
@@ -831,7 +832,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 return; // nothing moves: keep the idle ticks, spend no CPU
             }
             was_quiet.set(quiet);
-            let r = rays::build(&f.bands, &f.peaks);
+            // The picture turns slowly, a bit faster when the music is loud.
+            phase.set((phase.get() + dt * (0.008 + 0.03 * f.level)).rem_euclid(1.0));
+            let r = rays::build(&f.bands, &f.peaks, phase.get());
             ui.set_rays_halo(r.halo.into());
             ui.set_rays_body(r.body.into());
             ui.set_rays_tips(r.tips.into());

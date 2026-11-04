@@ -1,80 +1,117 @@
-//! Geometry of the spectrum rays around the progress ring.
+//! Geometry of the spectrum rays around the progress ring ("sun rays").
 //!
-//! Pure functions: spectrum bands in, SVG path strings out (one `Path` element per layer in the
-//! Slint file). Coordinates are in a 1000 x 1000 box that Slint scales to the real size, so the
-//! same strings work for every window size. The ring itself has radius `RING_R`.
+//! Pure functions: spectrum bands in, SVG path strings out (one filled `Path` per layer in the
+//! Slint file). Coordinates are in a 1000 x 1000 box that Slint scales to the real size.
+//! The ring has radius `RING_R`. Every ray is a thin pointed triangle; its length follows one band
+//! of the spectrum, but angle, length range and band assignment differ ray by ray (fixed pseudo-random
+//! numbers), the left and right half map the spectrum differently and `phase` slowly turns the whole
+//! picture. So it looks like glowing sun rays, not like an equalizer.
 
-/// Rays around the full circle (an even number: the picture is mirrored left / right).
-pub const RAY_COUNT: usize = 120;
+use std::f32::consts::{PI, TAU};
+
+pub const RAY_COUNT: usize = 168;
 /// Ring radius in box units; the Slint file sizes the box to `ring-d * 1.4` to match.
 pub const RING_R: f32 = 357.0;
-/// Where the rays start (a small gap from the ring) and how long the longest one can get.
-const R_INNER: f32 = RING_R + 16.0;
-const R_SPAN: f32 = 118.0;
-/// Idle ray length: the ring stays decorated when it is quiet.
-const MIN_LEN: f32 = 5.0;
-/// The outer part of each ray that is drawn again in a brighter color.
-const TIP_FRACTION: f32 = 0.34;
+const R_INNER: f32 = RING_R + 14.0;
+/// Longest possible ray (box edge is at radius 500).
+const R_SPAN: f32 = 122.0;
+/// Idle length: a quiet ring keeps a fine fringe.
+const MIN_LEN: f32 = 4.0;
 
 #[derive(Default, Clone, PartialEq)]
 pub struct RayPaths {
-    /// Wide, faint copy of the rays (soft glow).
+    /// Wide, faint triangles (soft glow around every ray).
     pub halo: String,
-    /// The rays themselves.
+    /// The rays.
     pub body: String,
-    /// Bright outer end of every ray.
+    /// Thin bright core of each ray.
     pub tips: String,
-    /// Small falling markers above the rays.
+    /// Tiny sparks above the rays that fall back slowly.
     pub peaks: String,
 }
 
-/// Level of ray `j`: lows sit at the bottom of the circle, highs at the top, mirrored left / right.
-/// The value is interpolated between neighbouring bands so the outline is round, not stepped.
-fn level_at(values: &[f32], j: usize) -> f32 {
+/// Deterministic pseudo-random number in 0..1 for (ray, salt).
+fn rnd(j: usize, salt: u32) -> f32 {
+    let mut x = (j as u32).wrapping_mul(0x9E37_79B1) ^ salt.wrapping_mul(0x85EB_CA6B);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x2C1B_3C6D);
+    x ^= x >> 12;
+    x = x.wrapping_mul(0x297A_2D39);
+    x ^= x >> 15;
+    (x >> 8) as f32 / (1u32 << 24) as f32
+}
+
+/// Value of a band curve at a fractional position (linear interpolation).
+fn sample(values: &[f32], pos: f32) -> f32 {
     let n = values.len();
     if n == 0 {
         return 0.0;
     }
-    let theta = std::f32::consts::TAU * (j as f32 + 0.5) / RAY_COUNT as f32; // clockwise from the top
-    let from_bottom = (theta - std::f32::consts::PI).abs() / std::f32::consts::PI; // 0 at the bottom, 1 at the top
-    let pos = from_bottom * (n - 1) as f32;
-    let i = (pos.floor() as usize).min(n - 1);
+    let pos = pos.clamp(0.0, (n - 1) as f32);
+    let i = pos.floor() as usize;
     let k = (i + 1).min(n - 1);
     let f = pos - i as f32;
     values[i] * (1.0 - f) + values[k] * f
 }
 
-fn seg(out: &mut String, r0: f32, r1: f32, sin: f32, cos: f32) {
+/// Where on the spectrum ray `j` listens (0..n-1) for the given turn `phase` (in turns).
+/// Lows sit at one point of the circle and highs on the opposite side, but the two halves bend the
+/// scale differently and every ray is shifted a little, so the picture is not mirrored.
+fn band_pos(j: usize, theta: f32, phase: f32, n: usize) -> f32 {
+    let u = (theta / TAU + phase).rem_euclid(1.0);
+    let t = if u < 0.5 { u * 2.0 } else { (1.0 - u) * 2.0 }; // 0 .. 1 .. 0
+    let warp = if u < 0.5 { t.powf(0.85) } else { t.powf(1.25) };
+    let jitter = (rnd(j, 3) - 0.5) * 3.0;
+    warp * (n - 1) as f32 + jitter
+}
+
+fn tri(out: &mut String, sin: f32, cos: f32, r0: f32, r1: f32, half_w: f32) {
     use std::fmt::Write;
+    // Base corners are shifted sideways (perpendicular to the ray), the tip sits on the ray axis.
+    let (px, py) = (cos, sin);
+    let (bx, by) = (500.0 + r0 * sin, 500.0 - r0 * cos);
     let _ = write!(
         out,
-        "M {:.1} {:.1} L {:.1} {:.1} ",
-        500.0 + r0 * sin,
-        500.0 - r0 * cos,
+        "M {:.1} {:.1} L {:.1} {:.1} L {:.1} {:.1} Z ",
+        bx - px * half_w,
+        by - py * half_w,
         500.0 + r1 * sin,
-        500.0 - r1 * cos
+        500.0 - r1 * cos,
+        bx + px * half_w,
+        by + py * half_w
     );
 }
 
-/// `bands` and `peaks` are 0..1, low frequencies first (same length).
-pub fn build(bands: &[f32], peaks: &[f32]) -> RayPaths {
+/// `bands` and `peaks` are 0..1, low frequencies first. `phase` is the slow rotation in turns.
+pub fn build(bands: &[f32], peaks: &[f32], phase: f32) -> RayPaths {
+    let n = bands.len().max(1);
     let mut p = RayPaths::default();
     for j in 0..RAY_COUNT {
-        let theta = std::f32::consts::TAU * (j as f32 + 0.5) / RAY_COUNT as f32;
+        let pitch = TAU / RAY_COUNT as f32;
+        // Angle with a random shift of up to +-45 % of the pitch (clumps and gaps, like real light).
+        let theta = pitch * (j as f32 + 0.5 + (rnd(j, 1) - 0.5) * 0.9);
         let (sin, cos) = theta.sin_cos();
-        let v = level_at(bands, j).clamp(0.0, 1.0);
-        // A slight curve: quiet parts stay small, loud parts open up.
-        let len = MIN_LEN + v.powf(1.2) * R_SPAN;
+
+        let pos = band_pos(j, theta, phase, n);
+        // Every ray has its own sensitivity; a few are "long" rays that reach much further.
+        let gain = 0.55 + 0.45 * rnd(j, 2);
+        let long = if rnd(j, 4) > 0.82 { 1.0 } else { 0.62 + 0.3 * rnd(j, 5) };
+        let v = (sample(bands, pos) * gain).clamp(0.0, 1.0);
+        let len = MIN_LEN + v.powf(1.25) * R_SPAN * long;
         let end = R_INNER + len;
-        seg(&mut p.halo, R_INNER, end, sin, cos);
-        seg(&mut p.body, R_INNER, end, sin, cos);
-        if len > MIN_LEN + 6.0 {
-            seg(&mut p.tips, end - len * TIP_FRACTION, end, sin, cos);
+        // Thin: width follows the length a little (long rays are a bit broader at the root).
+        let w = 0.9 + 1.5 * (len / R_SPAN).min(1.0) + 0.5 * rnd(j, 6);
+
+        tri(&mut p.halo, sin, cos, R_INNER - 2.0, end + 4.0, w * 3.2);
+        tri(&mut p.body, sin, cos, R_INNER, end, w);
+        if len > MIN_LEN + 7.0 {
+            tri(&mut p.tips, sin, cos, R_INNER + len * 0.15, end - len * 0.04, w * 0.42);
         }
-        let pk = level_at(peaks, j).clamp(0.0, 1.0);
-        if pk > v + 0.04 {
-            let r = R_INNER + MIN_LEN + pk.powf(1.2) * R_SPAN + 6.0;
-            seg(&mut p.peaks, r, r + 3.5, sin, cos);
+        let pk = (sample(peaks, pos) * gain).clamp(0.0, 1.0);
+        let peak_len = MIN_LEN + pk.powf(1.25) * R_SPAN * long;
+        if peak_len > len + 6.0 {
+            let r = R_INNER + peak_len + 5.0;
+            tri(&mut p.peaks, sin, cos, r, r + 4.0, 0.9);
         }
     }
     p
@@ -84,51 +121,81 @@ pub fn build(bands: &[f32], peaks: &[f32]) -> RayPaths {
 mod tests {
     use super::*;
 
-    fn count_segments(s: &str) -> usize {
+    fn triangles(s: &str) -> usize {
         s.matches('M').count()
     }
 
     #[test]
-    fn quiet_draws_idle_ticks_only() {
+    fn quiet_draws_a_fine_fringe_only() {
         let z = [0.0_f32; 60];
-        let p = build(&z, &z);
-        assert_eq!(count_segments(&p.body), RAY_COUNT);
-        assert_eq!(count_segments(&p.halo), RAY_COUNT);
+        let p = build(&z, &z, 0.0);
+        assert_eq!(triangles(&p.body), RAY_COUNT);
+        assert_eq!(triangles(&p.halo), RAY_COUNT);
         assert!(p.tips.is_empty() && p.peaks.is_empty());
     }
 
     #[test]
-    fn loud_adds_tips_and_peaks() {
-        let b = [1.0_f32; 60];
-        let mut pk = [1.0_f32; 60];
-        let p = build(&b, &pk);
-        assert_eq!(count_segments(&p.tips), RAY_COUNT);
-        assert!(p.peaks.is_empty(), "peak at the ray end needs no marker");
-        pk = [1.0; 60];
-        let half = [0.5_f32; 60];
-        assert_eq!(count_segments(&build(&half, &pk).peaks), RAY_COUNT);
+    fn loud_adds_cores_and_sparks() {
+        let b = [0.6_f32; 60];
+        let pk = [1.0_f32; 60];
+        let p = build(&b, &pk, 0.0);
+        assert!(triangles(&p.tips) > RAY_COUNT / 2);
+        assert!(triangles(&p.peaks) > RAY_COUNT / 4);
     }
 
     #[test]
-    fn mirrored_and_lows_at_the_bottom() {
+    fn not_mirrored_and_turns_with_phase() {
         let mut b = [0.0_f32; 60];
-        b[0] = 1.0; // lowest band only
-        for j in 0..RAY_COUNT / 2 {
-            let l = level_at(&b, j);
-            let r = level_at(&b, RAY_COUNT - 1 - j);
-            assert!((l - r).abs() < 1e-5, "ray {j} is not mirrored");
+        for (i, v) in b.iter_mut().enumerate() {
+            *v = i as f32 / 59.0;
         }
-        // The two rays next to the bottom (j = 59, 60) carry the most, the top ones nothing.
-        assert!(level_at(&b, 59) > level_at(&b, 30));
-        assert_eq!(level_at(&b, 0), 0.0);
+        let a = build(&b, &b, 0.0).body;
+        assert_ne!(a, build(&b, &b, 0.25).body, "phase must change the picture");
+        // Left and right half must not be copies of each other: compare total lengths.
+        let len_of = |from: usize, to: usize| -> f32 {
+            (from..to)
+                .map(|j| {
+                    let theta = TAU * (j as f32 + 0.5) / RAY_COUNT as f32;
+                    sample(&b, band_pos(j, theta, 0.0, 60)) * (0.55 + 0.45 * rnd(j, 2))
+                })
+                .sum()
+        };
+        let (r, l) = (len_of(0, RAY_COUNT / 2), len_of(RAY_COUNT / 2, RAY_COUNT));
+        assert!((r - l).abs() > 0.5, "halves look identical: {r} vs {l}");
+    }
+
+    #[test]
+    fn follows_the_spectrum() {
+        // Louder spectrum -> more ink in the body layer (longer rays).
+        let quiet = build(&[0.1; 60], &[0.1; 60], 0.0);
+        let loud = build(&[0.9; 60], &[0.9; 60], 0.0);
+        let reach = |s: &str| {
+            s.split_whitespace()
+                .filter_map(|t| t.parse::<f32>().ok())
+                .map(|v| (v - 500.0).abs())
+                .fold(0.0_f32, f32::max)
+        };
+        assert!(reach(&loud.body) > reach(&quiet.body) + 40.0);
     }
 
     #[test]
     fn stays_inside_the_box() {
         let o = [1.0_f32; 60];
-        let p = build(&o, &o);
-        for n in p.body.split_whitespace().filter_map(|t| t.parse::<f32>().ok()) {
-            assert!((0.0..=1000.0).contains(&n), "{n} is outside the box");
+        for phase in [0.0, 0.3, 0.77] {
+            let p = build(&o, &o, phase);
+            for layer in [&p.halo, &p.body, &p.tips, &p.peaks] {
+                for n in layer.split_whitespace().filter_map(|t| t.parse::<f32>().ok()) {
+                    assert!((0.0..=1000.0).contains(&n), "{n} is outside the box");
+                }
+            }
         }
+    }
+
+    #[test]
+    fn rnd_is_deterministic_and_spread() {
+        assert_eq!(rnd(5, 2), rnd(5, 2));
+        let mean: f32 = (0..1000).map(|j| rnd(j, 1)).sum::<f32>() / 1000.0;
+        assert!((mean - 0.5).abs() < 0.05, "mean {mean}");
+        assert!(PI > 3.0);
     }
 }
