@@ -53,6 +53,57 @@ pub fn sort_tracks(tracks: &mut [Track], state: SortState) {
     });
 }
 
+/// Score of one text field against the lowercase search text: whole match > start of the field >
+/// start of a word > anywhere. A match that covers more of the field scores a bit higher.
+fn field_score(field: &str, needle: &str) -> Option<u32> {
+    let f = field.to_lowercase();
+    if f.is_empty() {
+        return None;
+    }
+    let base = if f == needle {
+        100
+    } else if f.starts_with(needle) {
+        80
+    } else if f.split(|c: char| !c.is_alphanumeric()).any(|w| w.starts_with(needle)) {
+        60
+    } else if f.contains(needle) {
+        40
+    } else {
+        return None;
+    };
+    let needle_len = needle.chars().count() as u32;
+    let field_len = f.chars().count().max(1) as u32;
+    Some(base + (needle_len * 20 / field_len).min(20))
+}
+
+/// Search relevance of a track (`None` = does not match). `needle` must be trimmed and lowercase.
+/// Title counts more than artist and album. When the text has several words, a track where
+/// every word appears somewhere (title, artist or album) still matches, with a low score.
+pub fn search_score(track: &Track, needle: &str) -> Option<u32> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    let by_field = [
+        field_score(&track.title, needle).map(|s| s * 10),
+        track.artist.as_deref().and_then(|a| field_score(a, needle)).map(|s| s * 7),
+        track.album.as_deref().and_then(|a| field_score(a, needle)).map(|s| s * 7),
+    ];
+    if let Some(best) = by_field.into_iter().flatten().max() {
+        return Some(best);
+    }
+    let mut words = needle.split_whitespace().peekable();
+    if words.peek().is_none() {
+        return None;
+    }
+    let haystack = format!(
+        "{} {} {}",
+        track.title.to_lowercase(),
+        track.artist.as_deref().unwrap_or("").to_lowercase(),
+        track.album.as_deref().unwrap_or("").to_lowercase()
+    );
+    words.all(|w| haystack.contains(w)).then_some(15)
+}
+
 /// "Manual order": tracks follow the stored `order`; tracks that are not in it
 /// (new files) go to the end, sorted by path.
 pub fn apply_manual_order(tracks: &mut [Track], order: &[PathBuf]) {
@@ -93,6 +144,34 @@ mod tests {
         assert_eq!(v.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["a", "b", "x"]);
         sort_tracks(&mut v, SortState { key: SortKey::Artist, descending: true });
         assert_eq!(v.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["b", "a", "x"]);
+    }
+
+    #[test]
+    fn search_ranks_closer_matches_higher() {
+        let mk = |title: &str, album: Option<&str>| Track {
+            title: title.into(),
+            album: album.map(Into::into),
+            ..Default::default()
+        };
+        let exact = mk("Wa", None);
+        let prefix = mk("Watra", None);
+        let word = mk("Big Wave", None);
+        let inside = mk("Hawaii", None);
+        let by_album = mk("Other", Some("Watra"));
+        let none = mk("Zzz", None);
+        let s = |t: &Track| search_score(t, "wa");
+        assert!(s(&exact) > s(&prefix));
+        assert!(s(&prefix) > s(&word));
+        assert!(s(&word) > s(&inside));
+        assert!(s(&by_album).is_some() && s(&by_album) < s(&prefix));
+        assert_eq!(s(&none), None);
+    }
+
+    #[test]
+    fn search_with_several_words_matches_across_fields() {
+        let t = Track { title: "Song".into(), artist: Some("The Band".into()), ..Default::default() };
+        assert!(search_score(&t, "band song").is_some());
+        assert!(search_score(&t, "band zzz").is_none());
     }
 
     #[test]

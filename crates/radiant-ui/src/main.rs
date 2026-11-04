@@ -237,13 +237,19 @@ fn refresh_tracks(
     } else {
         radiant_core::sort::sort_tracks(&mut tracks, state);
     }
-    let needle = query.lock().map(|q| q.to_lowercase()).unwrap_or_default();
-    let visible: Vec<_> = tracks.iter().filter(|track| {
-        needle.is_empty()
-            || track.title.to_lowercase().contains(&needle)
-            || track.artist.as_deref().unwrap_or("").to_lowercase().contains(&needle)
-            || track.album.as_deref().unwrap_or("").to_lowercase().contains(&needle)
-    }).collect();
+    // With a search text the list is ordered by relevance (closer match = higher); equal scores keep
+    // the order of the chosen sort mode, because the sort below is stable.
+    let needle = query.lock().map(|q| q.trim().to_lowercase()).unwrap_or_default();
+    let visible: Vec<&Track> = if needle.is_empty() {
+        tracks.iter().collect()
+    } else {
+        let mut scored: Vec<(u32, &Track)> = tracks
+            .iter()
+            .filter_map(|t| radiant_core::sort::search_score(t, &needle).map(|score| (score, t)))
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.into_iter().map(|(_, t)| t).collect()
+    };
     let paths: Vec<PathBuf> = visible.iter().map(|t| t.path.clone()).collect();
 
     // One row per visible track. Covers already in the cache are used at once; the rest are
