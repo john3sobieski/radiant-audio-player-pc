@@ -29,11 +29,24 @@ export struct TrackRow {
     has-cover: bool,
 }
 
+// One line of the lyrics (time-ms = -1 for plain, unsynchronized lyrics).
+export struct LyricRow {
+    text: string,
+    time-ms: int,
+}
+
+// One "label: value" line of the Info tab.
+export struct InfoRow {
+    label: string,
+    value: string,
+}
+
 // Square cover: the picture, or a quiet tile with a letter when there is none.
 component CoverArt inherits Rectangle {
     in property <image> art;
     in property <bool> has-image: false;
     in property <string> letter;
+    in property <length> letter-size: 16px;
 
     width: 40px;
     height: 40px;
@@ -52,7 +65,7 @@ component CoverArt inherits Rectangle {
         height: parent.height;
         text: root.letter;
         color: Theme.muted;
-        font-size: 16px;
+        font-size: root.letter-size;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -456,6 +469,58 @@ export component MainWindow inherits Window {
     in-out property <bool> suppress-click: false;
     in property <string> status;
     in property <string> now-playing;
+
+    // Big player view ("Emitter"): cover inside a progress ring, glow from the cover, side tabs.
+    in-out property <bool> show-player: false;
+    /// 0 = Lyrics, 1 = Sound, 2 = Info, -1 = none (narrow windows only).
+    in-out property <int> player-tab: 0;
+    in property <string> np-title;
+    in property <string> np-sub;
+    in property <string> np-quality;
+    in property <string> np-letter;
+    in property <image> np-cover;
+    in property <bool> np-has-cover: false;
+    in property <color> glow-color: #8b6cff;
+    in property <[InfoRow]> np-info;
+    in property <[LyricRow]> lyrics;
+    in property <bool> lyrics-synced: false;
+    /// Index of the current line of synchronized lyrics, -1 = before the first line.
+    in property <int> lyric-index: -1;
+
+    private property <length> header-h: 48px;
+    private property <length> bar-h: 112px;
+    private property <length> player-h: root.height - root.bar-h;
+    private property <bool> wide: root.width >= 820px;
+    private property <length> side-w: root.wide ? 380px : root.width;
+    private property <length> side-x: root.width - root.side-w;
+    private property <length> stage-w: root.wide ? root.side-x : root.width;
+    private property <int> eff-tab: (root.wide && root.player-tab < 0) ? 0 : root.player-tab;
+    private property <bool> side-open: root.wide || root.player-tab >= 0;
+    private property <bool> stage-visible: root.wide || root.player-tab < 0;
+    private property <length> card-x: root.wide ? root.side-x : 12px;
+    private property <length> card-w: root.wide ? root.side-w - 12px : root.width - 24px;
+    private property <length> card-h: root.player-h - root.header-h - 12px;
+    private property <bool> sound-visible: (root.show-sound && !root.show-player)
+        || (root.show-player && root.eff-tab == 1);
+
+    function pick-tab(tab: int) {
+        if (root.wide) {
+            root.player-tab = tab;
+        } else {
+            root.player-tab = root.player-tab == tab ? -1 : tab;
+        }
+    }
+    // Position on the ring (0..1 clockwise from the top) for a mouse position inside a square of `size`.
+    pure function ring-ratio-at(mx: length, my: length, size: length) -> float {
+        let a = Math.atan2((mx - size / 2) / 1px, (size / 2 - my) / 1px) / 360deg;
+        return a < 0 ? a + 1 : a;
+    }
+    // True when the mouse is on the ring itself (not on the cover inside it).
+    pure function ring-hit(mx: length, my: length, size: length) -> bool {
+        let dx = (mx - size / 2) / 1px;
+        let dy = (my - size / 2) / 1px;
+        return Math.sqrt(dx * dx + dy * dy) * 1px >= size / 2 - 22px;
+    }
     in property <bool> is-playing;
     /// Index of the playing track in `tracks`, -1 if none.
     in property <int> current-index: -1;
@@ -813,10 +878,23 @@ export component MainWindow inherits Window {
                     width: max(0px, (parent.width - 348px) / 2 - 24px - 16px);
                     height: parent.height;
                     text: root.now-playing;
-                    color: Theme.text;
+                    color: root.show-player ? Theme.accent : Theme.text;
                     font-weight: 600;
                     vertical-alignment: center;
                     overflow: elide;
+                }
+                // Click the title to open / close the big player view.
+                TouchArea {
+                    x: 24px;
+                    width: max(0px, (parent.width - 348px) / 2 - 24px - 16px);
+                    height: parent.height;
+                    enabled: root.now-playing != "";
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.show-player = !root.show-player;
+                        root.show-sort = false;
+                        root.show-sound = false;
+                    }
                 }
 
                 // Center: transport controls.
@@ -917,6 +995,336 @@ export component MainWindow inherits Window {
         }
     }
 
+    // ---- big player view: covers the track list, the player bar below stays usable ----
+    if root.show-player : Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.player-h;
+        background: Theme.bg;
+        clip: true;
+
+        // Stage: glow, progress ring, cover, title.
+        if root.stage-visible : stage := Rectangle {
+            x: 0px;
+            y: root.header-h;
+            width: root.stage-w;
+            height: root.player-h - root.header-h;
+
+            property <length> zone-h: self.height - 76px;
+            property <length> ring-d: max(110px, min(self.zone-h, min(self.width - 60px, 360px)));
+            property <length> ring-x: (self.width - self.ring-d) / 2;
+            property <length> ring-y: max(0px, (self.zone-h - self.ring-d) / 2);
+            property <float> ring-drag: 0;
+            property <bool> ring-band: false;
+            property <float> ring-ratio: ring-ta.pressed && self.ring-band ? self.ring-drag : root.progress;
+            property <float> ring-c: self.ring-d / 2px;
+            property <float> ring-r: self.ring-c - 2;
+            property <angle> ring-angle: min(self.ring-ratio, 0.9999) * 360deg;
+            property <float> ring-x1: self.ring-c + self.ring-r * Math.sin(self.ring-angle);
+            property <float> ring-y1: self.ring-c - self.ring-r * Math.cos(self.ring-angle);
+
+            // Light spilling out of the cover.
+            Rectangle {
+                x: stage.ring-x - stage.ring-d * 0.45;
+                y: stage.ring-y - stage.ring-d * 0.45;
+                width: stage.ring-d * 1.9;
+                height: stage.ring-d * 1.9;
+                background: @radial-gradient(circle, root.glow-color.with-alpha(0.38) 0%, root.glow-color.with-alpha(0) 70%);
+            }
+            // Ring track.
+            Rectangle {
+                x: stage.ring-x;
+                y: stage.ring-y;
+                width: stage.ring-d;
+                height: stage.ring-d;
+                border-radius: self.width / 2;
+                border-width: 4px;
+                border-color: Theme.surface-hover;
+            }
+            // Ring progress.
+            Path {
+                x: stage.ring-x;
+                y: stage.ring-y;
+                width: stage.ring-d;
+                height: stage.ring-d;
+                viewbox-width: stage.ring-d / 1px;
+                viewbox-height: stage.ring-d / 1px;
+                commands: stage.ring-ratio < 0.002 ? "M 0 0"
+                    : "M \{stage.ring-c} \{stage.ring-c - stage.ring-r} A \{stage.ring-r} \{stage.ring-r} 0 \{stage.ring-ratio > 0.5 ? 1 : 0} 1 \{stage.ring-x1} \{stage.ring-y1}";
+                stroke: root.glow-color.brighter(0.2);
+                stroke-width: 4px;
+                stroke-line-cap: round;
+            }
+            // Knob at the end of the progress (hover / drag).
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: Theme.text;
+                visible: ring-ta.has-hover || ring-ta.pressed;
+                x: stage.ring-x + stage.ring-x1 * 1px - 6px;
+                y: stage.ring-y + stage.ring-y1 * 1px - 6px;
+            }
+            // Round cover.
+            CoverArt {
+                x: stage.ring-x + 14px;
+                y: stage.ring-y + 14px;
+                width: stage.ring-d - 28px;
+                height: stage.ring-d - 28px;
+                border-radius: self.width / 2;
+                art: root.np-cover;
+                has-image: root.np-has-cover;
+                letter: root.np-letter;
+                letter-size: stage.ring-d / 4;
+            }
+            // Paused: a play mark over the cover.
+            if !root.is-playing : Rectangle {
+                x: stage.ring-x + 14px;
+                y: stage.ring-y + 14px;
+                width: stage.ring-d - 28px;
+                height: stage.ring-d - 28px;
+                border-radius: self.width / 2;
+                background: #00000066;
+                Path {
+                    x: (parent.width - self.width) / 2 + 2px;
+                    y: (parent.height - self.height) / 2;
+                    width: 28px;
+                    height: 28px;
+                    viewbox-width: 20;
+                    viewbox-height: 20;
+                    commands: "M 4 0 L 19 10 L 4 20 Z";
+                    fill: #ffffff;
+                }
+            }
+            // Ring: drag or click on the ring = seek, wheel = 5 s, click on the cover = play / pause.
+            ring-ta := TouchArea {
+                x: stage.ring-x;
+                y: stage.ring-y;
+                width: stage.ring-d;
+                height: stage.ring-d;
+                mouse-cursor: pointer;
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                        stage.ring-band = root.ring-hit(self.mouse-x, self.mouse-y, self.width);
+                        if (stage.ring-band) {
+                            stage.ring-drag = root.ring-ratio-at(self.mouse-x, self.mouse-y, self.width);
+                        }
+                    } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up
+                        && stage.ring-band && root.duration-secs > 0) {
+                        root.seek(root.ring-ratio-at(self.mouse-x, self.mouse-y, self.width));
+                    }
+                }
+                moved => {
+                    if (self.pressed && stage.ring-band) {
+                        stage.ring-drag = root.ring-ratio-at(self.mouse-x, self.mouse-y, self.width);
+                    }
+                }
+                clicked => {
+                    if (!stage.ring-band) { root.toggle-play(); }
+                }
+                scroll-event(event) => {
+                    if (root.duration-secs <= 0) {
+                        return reject;
+                    }
+                    root.seek(max(0.0, min(1.0, root.progress + (event.delta-y / 60px) * 5.0 / root.duration-secs)));
+                    return accept;
+                }
+            }
+
+            // Title, "artist · album · year", quality.
+            Text {
+                x: 24px;
+                y: parent.height - 72px;
+                width: parent.width - 48px;
+                height: 28px;
+                text: root.np-title;
+                color: Theme.text;
+                font-size: 20px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                x: 24px;
+                y: parent.height - 44px;
+                width: parent.width - 48px;
+                height: 20px;
+                text: root.np-sub;
+                color: Theme.muted;
+                font-size: 13px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            if root.np-quality != "" : Rectangle {
+                y: parent.height - 22px;
+                height: 18px;
+                width: min(parent.width - 48px, quality-text.preferred-width + 20px);
+                x: (parent.width - self.width) / 2;
+                border-radius: 9px;
+                background: root.glow-color.with-alpha(0.18);
+                quality-text := Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.np-quality;
+                    color: Theme.text;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+
+        // Side card: Lyrics / Info (the Sound tab shows the sound panel here, see below).
+        if root.side-open : Rectangle {
+            x: root.card-x;
+            y: root.header-h;
+            width: root.card-w;
+            height: root.card-h;
+            background: Theme.surface;
+            border-radius: 14px;
+            clip: true;
+
+            if root.eff-tab == 0 && root.lyrics.length == 0 : Text {
+                width: parent.width;
+                height: parent.height;
+                text: "No lyrics for this track";
+                color: Theme.muted;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            // Synchronized: the current line stays in the middle, click a line to jump there.
+            if root.eff-tab == 0 && root.lyrics.length > 0 && root.lyrics-synced : Rectangle {
+                clip: true;
+                Rectangle {
+                    y: parent.height / 2 - 20px - max(0, root.lyric-index) * 40px;
+                    width: parent.width;
+                    height: root.lyrics.length * 40px;
+                    animate y { duration: 260ms; easing: ease-in-out; }
+                    for l[i] in root.lyrics : Rectangle {
+                        y: i * 40px;
+                        width: parent.width;
+                        height: 40px;
+                        Text {
+                            x: 20px;
+                            width: parent.width - 40px;
+                            height: parent.height;
+                            text: l.text;
+                            font-size: 17px;
+                            font-weight: i == root.lyric-index ? 700 : 400;
+                            color: i == root.lyric-index ? Theme.text
+                                : i < root.lyric-index ? Theme.muted.with-alpha(0.45) : Theme.muted;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                if (root.duration-secs > 0) {
+                                    root.seek(max(0.0, min(1.0, (l.time-ms / 1000.0) / root.duration-secs)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Plain text: a normal scrolling list.
+            if root.eff-tab == 0 && root.lyrics.length > 0 && !root.lyrics-synced : ListView {
+                for l in root.lyrics : Rectangle {
+                    height: l.text == "" ? 16px : 30px;
+                    Text {
+                        x: 20px;
+                        width: parent.width - 40px;
+                        height: parent.height;
+                        text: l.text;
+                        font-size: 15px;
+                        color: Theme.text;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+            }
+            if root.eff-tab == 2 : VerticalLayout {
+                padding: 20px;
+                spacing: 10px;
+                alignment: start;
+                for r in root.np-info : Rectangle {
+                    height: 22px;
+                    Text {
+                        width: 110px;
+                        height: parent.height;
+                        text: r.label;
+                        color: Theme.muted;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        x: 120px;
+                        width: max(0px, parent.width - 120px);
+                        height: parent.height;
+                        text: r.value;
+                        color: Theme.text;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+
+        // Header: close, caption, tabs.
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.header-h;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 16px;
+                spacing: 8px;
+                HeaderItem {
+                    IconButton {
+                        width: 40px;
+                        height: 40px;
+                        commands: "M 2 6 L 3.5 4.5 L 10 11 L 16.5 4.5 L 18 6 L 10 14 Z";
+                        clicked => { root.show-player = false; }
+                    }
+                }
+                Text {
+                    text: "Now playing";
+                    color: Theme.muted;
+                    font-size: 13px;
+                    horizontal-stretch: 1;
+                    vertical-alignment: center;
+                }
+                HeaderItem {
+                    PillButton {
+                        text: "Lyrics";
+                        active: root.side-open && root.eff-tab == 0;
+                        clicked => { root.pick-tab(0); }
+                    }
+                }
+                HeaderItem {
+                    PillButton {
+                        text: "Sound";
+                        active: root.side-open && root.eff-tab == 1;
+                        clicked => { root.pick-tab(1); }
+                    }
+                }
+                HeaderItem {
+                    PillButton {
+                        text: "Info";
+                        active: root.side-open && root.eff-tab == 2;
+                        clicked => { root.pick-tab(2); }
+                    }
+                }
+            }
+        }
+    }
+
     // ---- sort panel (overlay): click outside to close ----
     if root.show-sort : TouchArea {
         y: 64px;
@@ -990,16 +1398,16 @@ export component MainWindow inherits Window {
     }
 
     // ---- sound panel (overlay): click outside to close ----
-    if root.show-sound : TouchArea {
+    if root.show-sound && !root.show-player : TouchArea {
         y: 64px;
         height: root.height - 64px;
         clicked => { root.show-sound = false; }
     }
-    if root.show-sound : Rectangle {
-        x: root.width - self.width - 20px;
-        y: 68px;
+    if root.sound-visible : Rectangle {
+        x: root.show-player ? root.card-x + (root.card-w - self.width) / 2 : root.width - self.width - 20px;
+        y: root.show-player ? root.header-h : 68px;
         width: 360px;
-        height: min(root.height - 78px, 640px);
+        height: root.show-player ? min(root.card-h, 640px) : min(root.height - 78px, 640px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;

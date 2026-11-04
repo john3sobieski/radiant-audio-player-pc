@@ -13,7 +13,7 @@ use symphonia::core::codecs::CODEC_TYPE_NULL;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{MetadataOptions, StandardTagKey, StandardVisualKey, Tag, Value, Visual};
-use symphonia::core::probe::Hint;
+use symphonia::core::probe::{Hint, ProbeResult};
 
 pub const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "ogg", "oga", "opus", "m4a", "aac", "alac", "wav",
@@ -185,16 +185,38 @@ fn pick_visual(visuals: &[Visual]) -> Option<Vec<u8>> {
         .map(|v| v.data.to_vec())
 }
 
-fn embedded_cover(path: &Path) -> Option<Vec<u8>> {
+fn open_probe(path: &Path) -> Option<ProbeResult> {
     let file = fs::File::open(path).ok()?;
     let mut hint = Hint::new();
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
     let source = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut probed = symphonia::default::get_probe()
+    symphonia::default::get_probe()
         .format(&hint, source, &FormatOptions::default(), &MetadataOptions::default())
-        .ok()?;
+        .ok()
+}
+
+/// Lyrics embedded in the tags (USLT, Vorbis LYRICS, ...). Call it off the UI thread.
+pub fn read_tag_lyrics(path: &Path) -> Option<String> {
+    let mut probed = open_probe(path)?;
+    let mut tags = HashMap::new();
+    {
+        let metadata = probed.format.metadata();
+        if let Some(revision) = metadata.current() {
+            collect_tags(revision.tags(), &mut tags);
+        }
+    }
+    if let Some(metadata) = probed.metadata.get() {
+        if let Some(revision) = metadata.current() {
+            collect_tags(revision.tags(), &mut tags);
+        }
+    }
+    tags.remove(&StandardTagKey::Lyrics)
+}
+
+fn embedded_cover(path: &Path) -> Option<Vec<u8>> {
+    let mut probed = open_probe(path)?;
     let from_format = {
         let metadata = probed.format.metadata();
         let found = metadata.current().and_then(|r| pick_visual(r.visuals()));

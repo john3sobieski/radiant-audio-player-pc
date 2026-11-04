@@ -14,7 +14,7 @@ use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
 };
 use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
-use radiant_core::models::{SortKey, SortState, Track};
+use radiant_core::models::{AudioInfo, SortKey, SortState, Track};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -180,6 +180,170 @@ fn apply_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
             }
         }
     }
+    if NOW_KEY.lock().map(|k| *k == key).unwrap_or(false) {
+        set_now_cover(ui, px);
+    }
+}
+
+/// Cover key of the track shown in the big player view.
+static NOW_KEY: Mutex<String> = Mutex::new(String::new());
+/// Path of the track the big player view describes (to drop late results for an older track).
+static LAST_NOW: Mutex<Option<PathBuf>> = Mutex::new(None);
+/// Start times (ms) of the synchronized lyrics of the current track; empty = no synced lyrics.
+static LYRIC_TIMES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+/// The current lyric line starts a little early so the eye can follow it.
+const LEAD_MS: u64 = 250;
+
+const ACCENT_RGB: (u8, u8, u8) = (0x8b, 0x6c, 0xff);
+
+/// Glow color of the big player view: the cover's most colorful tone, lifted so it always shines.
+fn dominant_color(px: &CoverPixels) -> slint::Color {
+    let data = &px.rgba;
+    let n = data.len() / 4;
+    let step = (n / 400).max(1);
+    let (mut r, mut g, mut b, mut weight_sum) = (0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32);
+    for i in (0..n).step_by(step) {
+        let p = &data[i * 4..i * 4 + 4];
+        if p[3] < 128 { continue; }
+        let (rf, gf, bf) = (p[0] as f32, p[1] as f32, p[2] as f32);
+        let max = rf.max(gf).max(bf);
+        let min = rf.min(gf).min(bf);
+        let saturation = if max > 0.0 { (max - min) / max } else { 0.0 };
+        // Colorful, bright pixels count most; the small constant keeps gray covers working.
+        let w = saturation * saturation * (max / 255.0) + 0.001;
+        r += rf * w;
+        g += gf * w;
+        b += bf * w;
+        weight_sum += w;
+    }
+    if weight_sum <= 0.0 {
+        return slint::Color::from_rgb_u8(ACCENT_RGB.0, ACCENT_RGB.1, ACCENT_RGB.2);
+    }
+    let (mut r, mut g, mut b) = (r / weight_sum, g / weight_sum, b / weight_sum);
+    let max = r.max(g).max(b);
+    if max > 0.0 && max < 170.0 {
+        let k = 170.0 / max;
+        r *= k;
+        g *= k;
+        b *= k;
+    }
+    slint::Color::from_rgb_u8(r.min(255.0) as u8, g.min(255.0) as u8, b.min(255.0) as u8)
+}
+
+fn set_now_cover(ui: &MainWindow, px: &CoverPixels) {
+    ui.set_np_cover(px.to_image());
+    ui.set_np_has_cover(true);
+    ui.set_glow_color(dominant_color(px));
+}
+
+fn clear_now_cover(ui: &MainWindow) {
+    ui.set_np_cover(slint::Image::default());
+    ui.set_np_has_cover(false);
+    ui.set_glow_color(slint::Color::from_rgb_u8(ACCENT_RGB.0, ACCENT_RGB.1, ACCENT_RGB.2));
+}
+
+/// Decodes (or takes from the cache) the cover of the playing track on a helper thread.
+fn request_cover(weak: slint::Weak<MainWindow>, key: String, path: PathBuf) {
+    std::thread::spawn(move || {
+        let cached = COVER_CACHE.lock().ok().and_then(|c| c.get(&key).cloned());
+        let pixels = match cached {
+            Some(p) => p,
+            None => {
+                let p = decode_cover(&path);
+                if let Ok(mut cache) = COVER_CACHE.lock() {
+                    if cache.len() >= 600 { cache.clear(); }
+                    cache.insert(key.clone(), p.clone());
+                }
+                p
+            }
+        };
+        let Some(px) = pixels else { return };
+        let _ = weak.upgrade_in_event_loop(move |ui| apply_cover(&ui, &key, &px));
+    });
+}
+
+/// "FLAC · 1411 kbps · 44.1 kHz"
+fn quality_text(info: &AudioInfo) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !info.format.is_empty() { parts.push(info.format.clone()); }
+    if let Some(kbps) = info.bitrate_kbps { parts.push(format!("{kbps} kbps")); }
+    if let Some(rate) = info.sample_rate { parts.push(format!("{} kHz", rate as f32 / 1000.0)); }
+    parts.join(" · ")
+}
+
+fn info_rows(t: &Track) -> Vec<InfoRow> {
+    let mut rows: Vec<(&str, String)> = Vec::new();
+    rows.push(("Format", t.info.format.clone()));
+    rows.push(("Bitrate", t.info.bitrate_kbps.map(|k| format!("{k} kbps")).unwrap_or_default()));
+    rows.push(("Sample rate", t.info.sample_rate.map(|r| format!("{} kHz", r as f32 / 1000.0)).unwrap_or_default()));
+    rows.push(("Channels", match t.info.channels {
+        Some(1) => "Mono".to_string(),
+        Some(2) => "Stereo".to_string(),
+        Some(n) => format!("{n} channels"),
+        None => String::new(),
+    }));
+    rows.push(("Duration", t.duration_ms.filter(|d| *d > 0).map(fmt_time).unwrap_or_default()));
+    rows.push(("Size", if t.info.size_bytes > 0 { format!("{:.1} MB", t.info.size_bytes as f64 / 1_048_576.0) } else { String::new() }));
+    rows.push(("Year", t.year.map(|y| y.to_string()).unwrap_or_default()));
+    rows.push(("Folder", t.path.parent().map(|p| p.display().to_string()).unwrap_or_default()));
+    rows.into_iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(label, value)| InfoRow { label: label.into(), value: value.into() })
+        .collect()
+}
+
+/// Fills the big player view for a newly started track.
+fn show_now_playing(ui: &MainWindow, track: &Track) {
+    ui.set_np_title(track.title.clone().into());
+    let sub: Vec<String> = [track.artist.clone(), track.album.clone(), track.year.map(|y| y.to_string())]
+        .into_iter()
+        .flatten()
+        .collect();
+    ui.set_np_sub(sub.join(" · ").into());
+    ui.set_np_quality(quality_text(&track.info).into());
+    ui.set_np_letter(track.title.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into());
+    ui.set_np_info(ModelRc::new(VecModel::from(info_rows(track))));
+
+    let key = cover_key(track);
+    if let Ok(mut k) = NOW_KEY.lock() { *k = key.clone(); }
+    let cached = COVER_CACHE.lock().ok().and_then(|c| c.get(&key).cloned());
+    match cached {
+        Some(Some(px)) => set_now_cover(ui, &px),
+        Some(None) => clear_now_cover(ui),
+        None => {
+            clear_now_cover(ui);
+            request_cover(ui.as_weak(), key, track.path.clone());
+        }
+    }
+
+    // Lyrics are read on a helper thread; a late result for an older track is dropped.
+    ui.set_lyrics(ModelRc::new(VecModel::from(Vec::<LyricRow>::new())));
+    ui.set_lyrics_synced(false);
+    ui.set_lyric_index(-1);
+    if let Ok(mut times) = LYRIC_TIMES.lock() { times.clear(); }
+    let weak = ui.as_weak();
+    let owned = track.clone();
+    std::thread::spawn(move || {
+        let lines = radiant_core::lyrics::load(&owned);
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            if LAST_NOW.lock().ok().and_then(|l| l.clone()).as_ref() != Some(&owned.path) {
+                return;
+            }
+            let synced = radiant_core::lyrics::is_synced(&lines);
+            if let Ok(mut times) = LYRIC_TIMES.lock() {
+                *times = if synced { lines.iter().filter_map(|l| l.time_ms).collect() } else { Vec::new() };
+            }
+            let rows: Vec<LyricRow> = lines
+                .iter()
+                .map(|l| LyricRow {
+                    text: l.text.clone().into(),
+                    time_ms: l.time_ms.map_or(-1, |t| t.min(i32::MAX as u64) as i32),
+                })
+                .collect();
+            ui.set_lyrics(ModelRc::new(VecModel::from(rows)));
+            ui.set_lyrics_synced(synced);
+        });
+    });
 }
 
 /// Track order chosen by hand (mirrored in `AppSettings::manual_order`, which is saved to disk).
@@ -309,6 +473,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // The engine reports changes from its own thread; forward them to the UI thread.
     let weak = ui.as_weak();
     let status_library = displayed.clone();
+    let now_library = library.clone();
     let player = Rc::new(Player::spawn(move |status| {
         // Position of the playing track in the list (-1 = none), for the row highlight.
         let index = status
@@ -316,7 +481,38 @@ fn main() -> Result<(), slint::PlatformError> {
             .as_ref()
             .and_then(|c| status_library.lock().ok()?.iter().position(|p| p == c))
             .map_or(-1, |i| i as i32);
+
+        // A new track started: the big player view needs its details (looked up only on a change).
+        let changed_track: Option<Track> = match status.current.as_ref() {
+            Some(current) => {
+                let changed = LAST_NOW.lock().map_or(false, |mut last| {
+                    if last.as_ref() != Some(current) {
+                        *last = Some(current.clone());
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if changed {
+                    now_library.lock().ok().and_then(|l| l.iter().find(|t| &t.path == current).cloned())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+        // Current line of the synchronized lyrics (binary search over the start times).
+        let lyric_index = LYRIC_TIMES
+            .lock()
+            .ok()
+            .filter(|times| !times.is_empty())
+            .map_or(-1, |times| times.partition_point(|t| *t <= status.position_ms + LEAD_MS) as i32 - 1);
+
         let _ = weak.upgrade_in_event_loop(move |ui| {
+            if let Some(track) = &changed_track {
+                show_now_playing(&ui, track);
+            }
+            ui.set_lyric_index(lyric_index);
             ui.set_current_index(index);
             ui.set_shuffle(status.shuffle);
             ui.set_repeat_mode(match status.repeat {

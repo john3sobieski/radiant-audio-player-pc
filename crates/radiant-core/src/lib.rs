@@ -6,6 +6,7 @@
 //!       lyrics parsing, app-lock logic. See PROGRESS.md.
 
 pub mod library;
+pub mod lyrics;
 pub mod models;
 pub mod settings;
 pub mod sort;
