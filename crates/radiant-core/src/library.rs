@@ -112,7 +112,7 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
             (rate > 0).then(|| (frames as u128 * 1000 / rate as u128).min(u64::MAX as u128) as u64)
         });
 
-    let mut metadata = format.metadata();
+    let metadata = format.metadata();
     let Some(revision) = metadata.current() else {
         return;
     };

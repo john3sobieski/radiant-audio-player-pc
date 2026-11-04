@@ -447,7 +447,10 @@ export component MainWindow inherits Window {
                 }
                 PillButton {
                     text: "Next sort";
-                    clicked => { root.sort-mode = (root.sort-mode + 1) % 6; root.sort-changed(root.sort-mode, root.sort-descending); }
+                    clicked => {
+                        root.sort-mode = root.sort-mode == 5 ? 0 : root.sort-mode + 1;
+                        root.sort-changed(root.sort-mode, root.sort-descending);
+                    }
                 }
             }
 
