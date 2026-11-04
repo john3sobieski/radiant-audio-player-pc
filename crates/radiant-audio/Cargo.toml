@@ -6,8 +6,9 @@ license-file.workspace = true
 
 [dependencies]
 radiant-dsp = { path = "../radiant-dsp" }
-# Decoding. TODO: check HE-AAC and Opus (no Opus decoder in symphonia, README section 2).
+# Decoding. Opus uses libopus via a Symphonia adapter; HE-AAC still needs a separate check.
 symphonia = { version = "0.5", features = ["all"] }
+symphonia-adapter-libopus = "0.2"
 # Sample-rate conversion (windowed sinc). Version 5 API; only sinc_core.rs uses it. No FFT resampler needed.
 rubato = { version = "5", default-features = false }
 # Output (WASAPI on Windows).

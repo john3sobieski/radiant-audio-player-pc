@@ -14,13 +14,14 @@ use std::fs::File;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::path::Path;
 use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{Decoder, DecoderOptions, CODEC_TYPE_MP3, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{CodecRegistry, Decoder, DecoderOptions, CODEC_TYPE_MP3, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Time, TimeBase};
+use symphonia_adapter_libopus::OpusDecoder;
 
 pub struct TrackDecoder {
     format: Box<dyn FormatReader>,
@@ -49,6 +50,13 @@ fn open_format(path: &Path) -> Result<Box<dyn FormatReader>, String> {
     Ok(probed.format)
 }
 
+fn codec_registry() -> CodecRegistry {
+    let mut codecs = CodecRegistry::new();
+    symphonia::default::register_enabled_codecs(&mut codecs);
+    codecs.register_audio_decoder::<OpusDecoder>();
+    codecs
+}
+
 impl TrackDecoder {
     pub fn open(path: &Path) -> Result<Self, String> {
         let format = open_format(path)?;
@@ -65,7 +73,8 @@ impl TrackDecoder {
         };
         let needs_scan =
             duration_ms.is_none() || (track.codec_params.codec == CODEC_TYPE_MP3 && mp3_needs_scan(path));
-        let decoder = symphonia::default::get_codecs()
+        let codecs = codec_registry();
+        let decoder = codecs
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|e| e.to_string())?;
         Ok(Self { format, decoder, track_id, sample_buf: None, time_base, skip_secs: 0.0, duration_ms, needs_scan })

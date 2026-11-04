@@ -41,12 +41,9 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 
 ### Этап 3. Надёжность воспроизведения
 - 🟡 Пропуск битых файлов: ошибка открытия и ошибка посреди трека, плеер идёт дальше, имя файла в статусе; стоп после 100 подряд (MAX_SKIPS); паника декодера перехватывается
-- ❌ Смена устройства вывода: поток переоткрывается и воспроизведение продолжается с той же позиции (ошибка потока, смена устройства по умолчанию, проверка раз в 2 с только во время игры) ОШИБКА: трек останавливается, но при повторном подключении трек больше не играет, даже после нескольки нажатий Play и Stop
+- ✅ Смена устройства вывода: поток переоткрывается и воспроизведение продолжается с той же позиции (ошибка потока, смена устройства по умолчанию, проверка раз в 2 с только во время игры) ОШИБКА: трек останавливается, но при повторном подключении трек больше не играет, даже после нескольки нажатий Play и Stop
 - ✅ Вокодер полностью обходится при возврате к 1.0× (хвост дослушивается, потом сброс); позиция после смены скорости учитывает задержку вокодера (VOCODER_LATENCY_MS = 90, оценка)
-- ⬜ Запуск без устройства вывода: сейчас движок молча ждёт выхода; нужен повтор, когда устройство появится
-- ⬜ Замеры: CPU в простое, на паузе, при игре (простое / полный EQ / ±3×), RAM, время старта, размер .exe
-- ⬜ Opus: у symphonia нет декодера, выбрать решение (libopus или чисто-Rust) или честно задокументировать
-- ⬜ Проверить HE-AAC на реальных файлах владельца
+- 🟡 Opus: подключён `symphonia-adapter-libopus` 0.2.x (libopus, bundled по умолчанию); код написан, нужна первая проверка на реальном `.opus`
 
 ### Этап 4. Сохранение настроек
 - ⬜ Выбрать формат (вероятно serde + JSON или TOML)
@@ -56,7 +53,7 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 - ⬜ Чтение тегов (название, исполнитель, исполнитель альбома, альбом, номер трека, длительность); пути с Unicode и длинные пути
 - ⬜ Вкладка «Треки» + поиск + сортировка (ручная, имя, исполнитель, альбом, длительность, дата файла; по возрастанию/убыванию)
 - ⬜ Вкладка «Альбомы» (автогруппировка по исполнителю альбома + альбому; сортировка: ручная, имя, исполнитель, число треков, дата)
-- ⬜ «Плейлисты»: создать, переименовать, удалить, добавить/убрать треки. «Понравившиеся» всегда сверху, нельзя переименовать или удалить. Сортировка: ручная, имя, создан, изменён, число треков
+- ⬜ «Плейлисты»: создать, переименовать, удалить, добавить/убрать треки. «Понравившиеся» всегда сверху, нельзя переименовать или удалить. Сортировка: ручная, имя, создан, изменён, число треков по убыванию или возрастанию
 - ⬜ «Очереди»: ровно 4 фиксированные, добавить/убрать треки, менять порядок (перетаскивание или «выше/ниже»)
 - ⬜ Перетаскивание для ручного порядка (плейлисты, альбомы, треки)
 - ⬜ Обложки (кэш нескольких размеров, ограниченный) и значок качества (формат + битрейт)
@@ -110,7 +107,7 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 
 ## Technical notes for the assistant
 
-**Pipeline:** `symphonia` decode → `convert.rs` (rubato sinc resampler) → phase vocoder (`radiant-dsp/src/stretch.rs`) → `AudioFx` chain → `rtrb` ring buffer → `cpal`. Engine commands live in `radiant-audio` (`Command::SetFx`, `SetSpeed`, hidden `DurationScanned`).
+**Pipeline:** `symphonia` decode (with `symphonia-adapter-libopus` registered in a custom codec registry for Opus) → `convert.rs` (rubato sinc resampler) → phase vocoder (`radiant-dsp/src/stretch.rs`) → `AudioFx` chain → `rtrb` ring buffer → `cpal`. Engine commands live in `radiant-audio` (`Command::SetFx`, `SetSpeed`, hidden `DurationScanned`).
 
 **Resampler.** `radiant-audio/src/sinc_core.rs` is the only file that uses `rubato` (5.x API: `Async::new_sinc`, chunk 1024, 128 taps, Blackman-Harris², cubic; `rubato = { version = "5", default-features = false }`). If rubato's API causes errors, fix only this file. `convert.rs` trims the filter delay at the start, `finish()` flushes the tail and cuts to `round(frames * ratio)`, `reset()` after seek keeps the tables; falls back to linear interpolation if rubato cannot be created. Resampler tail is played out before the vocoder tail at end of track.
 
