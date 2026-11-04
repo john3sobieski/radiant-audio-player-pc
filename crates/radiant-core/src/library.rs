@@ -112,7 +112,8 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
             (rate > 0).then(|| (frames as u128 * 1000 / rate as u128).min(u64::MAX as u128) as u64)
         });
 
-    let Some(revision) = format.metadata().current() else {
+    let mut metadata = format.metadata();
+    let Some(revision) = metadata.current() else {
         return;
     };
     let mut tags = HashMap::new();
@@ -126,7 +127,6 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
             Value::Boolean(value) => value.to_string(),
             Value::Flag => String::new(),
             Value::Binary(_) => continue,
-            _ => continue,
         };
         if !value.is_empty() {
             tags.entry(key).or_insert(value);
