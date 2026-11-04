@@ -158,13 +158,11 @@ fn refresh_tracks(
     }).collect();
     let paths: Vec<PathBuf> = visible.iter().map(|t| t.path.clone()).collect();
     let titles: Vec<SharedString> = visible.iter().map(|t| t.title.clone().into()).collect();
-    let shown_count = visible.len();
     if let Ok(mut all) = library.lock() { *all = tracks; }
     if let Ok(mut shown) = displayed.lock() { *shown = paths; }
     if let Some(ui) = weak.upgrade() {
         ui.set_tracks(ModelRc::new(VecModel::from(titles)));
-        let count = library.lock().map(|l| l.len()).unwrap_or(0);
-        ui.set_status(format!("{shown_count} of {count} tracks").into());
+        ui.set_status("".into());
     }
 }
 
@@ -256,6 +254,31 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_sort_changed(move |mode, descending| {
             let state = SortState { key: sort_key_from_ui(mode), descending };
             if let Ok(mut current) = sort.lock() { *current = state; }
+            refresh_tracks(&weak, &library, &displayed, &query, state);
+        });
+    }
+
+    {
+        let (weak, library, displayed, query, sort) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone());
+        ui.on_reorder_tracks(move |from, to| {
+            if from < 0 || to < 0 || query.lock().map(|q| !q.is_empty()).unwrap_or(true) {
+                return;
+            }
+            let Some((from_path, to_path)) = displayed.lock().ok().and_then(|shown| {
+                Some((shown.get(from as usize)?.clone(), shown.get(to as usize)?.clone()))
+            }) else { return; };
+            if from_path == to_path { return; }
+            if let Ok(mut tracks) = library.lock() {
+                let Some(from_index) = tracks.iter().position(|track| track.path == from_path) else { return; };
+                let track = tracks.remove(from_index);
+                let Some(mut to_index) = tracks.iter().position(|item| item.path == to_path) else {
+                    tracks.insert(from_index, track);
+                    return;
+                };
+                if from_index < to_index { to_index += 1; }
+                tracks.insert(to_index, track);
+            }
+            let state = *sort.lock().unwrap_or_else(|e| e.into_inner());
             refresh_tracks(&weak, &library, &displayed, &query, state);
         });
     }

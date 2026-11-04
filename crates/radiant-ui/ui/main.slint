@@ -372,6 +372,11 @@ export component MainWindow inherits Window {
     in-out property <string> search-text: "";
     in-out property <int> sort-mode: 1;
     in-out property <bool> sort-descending: false;
+    in-out property <int> drag-from: -1;
+    in-out property <int> drag-to: -1;
+    in-out property <bool> drag-active: false;
+    in-out property <bool> drag-moved: false;
+    in-out property <bool> suppress-click: false;
     in property <string> status;
     in property <string> now-playing;
     in property <bool> is-playing;
@@ -391,6 +396,7 @@ export component MainWindow inherits Window {
 
     // Sound settings panel (values are owned here; Rust keeps the same numbers for the engine).
     in-out property <bool> show-sound: false;
+    in-out property <bool> show-sort: false;
     in-out property <bool> fx-normalize: false;
     in-out property <bool> fx-mono: false;
     in-out property <float> fx-bass: 0;
@@ -409,6 +415,7 @@ export component MainWindow inherits Window {
     callback choose-folder();
     callback search-changed(string);
     callback sort-changed(int, bool);
+    callback reorder-tracks(int, int);
     callback play-track(int);
     callback toggle-play();
     callback next-track();
@@ -444,17 +451,27 @@ export component MainWindow inherits Window {
                     font-weight: 700;
                     vertical-alignment: center;
                 }
+                SearchField {
+                    y: (parent.height - self.height) / 2;
+                    value: root.search-text;
+                    horizontal-stretch: 1;
+                    edited(text) => { root.search-text = text; root.search-changed(text); }
+                }
                 Text {
                     text: root.status;
                     color: Theme.muted;
                     vertical-alignment: center;
-                    horizontal-stretch: 1;
                     overflow: elide;
                 }
                 PillButton {
                     y: (parent.height - self.height) / 2;
+                    text: "Sort";
+                    clicked => { root.show-sort = !root.show-sort; root.show-sound = false; }
+                }
+                PillButton {
+                    y: (parent.height - self.height) / 2;
                     text: "Sound";
-                    clicked => { root.show-sound = !root.show-sound; }
+                    clicked => { root.show-sound = !root.show-sound; root.show-sort = false; }
                 }
                 PillButton {
                     y: (parent.height - self.height) / 2;
@@ -469,28 +486,6 @@ export component MainWindow inherits Window {
             vertical-stretch: 1;
 
             VerticalLayout {
-            HorizontalLayout {
-                height: 56px;
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 10px;
-                SearchField {
-                    value: root.search-text;
-                    horizontal-stretch: 1;
-                    edited(text) => { root.search-text = text; root.search-changed(text); }
-                }
-                PillButton {
-                    text: "Sort: " + ["Manual", "Name", "Artist", "Album", "Duration", "Date"][root.sort-mode] + (root.sort-descending ? " ↓" : " ↑");
-                    clicked => { root.sort-descending = !root.sort-descending; root.sort-changed(root.sort-mode, root.sort-descending); }
-                }
-                PillButton {
-                    text: "Next sort";
-                    clicked => {
-                        root.sort-mode = root.sort-mode == 5 ? 0 : root.sort-mode + 1;
-                        root.sort-changed(root.sort-mode, root.sort-descending);
-                    }
-                }
-            }
 
             if root.tracks.length == 0 : Rectangle {
                 vertical-stretch: 1;
@@ -509,8 +504,19 @@ export component MainWindow inherits Window {
                 vertical-stretch: 1;
                 for t[i] in root.tracks : Rectangle {
                     height: 44px;
-                    background: i == root.current-index ? Theme.accent.with-alpha(0.16)
+                    background: root.drag-active && i == root.drag-from ? Theme.accent.with-alpha(0.28)
+                        : i == root.current-index ? Theme.accent.with-alpha(0.16)
                         : row-ta.has-hover ? Theme.surface : transparent;
+                    animate y { duration: 180ms; easing: ease-in-out; }
+                    animate background { duration: 120ms; }
+
+                    if root.drag-active && i == root.drag-to : Rectangle {
+                        x: 12px;
+                        y: root.drag-to > root.drag-from ? parent.height - 2px : 0px;
+                        width: parent.width - 24px;
+                        height: 2px;
+                        background: Theme.accent;
+                    }
 
                     HorizontalLayout {
                         padding-left: 20px;
@@ -533,7 +539,38 @@ export component MainWindow inherits Window {
                     }
                     row-ta := TouchArea {
                         mouse-cursor: pointer;
-                        clicked => { root.play-track(i); }
+                        pointer-event(event) => {
+                            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down && root.search-text == "") {
+                                root.drag-from = i;
+                                root.drag-to = i;
+                                root.drag-active = true;
+                                root.drag-moved = false;
+                            } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.drag-active) {
+                                if (root.drag-moved && root.drag-from != root.drag-to) {
+                                    root.sort-mode = 0;
+                                    root.sort-descending = false;
+                                    root.sort-changed(0, false);
+                                    root.reorder-tracks(root.drag-from, root.drag-to);
+                                    root.suppress-click = true;
+                                }
+                                root.drag-active = false;
+                                root.drag-moved = false;
+                            }
+                        }
+                        moved => {
+                            if (self.pressed && root.drag-active) {
+                                let target = max(0, min(root.tracks.length - 1,
+                                    i + ((self.mouse-y - self.pressed-y) / 44px).round()));
+                                if (target != root.drag-to) {
+                                    root.drag-to = target;
+                                    root.drag-moved = true;
+                                }
+                            }
+                        }
+                        clicked => {
+                            if (root.suppress-click) { root.suppress-click = false; }
+                            else { root.play-track(i); }
+                        }
                     }
                 }
             }
@@ -685,6 +722,73 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+            }
+        }
+    }
+
+    // ---- sort panel (overlay): click outside to close ----
+    if root.show-sort : TouchArea {
+        clicked => { root.show-sort = false; }
+    }
+    if root.show-sort : Rectangle {
+        x: root.width - self.width - 20px;
+        y: 60px;
+        width: 260px;
+        height: min(root.height - 70px, 290px);
+        background: Theme.surface;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.surface-hover;
+        clip: true;
+
+        TouchArea { }
+        VerticalLayout {
+            padding: 16px;
+            spacing: 2px;
+            Text {
+                text: "Sort tracks";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 700;
+                height: 26px;
+            }
+            for label[i] in ["Manual order", "Name", "Artist", "Album", "Duration", "File date"] : Rectangle {
+                height: 28px;
+                border-radius: 7px;
+                background: root.sort-mode == i ? Theme.accent.with-alpha(0.2)
+                    : sort-row.has-hover ? Theme.surface-hover : transparent;
+                Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height;
+                    text: label;
+                    color: root.sort-mode == i ? Theme.accent : Theme.text;
+                    vertical-alignment: center;
+                }
+                sort-row := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.sort-mode = i;
+                        root.sort-changed(i, root.sort-descending);
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                PillButton {
+                    text: "Ascending";
+                    clicked => {
+                        root.sort-descending = false;
+                        root.sort-changed(root.sort-mode, false);
+                    }
+                }
+                PillButton {
+                    text: "Descending";
+                    clicked => {
+                        root.sort-descending = true;
+                        root.sort-changed(root.sort-mode, true);
+                    }
+                }
             }
         }
     }
