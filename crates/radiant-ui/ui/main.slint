@@ -313,11 +313,11 @@ component SearchField inherits Rectangle {
         spacing: 8px;
         Rectangle {
             width: 24px;
-            height: 24px;
+            height: 40px;
             background: transparent;
             Rectangle {
                 x: 2px;
-                y: 2px;
+                y: 10px;
                 width: 13px;
                 height: 13px;
                 border-radius: 7px;
@@ -327,7 +327,7 @@ component SearchField inherits Rectangle {
             }
             Path {
                 x: 14px;
-                y: 14px;
+                y: 22px;
                 width: 9px;
                 height: 9px;
                 viewbox-width: 9;
@@ -488,7 +488,7 @@ export component MainWindow inherits Window {
                 SearchField {
                     value: root.search-text;
                     horizontal-stretch: 1;
-                    edited(text) => { root.search-changed(text); }
+                    edited(text) => { root.search-text = text; root.search-changed(text); }
                 }
                 PillButton {
                     text: "Sort: " + ["Manual", "Name", "Artist", "Album", "Duration", "Date"][root.sort-mode] + (root.sort-descending ? " ↓" : " ↑");
@@ -503,13 +503,20 @@ export component MainWindow inherits Window {
                 }
             }
 
-            if root.tracks.length == 0 : Text {
-                text: root.search-text == "" ? "Choose a music folder to start" : "No matching tracks";
-                color: Theme.muted;
-                font-size: 16px;
+            if root.tracks.length == 0 : Rectangle {
+                vertical-stretch: 1;
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.search-text == "" ? "Choose a music folder to start" : "No matching tracks";
+                    color: Theme.muted;
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
 
-            ListView {
+            if root.tracks.length > 0 : ListView {
                 vertical-stretch: 1;
                 for t[i] in root.tracks : Rectangle {
                     height: 44px;
