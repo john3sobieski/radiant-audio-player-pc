@@ -435,9 +435,13 @@ export component MainWindow inherits Window {
                 padding-left: 20px;
                 padding-right: 20px;
                 spacing: 8px;
+                Text {
+                    text: "Search";
+                    color: Theme.muted;
+                    vertical-alignment: center;
+                }
                 TextInput {
                     text: root.search-text;
-                    placeholder-text: "Search tracks, artists, albums";
                     horizontal-stretch: 1;
                     edited => { root.search-changed(self.text); }
                 }
