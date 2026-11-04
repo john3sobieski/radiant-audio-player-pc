@@ -311,16 +311,36 @@ component SearchField inherits Rectangle {
         padding-left: 12px;
         padding-right: 10px;
         spacing: 8px;
-        Text {
-            text: "⌕";
-            color: Theme.muted;
-            font-size: 20px;
-            vertical-alignment: center;
+        Rectangle {
+            width: 24px;
+            height: 24px;
+            background: transparent;
+            Rectangle {
+                x: 2px;
+                y: 2px;
+                width: 13px;
+                height: 13px;
+                border-radius: 7px;
+                border-width: 2px;
+                border-color: Theme.muted;
+                background: transparent;
+            }
+            Rectangle {
+                x: 15px;
+                y: 16px;
+                width: 8px;
+                height: 2px;
+                border-radius: 1px;
+                rotation-angle: 45deg;
+                background: Theme.muted;
+            }
         }
         TextInput {
             text: root.value;
+            height: 40px;
             color: Theme.text;
             font-size: 14px;
+            vertical-alignment: center;
             horizontal-stretch: 1;
             edited => { root.value = self.text; root.edited(self.text); }
         }
