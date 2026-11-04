@@ -22,6 +22,7 @@
 //!       (background scan, decode.rs), sample-accurate seek (frames before the target are dropped),
 //!       skip unreadable files (open / decode errors, at most `MAX_SKIPS` in a row), output device change
 //!       (stream re-opened, playback resumes at the same position), vocoder fully bypassed at 1.0x.
+//!       live spectrum for the player rays: `Player::spectrum()` (tap in the callback + analyzer in radiant-dsp).
 //! TODO:
 //!   - gapless (now: queue of next file starts when the ring buffer is empty)
 //!   - start without any output device (now: the engine only waits for Quit)
@@ -33,10 +34,13 @@ mod decode;
 mod engine;
 mod position;
 mod sinc_core;
+mod spectrum;
 mod transport;
 
 pub use engine::{Command, Player, Status};
 pub use radiant_dsp::presets::{EqPreset, EQ_PRESETS};
 pub use radiant_dsp::stretch::{slider_to_speed, MAX_SPEED, MIN_SPEED};
+pub use radiant_dsp::spectrum::{SpectrumFrame, BANDS as SPECTRUM_BANDS};
 pub use radiant_dsp::AudioFxSettings;
+pub use spectrum::SpectrumTap;
 pub use transport::{PlayState, RepeatMode, Transport};

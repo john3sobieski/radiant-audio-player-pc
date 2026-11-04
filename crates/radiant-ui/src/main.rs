@@ -14,6 +14,8 @@ use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
 };
 use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
+mod rays;
+
 use radiant_core::models::{AudioInfo, SortKey, SortState, Track};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
@@ -271,20 +273,34 @@ fn quality_text(info: &AudioInfo) -> String {
     parts.join(" · ")
 }
 
+fn fmt_size(bytes: u64) -> String {
+    let mb = bytes as f64 / 1_048_576.0;
+    if mb >= 1.0 { format!("{mb:.1} MB") } else { format!("{:.0} KB", bytes as f64 / 1024.0) }
+}
+
 fn info_rows(t: &Track) -> Vec<InfoRow> {
     let mut rows: Vec<(&str, String)> = Vec::new();
+    // Tags first, then technical data, then the file itself.
+    rows.push(("Title", t.title.clone()));
+    rows.push(("Artist", t.artist.clone().unwrap_or_default()));
+    rows.push(("Album artist", t.album_artist.clone().unwrap_or_default()));
+    rows.push(("Album", t.album.clone().unwrap_or_default()));
+    rows.push(("Track no.", t.track_no.filter(|n| *n > 0).map(|n| n.to_string()).unwrap_or_default()));
+    rows.push(("Year", t.year.map(|y| y.to_string()).unwrap_or_default()));
     rows.push(("Format", t.info.format.clone()));
-    rows.push(("Bitrate", t.info.bitrate_kbps.map(|k| format!("{k} kbps")).unwrap_or_default()));
+    rows.push(("Bitrate", t.info.bitrate_kbps.filter(|k| *k > 0).map(|k| format!("{k} kbps")).unwrap_or_default()));
     rows.push(("Sample rate", t.info.sample_rate.map(|r| format!("{} kHz", r as f32 / 1000.0)).unwrap_or_default()));
     rows.push(("Channels", match t.info.channels {
         Some(1) => "Mono".to_string(),
         Some(2) => "Stereo".to_string(),
-        Some(n) => format!("{n} channels"),
-        None => String::new(),
+        Some(n) if n > 0 => format!("{n} channels"),
+        _ => String::new(),
     }));
     rows.push(("Duration", t.duration_ms.filter(|d| *d > 0).map(fmt_time).unwrap_or_default()));
-    rows.push(("Size", if t.info.size_bytes > 0 { format!("{:.1} MB", t.info.size_bytes as f64 / 1_048_576.0) } else { String::new() }));
-    rows.push(("Year", t.year.map(|y| y.to_string()).unwrap_or_default()));
+    rows.push(("Size", if t.info.size_bytes > 0 { fmt_size(t.info.size_bytes) } else { String::new() }));
+    rows.push(("Lyrics", if t.lyrics_path.is_some() { "File next to the track".to_string() }
+        else if t.tag_lyrics { "Embedded in tags".to_string() } else { String::new() }));
+    rows.push(("File", t.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
     rows.push(("Folder", t.path.parent().map(|p| p.display().to_string()).unwrap_or_default()));
     rows.into_iter()
         .filter(|(_, v)| !v.is_empty())
@@ -791,6 +807,38 @@ fn main() -> Result<(), slint::PlatformError> {
         save_settings(&weak, &settings);
         scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
     });
+
+    // Spectrum rays: while the big player view is open, poll the analyzer ~40 times a second.
+    // Hidden = the timer returns at once and the audio callback stops feeding the tap.
+    let rays_timer = slint::Timer::default();
+    {
+        let weak = ui.as_weak();
+        let tap = player.spectrum();
+        let last = std::cell::Cell::new(std::time::Instant::now());
+        let was_quiet = std::cell::Cell::new(false);
+        rays_timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(25), move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let now = std::time::Instant::now();
+            let dt = now.duration_since(last.replace(now)).as_secs_f32();
+            if !ui.get_show_player() {
+                tap.pause();
+                was_quiet.set(false);
+                return;
+            }
+            let f = tap.poll(dt);
+            let quiet = f.level < 0.002 && f.bass < 0.002 && f.peaks.iter().all(|p| *p < 0.002);
+            if quiet && was_quiet.get() {
+                return; // nothing moves: keep the idle ticks, spend no CPU
+            }
+            was_quiet.set(quiet);
+            let r = rays::build(&f.bands, &f.peaks);
+            ui.set_rays_halo(r.halo.into());
+            ui.set_rays_body(r.body.into());
+            ui.set_rays_tips(r.tips.into());
+            ui.set_rays_peaks(r.peaks.into());
+            ui.set_pulse(f.bass);
+        });
+    }
 
     ui.run()
 }

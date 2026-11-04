@@ -7,6 +7,7 @@
 use crate::convert::Converter;
 use crate::decode::{scan_duration, TrackDecoder};
 use crate::position::PositionTracker;
+use crate::spectrum::SpectrumTap;
 use crate::transport::{PlayState, RepeatMode, Transport};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use radiant_dsp::stretch::{TimeStretch, MAX_SPEED, MIN_SPEED};
@@ -102,6 +103,7 @@ pub struct Status {
 /// Handle used by the UI. Dropping it stops the engine thread.
 pub struct Player {
     tx: Sender<Command>,
+    spectrum: SpectrumTap,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -110,15 +112,22 @@ impl Player {
     pub fn spawn<F: Fn(Status) + Send + 'static>(on_change: F) -> Player {
         let (tx, rx) = mpsc::channel();
         let engine_tx = tx.clone(); // the engine sends scan results to itself
+        let spectrum = SpectrumTap::new();
+        let engine_spectrum = spectrum.clone();
         let thread = thread::Builder::new()
             .name("radiant-engine".into())
-            .spawn(move || run(rx, engine_tx, Box::new(on_change)))
+            .spawn(move || run(rx, engine_tx, engine_spectrum, Box::new(on_change)))
             .expect("cannot start the engine thread");
-        Player { tx, thread: Some(thread) }
+        Player { tx, spectrum, thread: Some(thread) }
     }
 
     pub fn send(&self, cmd: Command) {
         let _ = self.tx.send(cmd);
+    }
+
+    /// Handle for the live spectrum (player rays). Poll it once per frame while the rays are visible.
+    pub fn spectrum(&self) -> SpectrumTap {
+        self.spectrum.clone()
     }
 }
 
@@ -151,7 +160,7 @@ struct Output {
     lost: Arc<AtomicBool>,
 }
 
-fn open_output() -> Result<Output, String> {
+fn open_output(tap: &SpectrumTap) -> Result<Output, String> {
     let host = cpal::default_host();
     let device = host
         .default_output_device()
@@ -182,6 +191,7 @@ fn open_output() -> Result<Output, String> {
     let cb_ack = flush_ack.clone();
     let cb_played = played.clone();
     let cb_volume = volume.clone();
+    let (mut tap_prod, tap_on) = tap.attach(rate);
     let up = 1.0 / (FADE_IN_SECS * rate as f32);
     let down = 1.0 / (FADE_OUT_SECS * rate as f32);
     let mut gain = 0.0_f32;
@@ -218,8 +228,15 @@ fn open_output() -> Result<Output, String> {
                     }
                     vol += (target_vol - vol) * vol_coef;
                     let total = gain * vol;
+                    // The tap gets the mono mix before the volume (rays do not die at low volume).
+                    let mut mono = 0.0_f32;
                     for s in frame.iter_mut() {
-                        *s = cons.pop().unwrap_or(0.0) * total;
+                        let v = cons.pop().unwrap_or(0.0);
+                        mono += v;
+                        *s = v * total;
+                    }
+                    if tap_on.load(Ordering::Relaxed) {
+                        let _ = tap_prod.push(mono / channels as f32 * gain);
                     }
                     frames_out += 1;
                 }
@@ -255,6 +272,8 @@ fn open_output() -> Result<Output, String> {
 
 struct Engine {
     out: Output,
+    /// Live spectrum for the UI; a new ring is attached whenever the stream is reopened.
+    tap: SpectrumTap,
     transport: Transport,
     decoder: Option<TrackDecoder>,
     conv: Option<Converter>,
@@ -291,8 +310,13 @@ struct Engine {
     last_device_check: Instant,
 }
 
-fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status) + Send>) {
-    let out = match open_output() {
+fn run(
+    rx: Receiver<Command>,
+    tx: Sender<Command>,
+    tap: SpectrumTap,
+    on_change: Box<dyn Fn(Status) + Send>,
+) {
+    let out = match open_output(&tap) {
         Ok(o) => o,
         Err(e) => {
             on_change(Status {
@@ -316,6 +340,7 @@ fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status)
     let (out_rate, out_ch) = (out.rate, out.channels);
     let mut eng = Engine {
         out,
+        tap,
         transport: Transport::default(),
         decoder: None,
         conv: None,
@@ -421,7 +446,7 @@ impl Engine {
 
     /// New stream on the current default device; playback continues from the same position.
     fn reopen_output(&mut self) -> Result<(), String> {
-        let new = open_output()?; // on error the old output stays as it was
+        let new = open_output(&self.tap)?; // on error the old output stays as it was
         let ms = self.position_ms();
         let speed = self.stretch.speed();
         new.volume.store(self.out.volume.load(Ordering::Relaxed), Ordering::Relaxed);

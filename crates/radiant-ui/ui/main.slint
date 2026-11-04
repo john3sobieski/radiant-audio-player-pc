@@ -482,6 +482,13 @@ export component MainWindow inherits Window {
     in property <bool> np-has-cover: false;
     in property <color> glow-color: #8b6cff;
     in property <[InfoRow]> np-info;
+    /// Spectrum rays around the ring (SVG path strings in a 1000 x 1000 box, built in rays.rs).
+    in property <string> rays-halo;
+    in property <string> rays-body;
+    in property <string> rays-tips;
+    in property <string> rays-peaks;
+    /// Low-frequency energy 0..1: the glow breathes with the bass.
+    in property <float> pulse: 0;
     in property <[LyricRow]> lyrics;
     in property <bool> lyrics-synced: false;
     /// Index of the current line of synchronized lyrics, -1 = before the first line.
@@ -1004,6 +1011,13 @@ export component MainWindow inherits Window {
         background: Theme.bg;
         clip: true;
 
+        // Swallows every mouse event the player does not use itself, so clicks never fall
+        // through to the track list underneath (they used to start another track).
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+        }
+
         // Stage: glow, progress ring, cover, title.
         if root.stage-visible : stage := Rectangle {
             x: 0px;
@@ -1012,7 +1026,8 @@ export component MainWindow inherits Window {
             height: root.player-h - root.header-h;
 
             property <length> zone-h: self.height - 76px;
-            property <length> ring-d: max(110px, min(self.zone-h, min(self.width - 60px, 360px)));
+            // The rays need 20 % of the ring diameter on every side.
+            property <length> ring-d: max(90px, min(self.zone-h, min(self.width - 40px, 500px)) / 1.4);
             property <length> ring-x: (self.width - self.ring-d) / 2;
             property <length> ring-y: max(0px, (self.zone-h - self.ring-d) / 2);
             property <float> ring-drag: 0;
@@ -1024,13 +1039,62 @@ export component MainWindow inherits Window {
             property <float> ring-x1: self.ring-c + self.ring-r * Math.sin(self.ring-angle);
             property <float> ring-y1: self.ring-c - self.ring-r * Math.cos(self.ring-angle);
 
-            // Light spilling out of the cover.
+            // Light spilling out of the cover; it swells a little with the bass.
             Rectangle {
-                x: stage.ring-x - stage.ring-d * 0.45;
-                y: stage.ring-y - stage.ring-d * 0.45;
-                width: stage.ring-d * 1.9;
-                height: stage.ring-d * 1.9;
-                background: @radial-gradient(circle, root.glow-color.with-alpha(0.38) 0%, root.glow-color.with-alpha(0) 70%);
+                x: stage.ring-x - stage.ring-d * (0.45 + 0.2 * root.pulse);
+                y: stage.ring-y - stage.ring-d * (0.45 + 0.2 * root.pulse);
+                width: stage.ring-d * (1.9 + 0.4 * root.pulse);
+                height: stage.ring-d * (1.9 + 0.4 * root.pulse);
+                background: @radial-gradient(circle, root.glow-color.with-alpha(0.30 + 0.40 * root.pulse) 0%, root.glow-color.with-alpha(0) 70%);
+            }
+            // Spectrum rays: soft halo, body, bright tips, falling peak markers.
+            Path {
+                x: stage.ring-x - stage.ring-d * 0.2;
+                y: stage.ring-y - stage.ring-d * 0.2;
+                width: stage.ring-d * 1.4;
+                height: stage.ring-d * 1.4;
+                viewbox-width: 1000;
+                viewbox-height: 1000;
+                commands: root.rays-halo;
+                stroke: root.glow-color.with-alpha(0.22);
+                stroke-width: max(3px, stage.ring-d / 40);
+                stroke-line-cap: round;
+            }
+            Path {
+                x: stage.ring-x - stage.ring-d * 0.2;
+                y: stage.ring-y - stage.ring-d * 0.2;
+                width: stage.ring-d * 1.4;
+                height: stage.ring-d * 1.4;
+                viewbox-width: 1000;
+                viewbox-height: 1000;
+                commands: root.rays-body;
+                stroke: root.glow-color.with-alpha(0.85);
+                stroke-width: max(1.5px, stage.ring-d / 90);
+                stroke-line-cap: round;
+            }
+            Path {
+                x: stage.ring-x - stage.ring-d * 0.2;
+                y: stage.ring-y - stage.ring-d * 0.2;
+                width: stage.ring-d * 1.4;
+                height: stage.ring-d * 1.4;
+                viewbox-width: 1000;
+                viewbox-height: 1000;
+                commands: root.rays-tips;
+                stroke: root.glow-color.brighter(0.9);
+                stroke-width: max(1.5px, stage.ring-d / 90);
+                stroke-line-cap: round;
+            }
+            Path {
+                x: stage.ring-x - stage.ring-d * 0.2;
+                y: stage.ring-y - stage.ring-d * 0.2;
+                width: stage.ring-d * 1.4;
+                height: stage.ring-d * 1.4;
+                viewbox-width: 1000;
+                viewbox-height: 1000;
+                commands: root.rays-peaks;
+                stroke: #ffffffcc;
+                stroke-width: max(1.5px, stage.ring-d / 100);
+                stroke-line-cap: round;
             }
             // Ring track.
             Rectangle {
@@ -1247,29 +1311,35 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            if root.eff-tab == 2 : VerticalLayout {
-                padding: 20px;
-                spacing: 10px;
-                alignment: start;
-                for r in root.np-info : Rectangle {
-                    height: 22px;
-                    Text {
-                        width: 110px;
-                        height: parent.height;
-                        text: r.label;
+            // Info: "label  value" rows; long values (paths, titles) wrap instead of being cut off.
+            if root.eff-tab == 2 : ScrollView {
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    alignment: start;
+                    if root.np-info.length == 0 : Text {
+                        text: "No information";
                         color: Theme.muted;
                         font-size: 13px;
-                        vertical-alignment: center;
                     }
-                    Text {
-                        x: 120px;
-                        width: max(0px, parent.width - 120px);
-                        height: parent.height;
-                        text: r.value;
-                        color: Theme.text;
-                        font-size: 13px;
-                        vertical-alignment: center;
-                        overflow: elide;
+                    for r in root.np-info : HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Text {
+                            width: 104px;
+                            text: r.label;
+                            color: Theme.muted;
+                            font-size: 13px;
+                            vertical-alignment: top;
+                        }
+                        Text {
+                            horizontal-stretch: 1;
+                            text: r.value;
+                            color: Theme.text;
+                            font-size: 13px;
+                            wrap: word-wrap;
+                            vertical-alignment: top;
+                        }
                     }
                 }
             }

@@ -10,6 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod presets;
+pub mod spectrum;
 pub mod stretch;
 
 /// Centre frequencies of the 12 EQ bands, Hz (README 5.1).
