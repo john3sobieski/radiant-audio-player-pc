@@ -31,6 +31,10 @@ pub struct AppSettings {
     pub fx: AudioFxSettings,
     /// Track order set by hand (dragging) in the "Manual order" sort mode.
     pub manual_order: Vec<PathBuf>,
+    /// Open section: 0 = Tracks, 1 = Albums, 2 = Playlists, 3 = Queues.
+    pub section: u8,
+    /// Open queue inside the Queues section, 0..=3.
+    pub queue_index: u8,
 }
 
 impl Default for AppSettings {
@@ -43,6 +47,8 @@ impl Default for AppSettings {
             speed_t: 0.0,
             fx: AudioFxSettings::default(),
             manual_order: Vec::new(),
+            section: 0,
+            queue_index: 0,
         }
     }
 }
@@ -75,6 +81,8 @@ fn parse(text: &str) -> Result<AppSettings, serde_json::Error> {
 
 /// Keeps a hand-edited or older file inside the ranges the sliders and the engine use.
 fn sanitize(settings: &mut AppSettings) {
+    settings.section = settings.section.min(3);
+    settings.queue_index = settings.queue_index.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.speed_t = snap(finite(settings.speed_t, 0.0).clamp(-2.0, 2.0), 10.0);
     let fx = &mut settings.fx;

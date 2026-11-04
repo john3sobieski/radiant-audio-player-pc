@@ -86,6 +86,8 @@ fn apply_settings(
     settings: &AppSettings,
 ) {
     ui.set_volume(settings.volume);
+    ui.set_section(settings.section as i32);
+    ui.set_queue_index(settings.queue_index as i32);
     ui.set_shuffle(settings.shuffle);
     ui.set_repeat_mode(repeat_mode_to_ui(settings.repeat_mode));
     ui.set_speed_t(settings.speed_t);
@@ -650,6 +652,18 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_volume_changed(move |v| {
             player.send(Command::SetVolume(v));
             settings.borrow_mut().volume = v;
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Section / queue switch: remembered between launches.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_section_changed(move |section, queue| {
+            {
+                let mut st = settings.borrow_mut();
+                st.section = section.clamp(0, 3) as u8;
+                st.queue_index = queue.clamp(0, 3) as u8;
+            }
             save_settings(&weak, &settings);
         });
     }
