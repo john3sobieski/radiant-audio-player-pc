@@ -306,9 +306,10 @@ mod tests {
             dec.seek(secs).unwrap();
             let s = first_samples(&mut dec, 300);
             assert_eq!(s.len(), 300, "seek {secs}");
-            assert_eq!(frame_of(s[0]), frame, "first frame after seek to {secs}s");
+            // The ramp wraps at 30011, so compare modulo that.
+            assert_eq!(frame_of(s[0]), frame % 30011, "first frame after seek to {secs}s");
             for (i, v) in s.iter().enumerate() {
-                assert_eq!(frame_of(*v), frame + i, "continuity after seek to {secs}s, sample {i}");
+                assert_eq!(frame_of(*v), (frame + i) % 30011, "continuity after seek to {secs}s, sample {i}");
             }
         }
         std::fs::remove_file(&p).ok();

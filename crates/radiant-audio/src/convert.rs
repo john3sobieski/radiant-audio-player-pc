@@ -324,20 +324,40 @@ mod tests {
         out
     }
 
-    /// 1 kHz sine 44.1 -> 48 kHz: exact length, aligned in time (delay trimmed), same shape as an ideal 48 kHz sine.
+    /// 1 kHz sine 44.1 -> 48 kHz: exact length, and the shape is a clean sine. rubato reports its filter delay as a
+    /// whole number of frames, so the start may be off by a fraction of a frame (under 21 us, inaudible): the output
+    /// is compared with an ideal sine allowed to slide by up to one output frame.
     #[test]
     fn sine_is_resampled_accurately_and_aligned() {
         let input = sine_stereo(1000.0, 0.5, 44_100, 88_200);
         let mut c = Converter::new(44_100, 2, 48_000, 2);
         let out = convert_in_pieces(&mut c, &input, 1000);
         assert_eq!(out.len() / 2, 96_000);
-        let mut worst = 0.0_f64;
         for n in 2000..(96_000 - 2000) {
-            let ideal = 0.5 * (2.0 * PI * 1000.0 * n as f64 / 48_000.0).sin();
-            worst = worst.max((out[n * 2] as f64 - ideal).abs());
             assert_eq!(out[n * 2], out[n * 2 + 1], "channels must stay identical");
         }
-        assert!(worst < 0.01, "max error {worst}");
+        let (shift, err) = best_shift_error(&out, 1000.0, 0.5, 48_000);
+        assert!(shift.abs() <= 1.0, "output is shifted by {shift} frames");
+        assert!(err < 0.005, "max error {err} at the best shift {shift}");
+    }
+
+    /// Smallest max-error against `amp * sin(2 pi f (n + shift) / rate)` over shifts in -1.0..=1.0 frames
+    /// (left channel, away from both ends). Returns (best shift, its error).
+    fn best_shift_error(out: &[f32], freq: f64, amp: f64, rate: u32) -> (f64, f64) {
+        let frames = out.len() / 2;
+        let mut best = (0.0, f64::MAX);
+        for k in -50..=50 {
+            let shift = k as f64 * 0.02;
+            let mut worst = 0.0_f64;
+            for n in (3000..frames - 3000).step_by(3) {
+                let ideal = amp * (2.0 * PI * freq * (n as f64 + shift) / rate as f64).sin();
+                worst = worst.max((out[n * 2] as f64 - ideal).abs());
+            }
+            if worst < best.1 {
+                best = (shift, worst);
+            }
+        }
+        best
     }
 
     #[test]
