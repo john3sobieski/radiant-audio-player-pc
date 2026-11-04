@@ -17,7 +17,8 @@ use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
 use radiant_core::models::{SortKey, SortState, Track};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -102,6 +103,88 @@ fn apply_settings(
     player.send(Command::SetFx(settings.fx.clone()));
 }
 
+/// Decoded cover thumbnail (RGBA8); the bytes are shared, so clones are cheap.
+#[derive(Clone)]
+struct CoverPixels {
+    width: u32,
+    height: u32,
+    rgba: Arc<Vec<u8>>,
+}
+
+impl CoverPixels {
+    fn to_image(&self) -> slint::Image {
+        let mut buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(self.width, self.height);
+        buffer.make_mut_bytes().copy_from_slice(&self.rgba);
+        slint::Image::from_rgba8(buffer)
+    }
+}
+
+/// Covers by key (`None` = looked for, none found). Bounded in `load_covers`.
+static COVER_CACHE: Mutex<BTreeMap<String, Option<CoverPixels>>> = Mutex::new(BTreeMap::new());
+/// Cover key of every row of the list on screen (same order as the model).
+static ROW_KEYS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Bumped on every list refresh: an older cover thread stops, the newer refresh queues what is missing.
+static COVER_GEN: AtomicU64 = AtomicU64::new(0);
+
+/// Tracks of one album share a cover; a track without an album has its own.
+fn cover_key(t: &Track) -> String {
+    match &t.album {
+        Some(album) => format!(
+            "{}\u{1f}{}",
+            t.album_artist.as_deref().or(t.artist.as_deref()).unwrap_or(""),
+            album
+        ),
+        None => t.path.to_string_lossy().into_owned(),
+    }
+}
+
+/// Reads and shrinks the cover of one track (96 px is enough for the 40 px square on HiDPI screens).
+fn decode_cover(path: &Path) -> Option<CoverPixels> {
+    let bytes = radiant_core::library::read_cover(path)?;
+    let thumb = image::load_from_memory(&bytes).ok()?.thumbnail(96, 96).to_rgba8();
+    let (width, height) = thumb.dimensions();
+    Some(CoverPixels { width, height, rgba: Arc::new(thumb.into_raw()) })
+}
+
+fn load_covers(weak: slint::Weak<MainWindow>, jobs: Vec<(String, PathBuf)>, generation: u64) {
+    if jobs.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for (key, path) in jobs {
+            if COVER_GEN.load(Ordering::Acquire) != generation {
+                return;
+            }
+            let pixels = decode_cover(&path);
+            if let Ok(mut cache) = COVER_CACHE.lock() {
+                if cache.len() >= 600 { cache.clear(); }
+                cache.insert(key.clone(), pixels.clone());
+            }
+            let Some(px) = pixels else { continue };
+            let _ = weak.upgrade_in_event_loop(move |ui| apply_cover(&ui, &key, &px));
+        }
+    });
+}
+
+/// Puts a freshly decoded cover into every row with the same key.
+fn apply_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
+    let image = px.to_image();
+    let keys = ROW_KEYS.lock().map(|k| k.clone()).unwrap_or_default();
+    let model = ui.get_tracks();
+    for (i, k) in keys.iter().enumerate() {
+        if k == key {
+            if let Some(mut row) = model.row_data(i) {
+                row.cover = image.clone();
+                row.has_cover = true;
+                model.set_row_data(i, row);
+            }
+        }
+    }
+}
+
+/// Track order chosen by hand (mirrored in `AppSettings::manual_order`, which is saved to disk).
+static MANUAL_ORDER: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
 fn scan_folder(
     weak: slint::Weak<MainWindow>,
     library: Arc<Mutex<Vec<Track>>>,
@@ -148,7 +231,12 @@ fn refresh_tracks(
     state: SortState,
 ) {
     let mut tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
-    radiant_core::sort::sort_tracks(&mut tracks, state);
+    if state.key == SortKey::Manual {
+        let order = MANUAL_ORDER.lock().map(|o| o.clone()).unwrap_or_default();
+        radiant_core::sort::apply_manual_order(&mut tracks, &order);
+    } else {
+        radiant_core::sort::sort_tracks(&mut tracks, state);
+    }
     let needle = query.lock().map(|q| q.to_lowercase()).unwrap_or_default();
     let visible: Vec<_> = tracks.iter().filter(|track| {
         needle.is_empty()
@@ -157,11 +245,48 @@ fn refresh_tracks(
             || track.album.as_deref().unwrap_or("").to_lowercase().contains(&needle)
     }).collect();
     let paths: Vec<PathBuf> = visible.iter().map(|t| t.path.clone()).collect();
-    let titles: Vec<SharedString> = visible.iter().map(|t| t.title.clone().into()).collect();
+
+    // One row per visible track. Covers already in the cache are used at once; the rest are
+    // decoded on a helper thread and filled in later (`load_covers`).
+    let generation = COVER_GEN.fetch_add(1, Ordering::AcqRel) + 1;
+    let mut rows: Vec<TrackRow> = Vec::with_capacity(visible.len());
+    let mut keys: Vec<String> = Vec::with_capacity(visible.len());
+    let mut jobs: Vec<(String, PathBuf)> = Vec::new();
+    let mut queued: HashSet<String> = HashSet::new();
+    let mut images: HashMap<String, slint::Image> = HashMap::new();
+    for t in &visible {
+        let key = cover_key(t);
+        let cached = COVER_CACHE.lock().ok().and_then(|c| c.get(&key).cloned());
+        let (cover, has_cover) = match cached {
+            Some(Some(px)) => (images.entry(key.clone()).or_insert_with(|| px.to_image()).clone(), true),
+            Some(None) => (slint::Image::default(), false),
+            None => {
+                if queued.insert(key.clone()) {
+                    jobs.push((key.clone(), t.path.clone()));
+                }
+                (slint::Image::default(), false)
+            }
+        };
+        rows.push(TrackRow {
+            title: t.title.clone().into(),
+            artist: t.artist.clone().unwrap_or_default().into(),
+            album: t.album.clone().unwrap_or_default().into(),
+            year: t.year.map(|y| y.to_string()).unwrap_or_default().into(),
+            duration: t.duration_ms.filter(|d| *d > 0).map(fmt_time).unwrap_or_default().into(),
+            letter: t.title.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into(),
+            cover,
+            has_cover,
+        });
+        keys.push(key);
+    }
+    if let Ok(mut row_keys) = ROW_KEYS.lock() { *row_keys = keys; }
+    if let Some(ui) = weak.upgrade() {
+        load_covers(ui.as_weak(), jobs, generation);
+    }
     if let Ok(mut all) = library.lock() { *all = tracks; }
     if let Ok(mut shown) = displayed.lock() { *shown = paths; }
     if let Some(ui) = weak.upgrade() {
-        ui.set_tracks(ModelRc::new(VecModel::from(titles)));
+        ui.set_tracks(ModelRc::new(VecModel::from(rows)));
         ui.set_status("".into());
     }
 }
@@ -237,6 +362,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let eq_model: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0_f32; 12]));
     ui.set_eq_gains(ModelRc::from(eq_model.clone()));
     apply_settings(&ui, &player, &fx, &eq_model, &settings.borrow());
+    if let Ok(mut order) = MANUAL_ORDER.lock() { *order = settings.borrow().manual_order.clone(); }
     if let Some(dir) = settings.borrow().music_folder.clone() {
         scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
     }
@@ -259,26 +385,26 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     {
-        let (weak, library, displayed, query, sort) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone());
+        let (weak, library, displayed, query, sort, settings) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), settings.clone());
         ui.on_reorder_tracks(move |from, to| {
             if from < 0 || to < 0 || query.lock().map(|q| !q.is_empty()).unwrap_or(true) {
                 return;
             }
-            let Some((from_path, to_path)) = displayed.lock().ok().and_then(|shown| {
-                Some((shown.get(from as usize)?.clone(), shown.get(to as usize)?.clone()))
-            }) else { return; };
-            if from_path == to_path { return; }
-            if let Ok(mut tracks) = library.lock() {
-                let Some(from_index) = tracks.iter().position(|track| track.path == from_path) else { return; };
-                let track = tracks.remove(from_index);
-                let Some(mut to_index) = tracks.iter().position(|item| item.path == to_path) else {
-                    tracks.insert(from_index, track);
-                    return;
-                };
-                if from_index < to_index { to_index += 1; }
-                tracks.insert(to_index, track);
+            // The list on screen (no search active) becomes the new manual order, with the dragged row moved.
+            let mut order: Vec<PathBuf> = displayed.lock().map(|d| d.clone()).unwrap_or_default();
+            let (from, to) = (from as usize, to as usize);
+            if from >= order.len() || to >= order.len() || from == to { return; }
+            let moved = order.remove(from);
+            order.insert(to, moved);
+            if let Ok(mut m) = MANUAL_ORDER.lock() { *m = order.clone(); }
+            settings.borrow_mut().manual_order = order;
+            save_settings(&weak, &settings);
+            let state = SortState { key: SortKey::Manual, descending: false };
+            if let Ok(mut current) = sort.lock() { *current = state; }
+            if let Some(ui) = weak.upgrade() {
+                ui.set_sort_mode(0);
+                ui.set_sort_descending(false);
             }
-            let state = *sort.lock().unwrap_or_else(|e| e.into_inner());
             refresh_tracks(&weak, &library, &displayed, &query, state);
         });
     }

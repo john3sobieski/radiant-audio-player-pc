@@ -16,6 +16,49 @@ global Theme {
     out property <color> muted: #8d8d9b;
 }
 
+// One row of the track list (filled by Rust).
+export struct TrackRow {
+    title: string,
+    artist: string,
+    album: string,
+    year: string,
+    duration: string,
+    /// First letter of the title, shown while there is no cover.
+    letter: string,
+    cover: image,
+    has-cover: bool,
+}
+
+// Square cover: the picture, or a quiet tile with a letter when there is none.
+component CoverArt inherits Rectangle {
+    in property <image> art;
+    in property <bool> has-image: false;
+    in property <string> letter;
+
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    clip: true;
+    background: Theme.surface-hover;
+
+    if root.has-image : Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.art;
+        image-fit: cover;
+    }
+    if !root.has-image : Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.letter;
+        color: Theme.muted;
+        font-size: 16px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
 // Round icon button drawn from SVG-like path commands (viewbox 20x20), so no font/icon files are needed.
 component IconButton inherits Rectangle {
     in property <string> commands;
@@ -291,6 +334,7 @@ component PillButton inherits Rectangle {
         Text {
             text: root.text;
             color: root.active ? Theme.accent : Theme.text;
+            horizontal-alignment: center;
             vertical-alignment: center;
         }
     }
@@ -378,7 +422,30 @@ export component MainWindow inherits Window {
     background: Theme.bg;
     default-font-size: 14px;
 
-    in property <[string]> tracks;
+    in property <[TrackRow]> tracks;
+
+    // Track list grid: every column has an absolute position so rows line up exactly.
+    // Narrow windows drop the Year column first, then Album.
+    private property <length> col-pad: 20px;
+    private property <length> col-gap: 16px;
+    private property <length> num-w: 36px;
+    private property <length> dur-w: 52px;
+    private property <length> row-h: 56px;
+    private property <bool> show-album: root.width >= 700px;
+    private property <bool> show-year: root.width >= 860px;
+    private property <length> year-w: root.show-year ? 52px : 0px;
+    // The right edge leaves room for the list's scroll bar.
+    private property <length> content-right: root.width - root.col-pad - 14px;
+    private property <length> title-x: root.col-pad + root.num-w + root.col-gap;
+    // Space shared by the title and album columns.
+    private property <length> flex-w: max(0px, root.content-right - root.title-x - root.dur-w - root.col-gap
+        - (root.show-year ? root.year-w + root.col-gap : 0px));
+    private property <length> title-w: root.show-album ? root.flex-w * 0.56 : root.flex-w;
+    private property <length> album-x: root.title-x + root.title-w + root.col-gap;
+    private property <length> album-w: root.show-album ? max(0px, root.flex-w - root.title-w - root.col-gap) : 0px;
+    private property <length> year-x: root.show-album ? root.album-x + root.album-w + root.col-gap
+        : root.title-x + root.title-w + root.col-gap;
+    private property <length> dur-x: root.content-right - root.dur-w;
     in-out property <string> search-text: "";
     in-out property <int> sort-mode: 1;
     in-out property <bool> sort-descending: false;
@@ -503,6 +570,65 @@ export component MainWindow inherits Window {
 
             VerticalLayout {
 
+            // Column captions.
+            if root.tracks.length > 0 : Rectangle {
+                height: 30px;
+                Text {
+                    x: root.col-pad;
+                    width: root.num-w;
+                    height: parent.height;
+                    text: "#";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+                Text {
+                    x: root.title-x;
+                    width: root.title-w;
+                    height: parent.height;
+                    text: "Title";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+                if root.show-album : Text {
+                    x: root.album-x;
+                    width: root.album-w;
+                    height: parent.height;
+                    text: "Album";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+                if root.show-year : Text {
+                    x: root.year-x;
+                    width: root.year-w;
+                    height: parent.height;
+                    text: "Year";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+                Text {
+                    x: root.dur-x;
+                    width: root.dur-w;
+                    height: parent.height;
+                    text: "Time";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    x: root.col-pad;
+                    y: parent.height - 1px;
+                    width: parent.width - 2 * root.col-pad;
+                    height: 1px;
+                    background: Theme.surface-hover;
+                }
+            }
+
             if root.tracks.length == 0 : Rectangle {
                 vertical-stretch: 1;
                 Text {
@@ -519,7 +645,7 @@ export component MainWindow inherits Window {
             if root.tracks.length > 0 : ListView {
                 vertical-stretch: 1;
                 for t[i] in root.tracks : Rectangle {
-                    height: 44px;
+                    height: root.row-h;
                     background: root.drag-active && i == root.drag-from ? Theme.accent.with-alpha(0.28)
                         : i == root.current-index ? Theme.accent.with-alpha(0.16)
                         : row-ta.has-hover ? Theme.surface : transparent;
@@ -534,24 +660,73 @@ export component MainWindow inherits Window {
                         background: Theme.accent;
                     }
 
-                    HorizontalLayout {
-                        padding-left: 20px;
-                        padding-right: 20px;
-                        spacing: 14px;
-                        Text {
-                            text: i + 1;
-                            width: 32px;
-                            color: Theme.muted;
-                            horizontal-alignment: right;
-                            vertical-alignment: center;
-                        }
-                        Text {
-                            text: t;
-                            color: i == root.current-index ? Theme.accent : Theme.text;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            overflow: elide;
-                        }
+                    // 1. number
+                    Text {
+                        x: root.col-pad;
+                        width: root.num-w;
+                        height: parent.height;
+                        text: i + 1;
+                        color: i == root.current-index ? Theme.accent : Theme.muted;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                    }
+                    // 2. cover, title and artist
+                    CoverArt {
+                        x: root.title-x;
+                        y: (parent.height - self.height) / 2;
+                        art: t.cover;
+                        has-image: t.has-cover;
+                        letter: t.letter;
+                    }
+                    Text {
+                        x: root.title-x + 52px;
+                        y: t.artist == "" ? 0px : 8px;
+                        width: max(0px, root.title-w - 52px);
+                        height: t.artist == "" ? parent.height : 22px;
+                        text: t.title;
+                        color: i == root.current-index ? Theme.accent : Theme.text;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    if t.artist != "" : Text {
+                        x: root.title-x + 52px;
+                        y: 30px;
+                        width: max(0px, root.title-w - 52px);
+                        height: 18px;
+                        text: t.artist;
+                        color: Theme.muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    // 3. album
+                    if root.show-album : Text {
+                        x: root.album-x;
+                        width: root.album-w;
+                        height: parent.height;
+                        text: t.album;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    // 4. year
+                    if root.show-year : Text {
+                        x: root.year-x;
+                        width: root.year-w;
+                        height: parent.height;
+                        text: t.year;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                    }
+                    // 5. duration
+                    Text {
+                        x: root.dur-x;
+                        width: root.dur-w;
+                        height: parent.height;
+                        text: t.duration;
+                        color: Theme.muted;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
                     }
                     row-ta := TouchArea {
                         mouse-cursor: pointer;
@@ -566,9 +741,6 @@ export component MainWindow inherits Window {
                                 root.drag-moved = false;
                             } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.drag-active) {
                                 if (root.drag-moved && root.drag-from != root.drag-to) {
-                                    root.sort-mode = 0;
-                                    root.sort-descending = false;
-                                    root.sort-changed(0, false);
                                     root.reorder-tracks(root.drag-from, root.drag-to);
                                     root.suppress-click = true;
                                 }
@@ -579,7 +751,7 @@ export component MainWindow inherits Window {
                         moved => {
                             if (self.pressed && root.drag-active) {
                                 let target = max(0, min(root.tracks.length - 1,
-                                    i + ((self.mouse-y - self.pressed-y) / 44px).round()));
+                                    i + ((self.mouse-y - self.pressed-y) / root.row-h).round()));
                                 if (target != root.drag-to) {
                                     root.drag-to = target;
                                     root.drag-moved = true;

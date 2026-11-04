@@ -20,6 +20,8 @@ radiant-audio = { path = "../radiant-audio" }
 slint = "1"
 # Native folder dialog.
 rfd = "0.15"
+# Decodes cover art (embedded or cover.jpg/png) into small thumbnails for the track list.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [build-dependencies]
 slint-build = "1"

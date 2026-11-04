@@ -29,6 +29,8 @@ pub struct AppSettings {
     /// Playback speed slider position, -2 ..= +2 in steps of 0.1.
     pub speed_t: f32,
     pub fx: AudioFxSettings,
+    /// Track order set by hand (dragging) in the "Manual order" sort mode.
+    pub manual_order: Vec<PathBuf>,
 }
 
 impl Default for AppSettings {
@@ -40,6 +42,7 @@ impl Default for AppSettings {
             repeat_mode: RepeatModeSetting::Off,
             speed_t: 0.0,
             fx: AudioFxSettings::default(),
+            manual_order: Vec::new(),
         }
     }
 }
@@ -163,6 +166,7 @@ mod tests {
         s.fx.subsonic_percent = 30.0;
         s.fx.eq_gains_db[0] = -3.5;
         s.fx.eq_gains_db[11] = 6.0;
+        s.manual_order = vec![PathBuf::from("D:/Музыка/б.mp3"), PathBuf::from("D:/Музыка/а.mp3")];
         s
     }
 

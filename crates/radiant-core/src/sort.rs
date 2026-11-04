@@ -5,6 +5,8 @@
 
 use crate::models::{SortKey, SortState, Track};
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 fn cmp_ci(a: &str, b: &str) -> Ordering {
     a.to_lowercase().cmp(&b.to_lowercase())
@@ -36,13 +38,29 @@ pub fn sort_tracks(tracks: &mut [Track], state: SortState) {
                 let o = cmp_ci(&a.title, &b.title);
                 if d { o.reverse() } else { o }
             }
-            SortKey::Artist => cmp_opt(text_key(&a.artist), text_key(&b.artist), d),
-            SortKey::Album => cmp_opt(text_key(&a.album), text_key(&b.album), d),
+            // Artist -> album -> track number; Album -> artist -> track number (both ascending inside a group).
+            SortKey::Artist => cmp_opt(text_key(&a.artist), text_key(&b.artist), d)
+                .then_with(|| cmp_opt(text_key(&a.album), text_key(&b.album), false))
+                .then_with(|| cmp_opt(a.track_no, b.track_no, false)),
+            SortKey::Album => cmp_opt(text_key(&a.album), text_key(&b.album), d)
+                .then_with(|| cmp_opt(text_key(&a.artist), text_key(&b.artist), false))
+                .then_with(|| cmp_opt(a.track_no, b.track_no, false)),
             SortKey::Duration => cmp_opt(a.duration_ms.filter(|x| *x > 0), b.duration_ms.filter(|x| *x > 0), d),
             SortKey::FileDate => cmp_opt(a.modified, b.modified, d),
         };
         // Equal keys keep a stable, predictable order in both directions.
         o.then_with(|| cmp_ci(&a.title, &b.title)).then_with(|| a.path.cmp(&b.path))
+    });
+}
+
+/// "Manual order": tracks follow the stored `order`; tracks that are not in it
+/// (new files) go to the end, sorted by path.
+pub fn apply_manual_order(tracks: &mut [Track], order: &[PathBuf]) {
+    let pos: HashMap<&PathBuf, usize> = order.iter().enumerate().map(|(i, p)| (p, i)).collect();
+    tracks.sort_by(|a, b| {
+        let ia = pos.get(&a.path).copied().unwrap_or(usize::MAX);
+        let ib = pos.get(&b.path).copied().unwrap_or(usize::MAX);
+        ia.cmp(&ib).then_with(|| a.path.cmp(&b.path))
     });
 }
 
@@ -75,6 +93,14 @@ mod tests {
         assert_eq!(v.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["a", "b", "x"]);
         sort_tracks(&mut v, SortState { key: SortKey::Artist, descending: true });
         assert_eq!(v.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["b", "a", "x"]);
+    }
+
+    #[test]
+    fn manual_order_is_restored_and_new_files_go_last() {
+        let mk = |p: &str| Track { title: p.into(), path: PathBuf::from(p), ..Default::default() };
+        let mut v = vec![mk("a"), mk("b"), mk("c"), mk("d")];
+        apply_manual_order(&mut v, &[PathBuf::from("c"), PathBuf::from("a"), PathBuf::from("b")]);
+        assert_eq!(v.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["c", "a", "b", "d"]);
     }
 
     #[test]

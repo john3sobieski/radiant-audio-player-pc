@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use symphonia::core::codecs::CODEC_TYPE_NULL;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::{MetadataOptions, StandardTagKey, Value};
+use symphonia::core::meta::{MetadataOptions, StandardTagKey, StandardVisualKey, Tag, Value, Visual};
 use symphonia::core::probe::Hint;
 
 pub const AUDIO_EXTENSIONS: &[&str] = &[
@@ -94,6 +94,9 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
     ) else {
         return;
     };
+    // Tags found before the container (ID3v2 in MP3, for example) are in `probed.metadata`,
+    // container-native ones in `format.metadata()`. Both are read.
+    let mut early = probed.metadata;
     let mut format = probed.format;
     let Some(audio_track) = format
         .tracks()
@@ -112,24 +115,16 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
             (rate > 0).then(|| (frames as u128 * 1000 / rate as u128).min(u64::MAX as u128) as u64)
         });
 
-    let metadata = format.metadata();
-    let Some(revision) = metadata.current() else {
-        return;
-    };
     let mut tags = HashMap::new();
-    for tag in revision.tags() {
-        let Some(key) = tag.std_key else { continue };
-        let value = match &tag.value {
-            Value::String(value) => value.trim().to_owned(),
-            Value::UnsignedInt(value) => value.to_string(),
-            Value::SignedInt(value) => value.to_string(),
-            Value::Float(value) => value.to_string(),
-            Value::Boolean(value) => value.to_string(),
-            Value::Flag => String::new(),
-            Value::Binary(_) => continue,
-        };
-        if !value.is_empty() {
-            tags.entry(key).or_insert(value);
+    {
+        let metadata = format.metadata();
+        if let Some(revision) = metadata.current() {
+            collect_tags(revision.tags(), &mut tags);
+        }
+    }
+    if let Some(metadata) = early.get() {
+        if let Some(revision) = metadata.current() {
+            collect_tags(revision.tags(), &mut tags);
         }
     }
     if let Some(title) = tags.get(&StandardTagKey::TrackTitle) {
@@ -141,7 +136,94 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
     track.track_no = tags
         .get(&StandardTagKey::TrackNumber)
         .and_then(|v| v.split('/').next()?.trim().parse().ok());
+    track.year = [StandardTagKey::Date, StandardTagKey::ReleaseDate, StandardTagKey::OriginalDate]
+        .iter()
+        .find_map(|key| tags.get(key).and_then(|v| parse_year(v)));
     track.tag_lyrics = tags.contains_key(&StandardTagKey::Lyrics);
+}
+
+/// Adds the text tags of one metadata revision; the first value of a key wins.
+fn collect_tags(list: &[Tag], out: &mut HashMap<StandardTagKey, String>) {
+    for tag in list {
+        let Some(key) = tag.std_key else { continue };
+        let value = match &tag.value {
+            Value::String(value) => value.trim().to_owned(),
+            Value::UnsignedInt(value) => value.to_string(),
+            Value::SignedInt(value) => value.to_string(),
+            Value::Float(value) => value.to_string(),
+            Value::Boolean(value) => value.to_string(),
+            Value::Flag => String::new(),
+            Value::Binary(_) => continue,
+        };
+        if !value.is_empty() {
+            out.entry(key).or_insert(value);
+        }
+    }
+}
+
+/// "2019", "2019-05-03" and "20190503" all give 2019.
+fn parse_year(value: &str) -> Option<u32> {
+    let head: String = value.trim().chars().take(4).collect();
+    if head.len() == 4 && head.chars().all(|c| c.is_ascii_digit()) {
+        head.parse().ok().filter(|y| (1000..=2999).contains(y))
+    } else {
+        None
+    }
+}
+
+/// Cover image bytes (still encoded: JPEG/PNG/...): the picture embedded in the tags, else
+/// `cover/folder/front/album/artwork.(jpg|jpeg|png)` next to the file. Call it off the UI thread.
+pub fn read_cover(path: &Path) -> Option<Vec<u8>> {
+    embedded_cover(path).or_else(|| folder_cover(path))
+}
+
+fn pick_visual(visuals: &[Visual]) -> Option<Vec<u8>> {
+    visuals
+        .iter()
+        .find(|v| v.usage == Some(StandardVisualKey::FrontCover))
+        .or_else(|| visuals.first())
+        .map(|v| v.data.to_vec())
+}
+
+fn embedded_cover(path: &Path) -> Option<Vec<u8>> {
+    let file = fs::File::open(path).ok()?;
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let source = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut probed = symphonia::default::get_probe()
+        .format(&hint, source, &FormatOptions::default(), &MetadataOptions::default())
+        .ok()?;
+    let from_format = {
+        let metadata = probed.format.metadata();
+        let found = metadata.current().and_then(|r| pick_visual(r.visuals()));
+        found
+    };
+    if from_format.is_some() {
+        return from_format;
+    }
+    let metadata = probed.metadata.get()?;
+    let revision = metadata.current()?;
+    pick_visual(revision.visuals())
+}
+
+fn folder_cover(path: &Path) -> Option<Vec<u8>> {
+    const NAMES: [&str; 5] = ["cover", "folder", "front", "album", "artwork"];
+    const EXTS: [&str; 3] = ["jpg", "jpeg", "png"];
+    let dir = path.parent()?;
+    let mut best: Option<(usize, PathBuf)> = None;
+    for entry in fs::read_dir(dir).ok()?.flatten() {
+        let p = entry.path();
+        let stem = p.file_stem()?.to_string_lossy().to_lowercase();
+        let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let Some(rank) = NAMES.iter().position(|n| *n == stem) else { continue };
+        if !EXTS.contains(&ext.as_str()) { continue; }
+        if best.as_ref().map_or(true, |(r, _)| rank < *r) {
+            best = Some((rank, p));
+        }
+    }
+    fs::read(best?.1).ok()
 }
 
 /// `.lrc` wins over `.txt` (synced lyrics are better).
