@@ -39,6 +39,8 @@ export struct LyricRow {
 export struct NavItem {
     label: string,
     icon: string,
+    /// Extra width the segment gets while it is the open one (room for the label).
+    extra: length,
 }
 
 // One "label: value" line of the Info tab.
@@ -450,12 +452,9 @@ export component MainWindow inherits Window {
     private property <length> num-w: 36px;
     private property <length> dur-w: 52px;
     private property <length> row-h: 56px;
-    // Section rail on the left (icons + labels on wide windows, icons only on narrow ones).
-    private property <bool> rail-wide: root.width >= 900px;
-    private property <length> rail-w: root.rail-wide ? 208px : 64px;
-    private property <length> list-w: root.width - root.rail-w;
-    private property <bool> show-album: root.list-w >= 520px;
-    private property <bool> show-year: root.list-w >= 700px;
+    private property <length> list-w: root.width;
+    private property <bool> show-album: root.list-w >= 700px;
+    private property <bool> show-year: root.list-w >= 860px;
     private property <length> year-w: root.show-year ? 52px : 0px;
     // The right edge leaves room for the list's scroll bar.
     private property <length> content-right: root.list-w - root.col-pad - 14px;
@@ -486,15 +485,36 @@ export component MainWindow inherits Window {
     /// Track count of each of the four queues (set by Rust once queues exist).
     in property <[int]> queue-counts: [0, 0, 0, 0];
     callback section-changed(int, int);
-    private property <length> nav-h: 46px;
-    private property <length> nav-top: 14px;
-    private property <length> sub-h: 36px;
+    // Section switcher ("lens"): the open section unfolds into its label, "Queues" also into four queue dots.
+    private property <length> seg-w: 40px;
+    private property <length> seg-gap: 2px;
+    private property <length> chips-extra: 126px;
+    private property <length> open-extra: root.nav-items[root.section].extra + (root.section == 3 ? root.chips-extra : 0px);
+    private property <length> lens-w: 4 * root.seg-w + 3 * root.seg-gap + root.open-extra + 6px;
+    private property <float> wheel-acc: 0;
     private property <[NavItem]> nav-items: [
-        { label: "Tracks", icon: "M 8 3 L 17 1 V 12.5 A 2.5 2.5 0 1 1 15 10.5 V 5.2 L 10 6.2 V 14.5 A 2.5 2.5 0 1 1 8 12.5 Z" },
-        { label: "Albums", icon: "M 10 2 A 8 8 0 1 1 9.99 2 Z M 10 7.5 A 2.5 2.5 0 1 1 9.99 7.5 Z" },
-        { label: "Playlists", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 9 V 14 H 2 Z M 12 11.5 L 18 14.5 L 12 17.5 Z" },
-        { label: "Queues", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 8 V 14 H 2 Z M 15.5 7 H 17.5 V 15 A 2 2 0 1 1 15.5 13 Z" },
+        { label: "Tracks", icon: "M 8 3 L 17 1 V 12.5 A 2.5 2.5 0 1 1 15 10.5 V 5.2 L 10 6.2 V 14.5 A 2.5 2.5 0 1 1 8 12.5 Z", extra: 52px },
+        { label: "Albums", icon: "M 10 2 A 8 8 0 1 1 9.99 2 Z M 10 7.5 A 2.5 2.5 0 1 1 9.99 7.5 Z", extra: 58px },
+        { label: "Playlists", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 9 V 14 H 2 Z M 12 11.5 L 18 14.5 L 12 17.5 Z", extra: 66px },
+        { label: "Queues", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 8 V 14 H 2 Z M 15.5 7 H 17.5 V 15 A 2 2 0 1 1 15.5 13 Z", extra: 58px },
     ];
+    // Left edge of segment `i`: segments after the open one are pushed right by its extra width.
+    pure function seg-x(i: int, open: int, extra: length) -> length {
+        return 3px + i * (root.seg-w + root.seg-gap) + (open < i ? extra : 0px);
+    }
+    // Mouse wheel over the switcher: one notch = next / previous section (or queue, with the pointer on the dots).
+    function wheel(delta: length, on-queues: bool) {
+        root.wheel-acc += delta / 60px;
+        if (root.wheel-acc <= -1 || root.wheel-acc >= 1) {
+            let step = root.wheel-acc < 0 ? 1 : -1;
+            root.wheel-acc = 0;
+            if (on-queues) {
+                root.go-queue(max(0, min(3, root.queue-index + step)));
+            } else {
+                root.go-section(max(0, min(3, root.section + step)));
+            }
+        }
+    }
     function go-section(s: int) {
         root.section = s;
         root.show-sort = false;
@@ -673,191 +693,197 @@ export component MainWindow inherits Window {
             }
         }
 
-        // ---- rail + section content ----
-        HorizontalLayout {
+        // ---- section bar: the lens switcher on the left, context on the right ----
+        VerticalLayout {
             vertical-stretch: 1;
 
-            // Navigation rail. A highlight pill slides between the sections; "Queues" unfolds its four queues.
             Rectangle {
-                width: root.rail-w;
-                background: Theme.surface;
-                clip: true;
+                height: 54px;
 
+                // The lens: a pill that morphs. Icons only; the open section shows its name.
                 Rectangle {
-                    x: parent.width - 1px;
-                    width: 1px;
-                    background: Theme.surface-hover;
-                }
-                // Sliding highlight of the section.
-                Rectangle {
-                    x: 8px;
-                    y: root.nav-top + root.section * root.nav-h;
-                    width: parent.width - 17px;
-                    height: root.nav-h - 6px;
-                    border-radius: self.height / 2;
-                    background: Theme.accent.with-alpha(0.24);
-                    animate y { duration: 240ms; easing: ease-in-out; }
-                }
-                for item[i] in root.nav-items : Rectangle {
-                    x: 8px;
-                    y: root.nav-top + i * root.nav-h;
-                    width: parent.width - 17px;
-                    height: root.nav-h - 6px;
-                    border-radius: self.height / 2;
-                    background: nav-ta.has-hover && i != root.section ? Theme.surface-hover : transparent;
-                    animate background { duration: 120ms; }
-                    Path {
-                        x: root.rail-wide ? 16px : (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
-                        width: 20px;
-                        height: 20px;
-                        viewbox-width: 20;
-                        viewbox-height: 20;
-                        commands: item.icon;
-                        fill: i == root.section ? Theme.accent.brighter(0.4) : Theme.muted;
-                        fill-rule: evenodd;
-                    }
-                    if root.rail-wide : Text {
-                        x: 48px;
-                        width: parent.width - 56px;
-                        height: parent.height;
-                        text: item.label;
-                        color: i == root.section ? Theme.text : Theme.muted;
-                        font-weight: i == root.section ? 600 : 400;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                    nav-ta := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { root.go-section(i); }
-                    }
-                }
+                    x: 20px;
+                    y: 8px;
+                    width: root.lens-w;
+                    height: 38px;
+                    border-radius: 19px;
+                    background: Theme.surface;
+                    animate width { duration: 280ms; easing: ease-in-out; }
 
-                // The four queues, folded out under "Queues".
-                if root.section == 3 : Rectangle {
-                    y: root.nav-top + 4 * root.nav-h + 2px;
-                    width: parent.width;
-                    height: 4 * root.sub-h;
-
-                    // Tree line.
-                    if root.rail-wide : Rectangle {
-                        x: 27px;
-                        y: 0px;
-                        width: 1px;
-                        height: parent.height - root.sub-h / 2;
-                        background: Theme.surface-hover.brighter(0.3);
-                    }
+                    // Glass highlight under the open segment.
                     Rectangle {
-                        x: root.rail-wide ? 36px : 8px;
-                        y: root.queue-index * root.sub-h + 2px;
-                        width: parent.width - self.x - 9px;
-                        height: root.sub-h - 4px;
-                        border-radius: self.height / 2;
-                        background: Theme.accent.with-alpha(0.16);
-                        animate y { duration: 200ms; easing: ease-in-out; }
+                        x: root.seg-x(root.section, root.section, root.open-extra) - 0px;
+                        y: 3px;
+                        width: root.seg-w + root.open-extra;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: Theme.accent.with-alpha(0.26);
+                        border-width: 1px;
+                        border-color: Theme.accent.with-alpha(0.55);
+                        animate x { duration: 280ms; easing: ease-in-out; }
+                        animate width { duration: 280ms; easing: ease-in-out; }
                     }
-                    for q in 4 : Rectangle {
-                        x: root.rail-wide ? 36px : 8px;
-                        y: q * root.sub-h + 2px;
-                        width: parent.width - self.x - 9px;
-                        height: root.sub-h - 4px;
-                        border-radius: self.height / 2;
-                        background: sub-ta.has-hover && q != root.queue-index ? Theme.surface-hover : transparent;
-                        if root.rail-wide : Text {
-                            x: 14px;
-                            width: parent.width - 52px;
-                            height: parent.height;
-                            text: "Queue \{q + 1}";
-                            color: q == root.queue-index ? Theme.text : Theme.muted;
-                            font-size: 13px;
-                            vertical-alignment: center;
+                    for item[i] in root.nav-items : Rectangle {
+                        x: root.seg-x(i, root.section, root.open-extra);
+                        y: 3px;
+                        width: root.seg-w + (i == root.section ? root.open-extra : 0px);
+                        height: 32px;
+                        border-radius: 16px;
+                        clip: true;
+                        background: seg-ta.has-hover && i != root.section ? Theme.surface-hover : transparent;
+                        animate x { duration: 280ms; easing: ease-in-out; }
+                        animate width { duration: 280ms; easing: ease-in-out; }
+
+                        Path {
+                            x: 10px;
+                            y: 6px;
+                            width: 20px;
+                            height: 20px;
+                            viewbox-width: 20;
+                            viewbox-height: 20;
+                            commands: item.icon;
+                            fill: i == root.section ? Theme.accent.brighter(0.5) : Theme.muted;
+                            fill-rule: evenodd;
                         }
-                        if root.rail-wide : Text {
-                            x: parent.width - 40px;
-                            width: 30px;
+                        Text {
+                            x: 36px;
+                            width: item.extra;
                             height: parent.height;
-                            text: root.queue-counts[q];
-                            color: Theme.muted;
-                            font-size: 12px;
-                            horizontal-alignment: right;
-                            vertical-alignment: center;
-                        }
-                        if !root.rail-wide : Text {
-                            width: parent.width;
-                            height: parent.height;
-                            text: q + 1;
-                            color: q == root.queue-index ? Theme.text : Theme.muted;
+                            text: item.label;
+                            color: Theme.text;
                             font-size: 13px;
                             font-weight: 600;
-                            horizontal-alignment: center;
                             vertical-alignment: center;
+                            opacity: i == root.section ? 1 : 0;
+                            animate opacity { duration: 220ms; }
                         }
-                        sub-ta := TouchArea {
+                        // Click = open; wheel = previous / next section.
+                        seg-ta := TouchArea {
                             mouse-cursor: pointer;
-                            clicked => { root.go-queue(q); }
+                            clicked => { root.go-section(i); }
+                            scroll-event(e) => {
+                                root.wheel(e.delta-y, false);
+                                return accept;
+                            }
+                        }
+
+                        // The four queues: filled = has tracks, ring = empty, bright = open.
+                        if i == 3 && root.section == 3 : Rectangle {
+                            x: root.seg-w + item.extra - 4px;
+                            width: root.chips-extra;
+                            height: parent.height;
+                            // Wheel over the dots = previous / next queue (under the dots, so their clicks still work).
+                            TouchArea {
+                                width: parent.width;
+                                height: parent.height;
+                                scroll-event(e) => {
+                                    root.wheel(e.delta-y, true);
+                                    return accept;
+                                }
+                            }
+                            for q in 4 : Rectangle {
+                                x: q * 30px;
+                                y: 3px;
+                                width: 26px;
+                                height: 26px;
+                                border-radius: 13px;
+                                background: q == root.queue-index ? Theme.accent
+                                    : root.queue-counts[q] > 0 ? Theme.accent.with-alpha(0.30)
+                                    : chip-ta.has-hover ? Theme.surface-hover : transparent;
+                                border-width: root.queue-counts[q] > 0 || q == root.queue-index ? 0px : 1px;
+                                border-color: Theme.muted.with-alpha(0.5);
+                                animate background { duration: 150ms; }
+                                Text {
+                                    text: q + 1;
+                                    color: q == root.queue-index ? #ffffff : Theme.text;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                chip-ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.go-queue(q); }
+                                }
+                            }
                         }
                     }
                 }
+                Text {
+                    x: parent.width - 20px - self.width;
+                    width: 260px;
+                    height: parent.height;
+                    text: root.section == 0 ? "\{root.tracks.length} tracks"
+                        : root.section == 3 ? "Queue \{root.queue-index + 1} · \{root.queue-counts[root.queue-index]} tracks" : "";
+                    color: Theme.muted;
+                    font-size: 13px;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
             }
 
-            // Section content.
+            // Pages sit side by side on a strip; switching slides the strip (the direction shows where you went).
             Rectangle {
-                horizontal-stretch: 1;
+                vertical-stretch: 1;
+                clip: true;
 
-            // Albums / Playlists / Queues: page shell (the lists themselves come next).
-            if root.section != 0 : Rectangle {
-                VerticalLayout {
-                    padding-left: 28px;
-                    padding-right: 28px;
-                    padding-top: 26px;
-                    spacing: 12px;
-                    alignment: start;
-                    Text {
-                        text: root.section == 1 ? "Albums" : root.section == 2 ? "Playlists" : "Queue \{root.queue-index + 1}";
-                        color: Theme.text;
-                        font-size: 22px;
-                        font-weight: 700;
-                    }
-                    if root.section == 3 : Text {
-                        text: "\{root.queue-counts[root.queue-index]} tracks";
-                        color: Theme.muted;
-                        font-size: 13px;
-                    }
-                    if root.section == 3 : Rectangle {
-                        height: 40px;
-                        HorizontalLayout {
-                            spacing: 10px;
-                            alignment: start;
-                            // Disabled until the queue has tracks.
-                            Rectangle {
-                                width: 110px;
-                                height: 36px;
-                                border-radius: 18px;
-                                background: Theme.surface;
-                                Text { text: "Play"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
-                            }
-                            Rectangle {
-                                width: 110px;
-                                height: 36px;
-                                border-radius: 18px;
-                                background: Theme.surface;
-                                Text { text: "Shuffle"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
+                for k in 3 : Rectangle {
+                    x: (k + 1 - root.section) * parent.width;
+                    width: parent.width;
+                    height: parent.height;
+                    animate x { duration: 320ms; easing: ease-in-out; }
+
+                    VerticalLayout {
+                        padding-left: 28px;
+                        padding-right: 28px;
+                        padding-top: 14px;
+                        spacing: 12px;
+                        alignment: start;
+                        Text {
+                            text: k == 0 ? "Albums" : k == 1 ? "Playlists" : "Queue \{root.queue-index + 1}";
+                            color: Theme.text;
+                            font-size: 22px;
+                            font-weight: 700;
+                        }
+                        if k == 2 : Rectangle {
+                            height: 40px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+                                // Disabled until the queue has tracks.
+                                Rectangle {
+                                    width: 110px;
+                                    height: 36px;
+                                    border-radius: 18px;
+                                    background: Theme.surface;
+                                    Text { text: "Play"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
+                                }
+                                Rectangle {
+                                    width: 110px;
+                                    height: 36px;
+                                    border-radius: 18px;
+                                    background: Theme.surface;
+                                    Text { text: "Shuffle"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
+                                }
                             }
                         }
-                    }
-                    Text {
-                        width: 100%;
-                        text: root.section == 1 ? "Albums will be grouped automatically by album artist and album."
-                            : root.section == 2 ? "Playlists will live here. \"Liked tracks\" always stays on top."
-                            : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
-                        color: Theme.muted;
-                        font-size: 15px;
-                        wrap: word-wrap;
+                        Text {
+                            width: 100%;
+                            text: k == 0 ? "Albums will be grouped automatically by album artist and album."
+                                : k == 1 ? "Playlists will live here. \"Liked tracks\" always stays on top."
+                                : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
+                            color: Theme.muted;
+                            font-size: 15px;
+                            wrap: word-wrap;
+                        }
                     }
                 }
-            }
 
-            if root.section == 0 : Rectangle {
+            Rectangle {
+                x: (0 - root.section) * parent.width;
+                width: parent.width;
+                height: parent.height;
+                animate x { duration: 320ms; easing: ease-in-out; }
             VerticalLayout {
 
             // Column captions.
