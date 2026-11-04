@@ -12,6 +12,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use radiant_dsp::stretch::{TimeStretch, MAX_SPEED, MIN_SPEED};
 use radiant_dsp::{AudioFxProcessor, AudioFxSettings};
 use std::cell::Cell;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -30,6 +31,22 @@ const FILL_INTERVAL: Duration = Duration::from_millis(50);
 const PAUSE_STREAM_AFTER: Duration = Duration::from_millis(450);
 /// How often the UI gets a position update while playing.
 const POSITION_INTERVAL: Duration = Duration::from_millis(250);
+/// Unreadable files in a row after which the player stops (avoids an endless loop over a broken queue).
+const MAX_SKIPS: u32 = 100;
+/// How often the default output device is compared with the open one (only while playing).
+const DEVICE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+/// Audio held inside the phase vocoder; used to correct the position after a speed change (estimate).
+const VOCODER_LATENCY_MS: usize = 90;
+
+/// A decoder panic on a damaged file becomes a normal error (needs `panic = "unwind"` in the profile).
+fn guarded<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    catch_unwind(AssertUnwindSafe(f))
+        .unwrap_or_else(|_| Err("decoder crashed on a damaged file".into()))
+}
+
+fn default_device_name() -> Option<String> {
+    cpal::default_host().default_output_device()?.name().ok()
+}
 
 #[derive(Debug)]
 pub enum Command {
@@ -118,6 +135,9 @@ struct Output {
     played: Arc<AtomicU64>,
     /// Linear gain as `f32` bits (set by `SetVolume`).
     volume: Arc<AtomicU32>,
+    device_name: String,
+    /// Set by the cpal error callback (device unplugged, stream died).
+    lost: Arc<AtomicBool>,
 }
 
 fn open_output() -> Result<Output, String> {
@@ -130,6 +150,9 @@ fn open_output() -> Result<Output, String> {
     if supported.sample_format() != cpal::SampleFormat::F32 {
         return Err(format!("unsupported sample format {:?}", supported.sample_format()));
     }
+    let device_name = device.name().unwrap_or_default();
+    let lost = Arc::new(AtomicBool::new(false));
+    let err_lost = lost.clone();
     let config: cpal::StreamConfig = supported.config();
     let channels = config.channels as usize;
     let rate = config.sample_rate.0;
@@ -193,14 +216,30 @@ fn open_output() -> Result<Output, String> {
                     cb_played.fetch_add(frames_out, Ordering::Relaxed);
                 }
             },
-            |err| eprintln!("audio stream error: {err}"),
+            move |err| {
+                eprintln!("audio stream error: {err}");
+                err_lost.store(true, Ordering::Relaxed);
+            },
             None,
         )
         .map_err(|e| e.to_string())?;
     // Some backends start the stream right away; start paused so idle costs nothing.
     let _ = stream.pause();
 
-    Ok(Output { stream, prod, capacity, rate, channels, playing, flush_req, flush_ack, played, volume })
+    Ok(Output {
+        stream,
+        prod,
+        capacity,
+        rate,
+        channels,
+        playing,
+        flush_req,
+        flush_ack,
+        played,
+        volume,
+        device_name,
+        lost,
+    })
 }
 
 struct Engine {
@@ -230,6 +269,15 @@ struct Engine {
     /// Source-time position (stays correct while the speed changes), see `position.rs`.
     pos: PositionTracker,
     last_notify: Cell<Instant>,
+    /// Last sound settings, to rebuild the effects after the output device changed.
+    fx_settings: AudioFxSettings,
+    /// The vocoder is in the signal path (speed != 1). Off = no vocoder work at all.
+    use_voc: bool,
+    /// Speed went back to 1.0: play out the vocoder tail on the next fill, then bypass it.
+    voc_drain: bool,
+    /// Files in a row that gave no audio.
+    skip_streak: u32,
+    last_device_check: Instant,
 }
 
 fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status) + Send>) {
@@ -274,6 +322,11 @@ fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status)
         duration_ms: None,
         pos: PositionTracker::new(out_rate),
         last_notify: Cell::new(Instant::now()),
+        fx_settings: AudioFxSettings::default(),
+        use_voc: false,
+        voc_drain: false,
+        skip_streak: 0,
+        last_device_check: Instant::now(),
     };
     loop {
         // Block without polling when there is nothing to do (0 % CPU while paused).
@@ -309,9 +362,74 @@ impl Engine {
         self.duration_ms.map_or(ms, |d| ms.min(d))
     }
 
+    fn current_label(&self) -> String {
+        self.transport
+            .current()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
+    /// Every `stretch.reset()` goes through here so the flags stay consistent.
+    fn vocoder_reset(&mut self) {
+        self.stretch.reset();
+        self.voc_drain = false;
+        self.use_voc = (self.stretch.speed() - 1.0).abs() > 1e-4;
+    }
+
+    /// Re-opens the output when the device is gone or the system default changed.
+    /// false = no usable device (the error text is set).
+    fn refresh_output(&mut self) -> bool {
+        let gone = self.out.lost.load(Ordering::Relaxed);
+        let changed = default_device_name().as_deref() != Some(self.out.device_name.as_str());
+        if !gone && !changed {
+            return true;
+        }
+        match self.reopen_output() {
+            Ok(()) => true,
+            Err(e) => {
+                self.error = Some(format!("Audio device: {e}"));
+                false
+            }
+        }
+    }
+
+    /// New stream on the current default device; playback continues from the same position.
+    fn reopen_output(&mut self) -> Result<(), String> {
+        let new = open_output()?; // on error the old output stays as it was
+        let ms = self.position_ms();
+        let speed = self.stretch.speed();
+        new.volume.store(self.out.volume.load(Ordering::Relaxed), Ordering::Relaxed);
+        let (rate, ch) = (new.rate, new.channels);
+        self.out = new; // the old stream is dropped (closed) here
+        // Everything that depends on the rate / channel count is rebuilt.
+        self.stretch = TimeStretch::new(ch, rate);
+        self.stretch.set_speed(speed);
+        self.vocoder_reset();
+        self.fx = AudioFxProcessor::new(self.fx_settings.clone());
+        self.conv = None; // recreated on the next chunk for the new rate
+        self.pending.clear();
+        self.pending_pos = 0;
+        self.converted.clear();
+        self.pos = PositionTracker::new(rate);
+        if let Some(dec) = self.decoder.as_mut() {
+            if dec.seek(ms as f64 / 1000.0).is_ok() {
+                self.eof = false;
+            }
+        }
+        self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, speed);
+        self.fill();
+        if self.transport.state == PlayState::Playing {
+            let _ = self.out.stream.play();
+            self.out.playing.store(true, Ordering::Release);
+            self.pause_deadline = None;
+        }
+        Ok(())
+    }
+
     /// Speed change: the new speed is applied to audio decoded from now on, so it is heard after the
-    /// audio already queued (ring buffer + pending). The position tracker is told where that is.
-    /// (The vocoder's own ~90 ms latency is ignored: the position may be off by that much for a moment.)
+    /// audio already queued (ring buffer + pending + what is still inside the vocoder, ~VOCODER_LATENCY_MS).
+    /// The position tracker is told where that is.
     fn set_speed(&mut self, speed: f32) {
         let speed = speed.clamp(MIN_SPEED, MAX_SPEED);
         if (speed - self.stretch.speed()).abs() < 1e-4 {
@@ -321,9 +439,21 @@ impl Engine {
         let played = self.out.played.load(Ordering::Relaxed);
         let queued_ring = (self.out.capacity - self.out.prod.slots()) / ch;
         let queued_pending = self.pending.len().saturating_sub(self.pending_pos) / ch;
+        let in_vocoder = if self.use_voc {
+            self.out.rate as usize * VOCODER_LATENCY_MS / 1000
+        } else {
+            0
+        };
         self.pos.settle(played);
-        self.pos.push_speed(played + (queued_ring + queued_pending) as u64, speed);
+        self.pos
+            .push_speed(played + (queued_ring + queued_pending + in_vocoder) as u64, speed);
         self.stretch.set_speed(speed);
+        if (speed - 1.0).abs() < 1e-4 {
+            self.voc_drain = self.use_voc; // flushed and bypassed in the next fill()
+        } else {
+            self.use_voc = true;
+            self.voc_drain = false;
+        }
     }
 
     fn notify(&self) {
@@ -381,7 +511,10 @@ impl Engine {
                 let v = v.clamp(0.0, 1.0);
                 self.out.volume.store((v * v).to_bits(), Ordering::Relaxed);
             }
-            Command::SetFx(settings) => self.fx.set_settings(settings),
+            Command::SetFx(settings) => {
+                self.fx.set_settings(settings.clone());
+                self.fx_settings = settings;
+            }
             Command::SetSpeed(speed) => self.set_speed(speed),
             Command::DurationScanned { path, ms } => {
                 // Ignore a late result for a track that is no longer the current one.
@@ -399,6 +532,16 @@ impl Engine {
     fn tick(&mut self) {
         match self.transport.state {
             PlayState::Playing => {
+                if self.out.lost.load(Ordering::Relaxed)
+                    || self.last_device_check.elapsed() >= DEVICE_CHECK_INTERVAL
+                {
+                    self.last_device_check = Instant::now();
+                    if !self.refresh_output() {
+                        self.pause();
+                        self.notify();
+                        return;
+                    }
+                }
                 self.pos.settle(self.out.played.load(Ordering::Relaxed));
                 self.fill();
                 if self.last_notify.get().elapsed() >= POSITION_INTERVAL {
@@ -406,8 +549,10 @@ impl Engine {
                 }
                 let drained = self.out.prod.slots() == self.out.capacity;
                 if self.eof && self.pending_pos >= self.pending.len() && drained {
-                    // Track ended by itself. The ring buffer is empty, so no flush is needed.
-                    if self.transport.next(true).is_some() {
+                    // Track ended by itself (or was cut by a decode error: then it is simply skipped).
+                    // The ring buffer is empty, so no flush is needed.
+                    let go_on = self.skip_streak < MAX_SKIPS && self.transport.next(true).is_some();
+                    if go_on {
                         self.play_current(false);
                     } else {
                         self.stop();
@@ -456,56 +601,70 @@ impl Engine {
         if let Some(c) = self.conv.as_mut() {
             c.reset(); // restart the resampler (keeps its filter tables)
         }
-        self.stretch.reset(); // restart the vocoder (no old audio mixed into the new position)
+        self.vocoder_reset(); // restart the vocoder (no old audio mixed into the new position)
         self.flush();
         self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, self.stretch.speed());
         self.fill();
     }
 
     /// Opens the current track, fills the buffer and starts output.
+    /// An unreadable file is skipped (the next one is tried). `flush` = started by the user.
     fn play_current(&mut self, flush: bool) {
-        self.decoder = None;
-        self.conv = None;
-        self.pending.clear();
-        self.pending_pos = 0;
-        self.eof = false;
-        self.error = None;
-        self.duration_ms = None;
-        self.stretch.reset();
-        let Some(path) = self.transport.current().map(|p| p.to_path_buf()) else {
-            self.stop();
-            return;
-        };
-        match TrackDecoder::open(&path) {
-            Ok(d) => {
-                self.duration_ms = d.duration_ms;
-                if d.needs_scan {
-                    // Length missing or only estimated: find the exact one in the background.
-                    let tx = self.tx.clone();
-                    let scan_path = path.clone();
-                    let _ = thread::Builder::new().name("radiant-scan".into()).spawn(move || {
-                        if let Ok(ms) = scan_duration(&scan_path) {
-                            let _ = tx.send(Command::DurationScanned { path: scan_path, ms });
-                        }
-                    });
-                }
-                self.decoder = Some(d);
-                if flush {
-                    self.flush();
-                }
-                self.pos.reset(self.out.played.load(Ordering::Relaxed), 0, self.stretch.speed());
-                self.fill();
-                self.start();
-            }
-            Err(e) => {
-                // TODO: skip unreadable files instead of stopping.
-                self.error = Some(format!("{}: {e}", path.display()));
+        if flush {
+            self.error = None;
+            self.skip_streak = 0;
+        }
+        loop {
+            self.decoder = None;
+            self.conv = None;
+            self.pending.clear();
+            self.pending_pos = 0;
+            self.eof = false;
+            self.duration_ms = None;
+            self.vocoder_reset();
+            let Some(path) = self.transport.current().map(|p| p.to_path_buf()) else {
                 self.stop();
+                return;
+            };
+            match guarded(|| TrackDecoder::open(&path)) {
+                Ok(d) => {
+                    self.duration_ms = d.duration_ms;
+                    if d.needs_scan {
+                        // Length missing or only estimated: find the exact one in the background.
+                        let tx = self.tx.clone();
+                        let scan_path = path.clone();
+                        let _ = thread::Builder::new().name("radiant-scan".into()).spawn(move || {
+                            if let Ok(ms) = scan_duration(&scan_path) {
+                                let _ = tx.send(Command::DurationScanned { path: scan_path, ms });
+                            }
+                        });
+                    }
+                    self.decoder = Some(d);
+                    if flush {
+                        self.flush();
+                    }
+                    self.pos.reset(self.out.played.load(Ordering::Relaxed), 0, self.stretch.speed());
+                    self.fill();
+                    self.start();
+                    return;
+                }
+                Err(e) => {
+                    self.error = Some(format!("Skipped {}: {e}", self.current_label()));
+                    self.skip_streak += 1;
+                    if self.skip_streak >= MAX_SKIPS || self.transport.next(false).is_none() {
+                        self.stop();
+                        return;
+                    }
+                }
             }
         }
     }
 
     fn start(&mut self) {
+        if !self.refresh_output() {
+            self.pause(); // no usable device; Play tries again
+            return;
+        }
         let _ = self.out.stream.play();
         self.out.playing.store(true, Ordering::Release);
         self.transport.state = PlayState::Playing;
@@ -556,14 +715,25 @@ impl Engine {
             }
 
             // 2. Decode, convert to the device format, run the effects.
+            if self.voc_drain {
+                // Speed is back at 1.0: play out the vocoder tail once, then bypass it.
+                self.stretch.finish(&mut self.pending);
+                self.vocoder_reset();
+                if !self.pending.is_empty() {
+                    self.fx.process(&mut self.pending, ch, self.out.rate);
+                    continue; // step 1 pushes the tail
+                }
+            }
             let Some(dec) = self.decoder.as_mut() else { return };
-            match dec.next_chunk(&mut self.raw) {
+            let res = guarded(|| dec.next_chunk(&mut self.raw));
+            match res {
                 Ok(Some((rate, src_ch))) => {
+                    self.skip_streak = 0;
                     if self.conv.is_none() {
                         self.conv = Some(Converter::new(rate, src_ch, self.out.rate, ch));
                     }
                     if let Some(c) = self.conv.as_mut() {
-                        if self.stretch.is_passthrough() {
+                        if !self.use_voc {
                             // Speed 1: no vocoder, no extra copy.
                             c.process(&self.raw, &mut self.pending);
                         } else {
@@ -582,13 +752,15 @@ impl Engine {
                         c.finish(&mut self.converted);
                     }
                     if !self.converted.is_empty() {
-                        if self.stretch.is_passthrough() {
+                        if !self.use_voc {
                             self.pending.extend_from_slice(&self.converted);
                         } else {
                             self.stretch.process(&self.converted, &mut self.pending);
                         }
                     }
-                    self.stretch.finish(&mut self.pending);
+                    if self.use_voc {
+                        self.stretch.finish(&mut self.pending);
+                    }
                     if self.pending.is_empty() {
                         return;
                     }
@@ -596,8 +768,9 @@ impl Engine {
                     // Loop again: step 1 pushes the tail, then `eof` ends the loop.
                 }
                 Err(e) => {
-                    self.error = Some(e);
-                    self.eof = true;
+                    self.error = Some(format!("{}: {e}", self.current_label()));
+                    self.skip_streak += 1;
+                    self.eof = true; // the track ends; tick() moves on to the next one
                     self.notify();
                     return;
                 }

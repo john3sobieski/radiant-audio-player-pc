@@ -19,11 +19,13 @@
 //!       play / pause / toggle / next / previous / repeat, 300 ms fade-in and 250 ms fade-out,
 //!       auto-advance at end of track, stream paused when idle (no CPU while paused).
 //!       rubato sinc resampler (convert.rs / sinc_core.rs), exact duration for files without a length header
-//!       (background scan, decode.rs), sample-accurate seek (frames before the target are dropped).
+//!       (background scan, decode.rs), sample-accurate seek (frames before the target are dropped),
+//!       skip unreadable files (open / decode errors, at most `MAX_SKIPS` in a row), output device change
+//!       (stream re-opened, playback resumes at the same position), vocoder fully bypassed at 1.0x.
 //! TODO:
 //!   - gapless (now: queue of next file starts when the ring buffer is empty)
-//!   - device change (headphones unplugged) -> re-open the stream and resume
-//!   - non-f32 device formats (now: error), skip unreadable files instead of stopping
+//!   - start without any output device (now: the engine only waits for Quit)
+//!   - non-f32 device formats (now: error)
 //!   - measure CPU and report it
 
 mod convert;

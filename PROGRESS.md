@@ -1,61 +1,129 @@
-# PROGRESS (notes for the next session — read this first, then README.md)
+# PROGRESS — Radiant for PC
+(notes for the next session — read this first, then README.md)
 
 README.md = the project brief (keep it until the user-facing README is written).
-Language with the owner: Russian. Code and comments: English.
+The Android app (README_ru.md in the owner's repo) is the target: the PC version is done when it has the same features.
 
-## Status
-Base workspace created. **Nothing here has been compiled yet** (no Rust toolchain in the session
-where it was written). First thing to do: push to GitHub, run the `build` workflow, fix errors
-from the log the owner pastes.
+## Rules for the assistant
+- Owner writes Russian: reply in Russian. Code and comments in English. The owner does not write Rust: explain briefly and concretely.
+- **Do NOT end replies with reminders to push to GitHub, run the `build` workflow, check CI, paste logs, or commit.** The owner knows his workflow and reports problems himself. Mention a manual check only when it is specific and non-obvious (for example, what to listen for), in one line.
+- Do not loop on `cargo build` in the sandbox: crates.io is usually unreachable there. Write the code, run only checks that work offline (rustfmt, tests of a crate without external dependencies). No retry loops.
+- Send only the files that changed (complete files, the owner drops them in). Do not resend untouched files.
+- Keep this file short (target: under 150 lines). Update the marks in place; no session logs; remove details that no longer matter.
+- No feature loss. When unsure whether something matters, ask. Keep the DSP numbers from README section 5 unless measured otherwise.
 
-## Done
-- Cargo workspace, 6 crates (layout from README section 6), release profile, static CRT, Windows CI.
-- `radiant-core`: models, recursive folder scan (file names only), album grouping, track sorting + tests.
-- `radiant-audio`: playback engine written (symphonia decode -> convert -> DSP -> rtrb ring -> cpal),
-  play/pause/next/prev/repeat, fades, auto-advance, stream paused when idle. **Untested: never compiled or heard.**
-  Modules: transport, decode, convert, engine (see header of `lib.rs`).
-- `radiant-dsp`: AudioFx chain per README 5.1 (RBJ biquads, 12-band EQ with Q formula, bass/treble shelves, subsonic 24 dB/oct, preamp, normalization, soft limiter, mono, zero-cost bypass). 13 unit tests pass (run standalone, `cargo test` on this crate alone; no network in that session). Engine still passes `AudioFxSettings::default()` (bypass): settings are not wired to UI/engine yet.
-- EQ presets: `radiant-dsp/src/presets.rs` (10 presets, checked identical to EqPresets.kt by script, 3 unit tests pass). UI: two rows of preset chips in the Sound panel (`eq-preset-selected` callback in `main.rs`). Names are English for now (keys `rock`, `pop`... = Android `preset_*`), translate with localization. UI part NOT compiled yet. EQ modes OFF/GLOBAL/PER_TRACK still to do.
-- Phase vocoder (README 5.2): `radiant-dsp/src/stretch.rs`, port of TimeStretch.kt (same N, hops, peak detection, phase locking, stereo-sum phases, OLA, tail; hand-written radix-2 FFT as in Kotlin, no new crate). API: `TimeStretch::{new,set_speed,process,finish,reset,configure}`, `slider_to_speed`. 9 unit tests pass (pitch kept at 0.5..3x, length scales, no clicks, chunk-size independent, stereo image, mono/3ch, silence, on-the-fly start). WIRED (NOT compiled yet): `Command::SetSpeed(f32)` in `radiant-audio`; vocoder sits after the resampler and before the effects in `Engine::fill` (pass-through at speed 1, no extra copy); reset on seek / new track; tail played out at end of track; `position.rs` (`PositionTracker`, 3 unit tests) keeps position/progress in SOURCE time while the speed changes (a change is registered at the output frame where it becomes audible). UI: "Speed" row at the top of the Sound panel (slider -2..+2, step 0.1, label 1.0x..3.0x / -1.0x..-3.0x), `speed-changed` -> `slider_to_speed` -> `SetSpeed`. Speed is NOT reset by the panel's Reset button and NOT saved between launches yet. Known: after returning to 1.0x mid-track the vocoder keeps running until the next seek/track (costs a little CPU); position can be off by the vocoder latency (~90 ms) right after a change.
-- CI result for the code below (session 5): it COMPILED with rubato 5 / symphonia / cpal; 28 of 30 tests passed. The 2 failures were test mistakes, fixed: (1) the ramp WAV wraps at 30011, expectations are now taken modulo that (seek itself was exact); (2) rubato reports its filter delay in whole frames, so the resampled sine can be off by a fraction of a frame (error 0.0228 = 0.35 frame at 1 kHz/48 kHz), the test now allows a slide of up to 1 frame and checks the residual shape error < 0.005. Fixed tests not yet re-run in CI.
-- Resampler + seek + duration (session 4, was NOT compiled with the real crates: crates.io was blocked in that session, so `rubato`, `symphonia`, `cpal` could not be built; syntax checked with rustfmt, logic tested with stand-ins):
-  - `radiant-audio/src/sinc_core.rs`: the only file that uses `rubato` (**version 5.x API**, read from the 5.0.1 source; `Async::new_sinc`, fixed input chunk 1024, sinc 128 taps, Blackman-Harris^2, cubic). `Cargo.toml`: `rubato = { version = "5", default-features = false }` (no FFT resampler, no realfft). If CI complains about the rubato API, fix only this file.
-  - `convert.rs`: streaming wrapper around the core (collects whole chunks, trims the filter delay at the start, `finish()` flushes the tail and cuts to the exact length `round(frames * ratio)`, `reset()` after a seek keeps the filter tables). Falls back to the old linear interpolator if rubato cannot be created. 13 unit tests: the bookkeeping part (fake core, 5 tests) was run and passes; the tests that use the real core (sine 44.1->48 kHz must match an ideal sine within 0.01, exact length, piece-size independence, reset) will run for the first time in CI.
-  - `engine.rs`: resampler tail is played out at the end of a track (before the vocoder tail), seek calls `Converter::reset` instead of rebuilding.
-  - `decode.rs`: seek is now sample-accurate (symphonia lands on a packet boundary; the frames before the target are dropped). Duration fallback: `needs_scan` is set when the container gives no length, or for a raw MP3 without Xing/Info/VBRI header (symphonia 0.5.4 only ESTIMATES the length from the first frame's bitrate then, wrong for VBR). The engine runs `scan_duration` (walks packets, no decoding) on a helper thread and receives `Command::DurationScanned` (hidden variant, sent to itself); a result for a track that is no longer current is ignored. Until it arrives the seek bar uses the estimate or is off (duration `None`).
-  - Tests added in `decode.rs` (run in CI): ramp WAV where every sample encodes its frame number, so seek accuracy is checked exactly (forward, backward, near the end), exact scan duration. The pure MP3-header detection tests (ID3 size, Xing/Info/VBRI) were run here and pass. NOT tested on real MP3 files: to check by hand with ffmpeg: `ffmpeg -i in.wav -c:a libmp3lame -b:a 192k -write_xing 0 headerless.mp3` (CBR, no header) and `-q:a 2 -write_xing 0` (VBR, no header), then play and drag the seek bar.
+## Legend
+✅ done, compiled in CI, tests pass  |  🟡 written, but not compiled yet or not heard by ear  |  ⬜ not started  | ❌ need to be fixed
 
-- `radiant-stems`: constants only (models, sizes, SHA-256, STFT sizes).
-- `radiant-cloud`: empty placeholder.
-- Volume (smoothed, squared curve, mute by clicking the speaker), shuffle, repeat button: written, not compiled yet.
-- Sound settings wired end to end (NOT compiled yet): `Command::SetFx(AudioFxSettings)` in `radiant-audio`
-  (applied on the engine thread, `AudioFxSettings` re-exported from `radiant-audio`); UI "Sound" button opens an
-  overlay panel (Normalize, Mono, Reset, Bass, Treble, Subsonic, 12 EQ sliders). Rust (`main.rs`) owns the settings
-  and sends the whole set on every change. Slider steps: 0.5 dB (EQ/bass/treble), 1 % (subsonic).
-  The ring buffer was shortened from 1000 ms to `RING_MS = 400` so a change is audible within 0.4 s
-  (the DSP runs before the ring buffer). If crackling appears on weak machines, raise `RING_MS` in `engine.rs`.
-- Slint: `VolumeBar` callback renamed `changed` -> `edited` (avoids a possible clash with Slint's `changed` keyword).
-- `radiant-ui`: Slint window, folder button, background scan, restyled dark UI (custom widgets, `Theme` global, current-row highlight, player bar with icon buttons).
+UI work is marked 🟡 because it was edited after the last known CI run. After the owner pastes a new build log, update the marks.
 
-- UI fixes (NOT compiled yet): player-bar control row now uses absolute positions (title elides in the space left of the centered transport block, volume pinned right), so a long track title no longer shifts Shuffle/Prev/Play/Next/Repeat; window min-width raised 480 -> 640 so blocks cannot overlap. Mouse wheel over any slider (seek, volume, all sound sliders): `scroll-event` on each slider's TouchArea; 1 notch (= 60 px in Slint) = 5 s seek / 5 % volume / `wheel-step` (0.5 dB EQ/bass/treble, 0.1 speed, 1 % subsonic). `duration-secs` property fed from Rust.
+---
 
-## Next (order from README section 11)
-1. Playback: CI check of the new resampler/seek code first (read the CI log: rubato API, the real-core tests). Then skip bad files, device change, measure CPU (resampler 44.1->48 kHz included). Listen to a 44.1 kHz file on a 48 kHz device (ends of tracks, seek).
-2. Library UI: tabs, search, sort, player bar, cover, quality badge; tag reading in `radiant-core`.
-3. DSP: AudioFx chain DONE, settings wired to engine/UI (needs CI check). EQ presets DONE (see above). Next: EQ modes OFF/GLOBAL/PER_TRACK. Vocoder is wired (check by ear in CI build: 0.5x, 2x, 3x, seek while slowed, end of track at 0.5x).
-4. Lyrics, track details, themes, languages (convert Android strings.xml by script, do not retranslate).
-5. App lock, 
-6. Stems, 
-7. Dropbox, 
-8. SMTC/media keys, 
-9. installer, 
-10. user README.
+## ROADMAP (in development order)
 
-## Open items
-- Remember volume, shuffle, repeat, the music folder and the sound settings between launches (settings file, not written yet).
-- Slint license: royalty-free option needs attribution; add notice.
-- Opus decoder: symphonia has none; choose a solution.
-- Settings persistence format not chosen yet (serde + JSON/TOML is the likely choice).
+### Этап 1. Фундамент
+- ✅ Cargo workspace из 6 crate'ов (core, audio, dsp, stems, cloud, ui), release-профиль, статический CRT, сборка на Windows в GitHub Actions
+- ✅ Сканирование папки с музыкой (рекурсивно, пока только имена файлов), группировка в альбомы, сортировка треков, тесты
+- ✅ Движок воспроизведения: декодирование → ресемплер → эффекты → кольцевой буфер → звуковая карта. Play/pause/next/prev/repeat, плавные fade, автопереход, поток засыпает, когда ничего не играет
+- ✅ Ресемплер 44.1 → 48 кГц (rubato, sinc)
+- ✅ Точная перемотка и точная длительность (в том числе MP3 без заголовка)
+- ✅ Цепочка эффектов: 12-полосный EQ, bass, treble, subsonic, preamp, нормализация, мягкий лимитер, моно, нулевая стоимость при выключении (13 тестов)
+- ✅ 10 пресетов эквалайзера (данные и тесты)
+- ✅ Фазовый вокодер как модуль: скорость от -3× до 3× без смены высоты (9 тестов)
+- ✅ Окно Slint: кнопка выбора папки, фоновое сканирование, тёмная тема, подсветка текущего трека, панель плеера
 
-## Notes on DSP
-- Normalization envelope follows spec (fast attack) so on a pure sine it settles ~15% below the 0.16 target; kept as in Android. Gain keeps adapting for ~9 s of silence until the envelope falls under the gate (1e-6), then freezes.
+### Этап 2. Доделать написанное, но не проверенное
+- ✅ Скорость подключена к движку и интерфейсу (ползунок, учёт позиции в исходном времени)
+- ✅ Панель «Sound» целиком: Normalize, Mono, Bass, Treble, Subsonic, 12 полос, пресеты, Reset
+- ✅ Громкость (плавная, mute по клику на динамик), shuffle, repeat
+- ✅ Колесо мыши на всех ползунках; исправления панели плеера (длинные названия, минимальная ширина окна 640)
+- ✅ Проверка на слух: вокодер на 0.5×, 2×, 3×; перемотка при замедлении; конец трека при 0.5×; файл 44.1 кГц на устройстве 48 кГц
+
+### Этап 3. Надёжность воспроизведения
+- 🟡 Пропуск битых файлов: ошибка открытия и ошибка посреди трека, плеер идёт дальше, имя файла в статусе; стоп после 100 подряд (MAX_SKIPS); паника декодера перехватывается
+- ❌ Смена устройства вывода: поток переоткрывается и воспроизведение продолжается с той же позиции (ошибка потока, смена устройства по умолчанию, проверка раз в 2 с только во время игры) ОШИБКА: трек останавливается, но при повторном подключении трек больше не играет, даже после нескольки нажатий Play и Stop
+- ✅ Вокодер полностью обходится при возврате к 1.0× (хвост дослушивается, потом сброс); позиция после смены скорости учитывает задержку вокодера (VOCODER_LATENCY_MS = 90, оценка)
+- ⬜ Запуск без устройства вывода: сейчас движок молча ждёт выхода; нужен повтор, когда устройство появится
+- ⬜ Замеры: CPU в простое, на паузе, при игре (простое / полный EQ / ±3×), RAM, время старта, размер .exe
+- ⬜ Opus: у symphonia нет декодера, выбрать решение (libopus или чисто-Rust) или честно задокументировать
+- ⬜ Проверить HE-AAC на реальных файлах владельца
+
+### Этап 4. Сохранение настроек
+- ⬜ Выбрать формат (вероятно serde + JSON или TOML)
+- ⬜ Запоминать между запусками: папку с музыкой, громкость, shuffle, repeat, настройки звука, скорость (решить, сбрасывает ли её кнопка Reset; сейчас нет)
+
+### Этап 5. Библиотека (как на Android: Плейлисты / Альбомы / Треки / Очереди)
+- ⬜ Чтение тегов (название, исполнитель, исполнитель альбома, альбом, номер трека, длительность); пути с Unicode и длинные пути
+- ⬜ Вкладка «Треки» + поиск + сортировка (ручная, имя, исполнитель, альбом, длительность, дата файла; по возрастанию/убыванию)
+- ⬜ Вкладка «Альбомы» (автогруппировка по исполнителю альбома + альбому; сортировка: ручная, имя, исполнитель, число треков, дата)
+- ⬜ «Плейлисты»: создать, переименовать, удалить, добавить/убрать треки. «Понравившиеся» всегда сверху, нельзя переименовать или удалить. Сортировка: ручная, имя, создан, изменён, число треков
+- ⬜ «Очереди»: ровно 4 фиксированные, добавить/убрать треки, менять порядок (перетаскивание или «выше/ниже»)
+- ⬜ Перетаскивание для ручного порядка (плейлисты, альбомы, треки)
+- ⬜ Обложки (кэш нескольких размеров, ограниченный) и значок качества (формат + битрейт)
+- ⬜ Окно «Сведения о треке» (теги, формат, битрейт, частота, каналы, размер файла и т. д.)
+- ⬜ Пересканирование при каждом запуске + кнопка ручного пересканирования; сканирование не в потоке интерфейса; длинные списки виртуализировать
+- ⬜ Окно плеера: обложка, значок качества, добавление в очередь, кнопки «сведения» и «тексты»
+
+### Этап 6. Звук: режимы эквалайзера
+- ⬜ Три режима: выключен / одна кривая для всех / отдельная кривая для каждого трека (хранятся независимо, по пути файла)
+- ⬜ Названия пресетов на языке интерфейса (пока английские)
+
+### Этап 7. Тексты песен
+- ⬜ Источники: теги (ID3 USLT/SYLT, Vorbis LYRICS, M4A ©lyr) и файлы .lrc/.txt рядом с треком, перепроверка при каждом сканировании
+- ⬜ Экран: синхронные тексты (прокрутка, подсветка текущей строки, приглушение спетых, клик по строке = перемотка; поиск строки бинарным поиском, небольшой опережающий LEAD_MS), обычные тексты в компактном виде
+
+### Этап 8. Темы и языки
+- ⬜ Темы: светлая, чёрная (для OLED), системная
+- ⬜ 10 языков (en, de, ru, uk, zh, ja, fr, cs, es, pl) + «Системный»: конвертировать `strings.xml` скриптом (~320 строк), заново не переводить; смена на лету без остановки музыки
+
+### Этап 9. Энергосбережение (решить вместе с владельцем)
+- ⬜ Один режим «низкое потребление» вместо трёх уровней Android: реже перерисовка, эффекты отключены, стемы отключены. Правила про громкость 40 % и Bluetooth не переносятся
+
+### Этап 10. Блокировка приложения
+- ⬜ Коды: 4 цифры, 6 цифр или свой (латиница и цифры, 4–64 символа). Спрашивать при запуске и при возврате из фона
+- ⬜ Хранить только соль и хэш PBKDF2-HMAC-SHA256 (30 000 итераций), сравнение за постоянное время
+- ⬜ Задержки после каждых 5 ошибок: 30 с, 1, 2, 4… до 15 минут, сохраняются после перезапуска
+- ⬜ Файл восстановления из 12 случайных слов (список из 700 слов, криптостойкий генератор), хранится только хэш; «Забыл пароль»; экран блокировки. Эталон логики: `AppLock.kt`
+
+### Этап 11. Стемы (ИИ-разделение)
+- ✅ `radiant-stems`: константы (модели, размеры, SHA-256, размеры STFT)
+- ⬜ Менеджер моделей: скачать (проверка SHA-256) или импортировать из файлов (распознавание по контрольной сумме)
+- ⬜ Конвейер: декодирование в 44.1 кГц стерео → STFT 4096/1024 → 4 сети ONNX (`ort`) → мягкая маска → WAV 16 бит в `Stems/<исполнитель - название>/`; блоки 512 хопов + 86 контекста; прогресс, оценка времени, отмена, очистка временных файлов; выбор частей и имена вроде `... - No Bass.wav`
+- ⬜ Решить, как поставлять `onnxruntime.dll`: стемы необязательны, базовая программа должна остаться маленькой
+- ⬜ (по желанию, после паритета с Android) более сильные модели, чем Open-Unmix
+
+### Этап 12. Dropbox
+- ⬜ `radiant-cloud` (сейчас пустая заготовка): вход OAuth 2 + PKCE в браузере, возврат на локальный адрес 127.0.0.1; скачивание только в одну сторону в подпапку `Dropbox`; ничего не загружается, не меняется и не удаляется; тип доступа «App folder»
+
+### Этап 13. Интеграция с Windows
+- ⬜ Медиа-клавиши и системные кнопки Windows (SMTC, например через `souvlaki`; Windows 10+, на старых хотя бы медиа-клавиши)
+
+### Этап 14. Выпуск
+- ⬜ Portable .zip и установщик (MSI, NSIS или MSIX)
+- ⬜ Лицензия Slint: вариант «royalty-free» с указанием авторства, добавить уведомление
+- ⬜ Раздел «Сторонние компоненты» (symphonia, cpal, rubato, rtrb, ort, ONNX Runtime, Slint, Open-Unmix)
+- ⬜ Пользовательский README по образцу Android (10 языков) вместо этого брифа; сохранить `LICENSE.md` (PolyForm Noncommercial 1.0.0, Required Notice с ником), `FUNDING.yml`
+- ⬜ Заметка про SmartScreen («Подробнее → Выполнить в любом случае»), публикация на GitHub Releases
+- ⬜ Отдельная legacy-сборка для Windows 7/8.1, только если исследование (этап 3) покажет, что это реально
+
+---
+
+## Technical notes for the assistant
+
+**Pipeline:** `symphonia` decode → `convert.rs` (rubato sinc resampler) → phase vocoder (`radiant-dsp/src/stretch.rs`) → `AudioFx` chain → `rtrb` ring buffer → `cpal`. Engine commands live in `radiant-audio` (`Command::SetFx`, `SetSpeed`, hidden `DurationScanned`).
+
+**Resampler.** `radiant-audio/src/sinc_core.rs` is the only file that uses `rubato` (5.x API: `Async::new_sinc`, chunk 1024, 128 taps, Blackman-Harris², cubic; `rubato = { version = "5", default-features = false }`). If rubato's API causes errors, fix only this file. `convert.rs` trims the filter delay at the start, `finish()` flushes the tail and cuts to `round(frames * ratio)`, `reset()` after seek keeps the tables; falls back to linear interpolation if rubato cannot be created. Resampler tail is played out before the vocoder tail at end of track.
+
+**Seek and duration.** `decode.rs`: sample-accurate seek (land on a packet boundary, drop frames before the target). `needs_scan` is set when the container gives no length or for a raw MP3 without Xing/Info/VBRI (symphonia 0.5.4 only estimates, wrong for VBR). `scan_duration` walks packets on a helper thread and sends `Command::DurationScanned`; a result for a non-current track is ignored; until then the seek bar uses the estimate or is off.
+
+**Sound settings.** Rust (`main.rs`) owns `AudioFxSettings` and sends the whole set on every change (`Command::SetFx`, applied on the engine thread). `RING_MS = 400` in `engine.rs` (shorter ring = faster audible response; raise it if crackling appears on weak machines). Slider steps: 0.5 dB (EQ/bass/treble), 1 % (subsonic), 0.1 (speed).
+
+**Vocoder.** Port of `TimeStretch.kt` (same N, hops, peak detection, phase locking, stereo-sum phases, OLA, tail; hand-written radix-2 FFT, no new crate). API: `TimeStretch::{new,set_speed,process,finish,reset,configure}`, `slider_to_speed`. Sits after the resampler, before the effects in `Engine::fill`; pass-through at speed 1; reset on seek and on new track. `position.rs` (`PositionTracker`) keeps position/progress in SOURCE time; a speed change is registered at the output frame where it becomes audible.
+
+**Slint gotchas.** `VolumeBar` callback is named `edited` (not `changed`, which clashes with a Slint keyword). Mouse wheel: `scroll-event` on each slider's TouchArea; 1 notch = 60 px = 5 s seek / 5 % volume / `wheel-step`. Player-bar control row uses absolute positions; window min-width 640. Preset names are English keys (`rock`, `pop`, ... = Android `preset_*`) until localization exists.
+
+**Robustness (engine.rs).** `skip_streak` counts files in a row that gave no audio (open error or decode error before the first good chunk); it is reset by the first good chunk and by any user command; at `MAX_SKIPS` the player stops. `guarded()` turns a decoder panic into an error (needs `panic = "unwind"` in the profile). Device: `Output.lost` is set by the cpal error callback; `refresh_output()` also compares the default device name (every `DEVICE_CHECK_INTERVAL` while playing, and on every `start()`, nothing while paused). `reopen_output()` rebuilds stream, vocoder, effects (from `fx_settings`), resampler and position tracker for the new rate/channels, then seeks the decoder to the old position. On failure the player pauses with a message; Play retries. Vocoder bypass: `use_voc` / `voc_drain`; `vocoder_reset()` keeps them consistent after any `stretch.reset()`.
+
+**Normalization note.** The envelope follows the spec (fast attack), so on a pure sine it settles ~15 % below the 0.16 target; kept as on Android. Gain keeps adapting for ~9 s of silence until the envelope falls under the gate (1e-6), then freezes.
+
+**Tests.** The ramp-WAV seek tests take expectations modulo 30011 (the ramp wraps). The resampler sine test allows a slide of up to 1 frame and checks a residual shape error < 0.005 (rubato reports its delay in whole frames). MP3 header detection (ID3 size, Xing/Info/VBRI) is unit-tested; real-file check with ffmpeg: `ffmpeg -i in.wav -c:a libmp3lame -b:a 192k -write_xing 0 headerless.mp3` (CBR) and `-q:a 2 -write_xing 0` (VBR).
