@@ -53,7 +53,7 @@ fn open_format(path: &Path) -> Result<Box<dyn FormatReader>, String> {
 fn codec_registry() -> CodecRegistry {
     let mut codecs = CodecRegistry::new();
     symphonia::default::register_enabled_codecs(&mut codecs);
-    codecs.register_audio_decoder::<OpusDecoder>();
+    codecs.register_all::<OpusDecoder>();
     codecs
 }
 
