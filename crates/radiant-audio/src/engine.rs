@@ -5,7 +5,7 @@
 //! ring buffer and applies a fade gain. Everything else happens on this thread.
 
 use crate::convert::Converter;
-use crate::decode::TrackDecoder;
+use crate::decode::{scan_duration, TrackDecoder};
 use crate::position::PositionTracker;
 use crate::transport::{PlayState, RepeatMode, Transport};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -52,6 +52,9 @@ pub enum Command {
     /// Playback speed, pitch preserved (phase vocoder). 1.0 = normal, clamped to 0.25..=4.
     /// The UI converts its slider with `slider_to_speed`.
     SetSpeed(f32),
+    /// Internal: a background scan found the exact length of `path` (sent by the engine to itself).
+    #[doc(hidden)]
+    DurationScanned { path: PathBuf, ms: u64 },
     Quit,
 }
 
@@ -78,9 +81,10 @@ impl Player {
     /// `on_change` is called on the engine thread (forward to the UI thread yourself).
     pub fn spawn<F: Fn(Status) + Send + 'static>(on_change: F) -> Player {
         let (tx, rx) = mpsc::channel();
+        let engine_tx = tx.clone(); // the engine sends scan results to itself
         let thread = thread::Builder::new()
             .name("radiant-engine".into())
-            .spawn(move || run(rx, Box::new(on_change)))
+            .spawn(move || run(rx, engine_tx, Box::new(on_change)))
             .expect("cannot start the engine thread");
         Player { tx, thread: Some(thread) }
     }
@@ -217,6 +221,8 @@ struct Engine {
     converted: Vec<f32>,
     fx: AudioFxProcessor,
     on_change: Box<dyn Fn(Status) + Send>,
+    /// Own command channel: lets a helper thread report the scanned duration.
+    tx: Sender<Command>,
     /// When set, the stream is paused after this moment (fade-out finished).
     pause_deadline: Option<Instant>,
     error: Option<String>,
@@ -226,7 +232,7 @@ struct Engine {
     last_notify: Cell<Instant>,
 }
 
-fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
+fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status) + Send>) {
     let out = match open_output() {
         Ok(o) => o,
         Err(e) => {
@@ -262,6 +268,7 @@ fn run(rx: Receiver<Command>, on_change: Box<dyn Fn(Status) + Send>) {
         converted: Vec::new(),
         fx: AudioFxProcessor::new(AudioFxSettings::default()),
         on_change,
+        tx,
         pause_deadline: None,
         error: None,
         duration_ms: None,
@@ -376,6 +383,12 @@ impl Engine {
             }
             Command::SetFx(settings) => self.fx.set_settings(settings),
             Command::SetSpeed(speed) => self.set_speed(speed),
+            Command::DurationScanned { path, ms } => {
+                // Ignore a late result for a track that is no longer the current one.
+                if self.transport.current() == Some(path.as_path()) {
+                    self.duration_ms = Some(ms);
+                }
+            }
             Command::Quit => return false,
         }
         self.notify();
@@ -440,7 +453,9 @@ impl Engine {
         self.pending.clear();
         self.pending_pos = 0;
         self.eof = false;
-        self.conv = None; // restart the resampler
+        if let Some(c) = self.conv.as_mut() {
+            c.reset(); // restart the resampler (keeps its filter tables)
+        }
         self.stretch.reset(); // restart the vocoder (no old audio mixed into the new position)
         self.flush();
         self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, self.stretch.speed());
@@ -464,6 +479,16 @@ impl Engine {
         match TrackDecoder::open(&path) {
             Ok(d) => {
                 self.duration_ms = d.duration_ms;
+                if d.needs_scan {
+                    // Length missing or only estimated: find the exact one in the background.
+                    let tx = self.tx.clone();
+                    let scan_path = path.clone();
+                    let _ = thread::Builder::new().name("radiant-scan".into()).spawn(move || {
+                        if let Ok(ms) = scan_duration(&scan_path) {
+                            let _ = tx.send(Command::DurationScanned { path: scan_path, ms });
+                        }
+                    });
+                }
                 self.decoder = Some(d);
                 if flush {
                     self.flush();
@@ -551,7 +576,18 @@ impl Engine {
                 }
                 Ok(None) => {
                     self.eof = true;
-                    // Play out the vocoder's tail (it holds ~90 ms of audio), then the effects.
+                    // Tails, in signal order: the resampler's, then the vocoder's (~90 ms), then the effects.
+                    self.converted.clear();
+                    if let Some(c) = self.conv.as_mut() {
+                        c.finish(&mut self.converted);
+                    }
+                    if !self.converted.is_empty() {
+                        if self.stretch.is_passthrough() {
+                            self.pending.extend_from_slice(&self.converted);
+                        } else {
+                            self.stretch.process(&self.converted, &mut self.pending);
+                        }
+                    }
                     self.stretch.finish(&mut self.pending);
                     if self.pending.is_empty() {
                         return;

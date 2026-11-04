@@ -8,6 +8,8 @@ license-file.workspace = true
 radiant-dsp = { path = "../radiant-dsp" }
 # Decoding. TODO: check HE-AAC and Opus (no Opus decoder in symphonia, README section 2).
 symphonia = { version = "0.5", features = ["all"] }
+# Sample-rate conversion (windowed sinc). Version 5 API; only sinc_core.rs uses it. No FFT resampler needed.
+rubato = { version = "5", default-features = false }
 # Output (WASAPI on Windows).
 cpal = "0.15"
 # Lock-free single-producer single-consumer ring buffer.

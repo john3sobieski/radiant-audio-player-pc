@@ -4,7 +4,8 @@
 //!   transport.rs  queue / index / repeat logic (no audio)
 //!   decode.rs     symphonia wrapper: file -> interleaved f32 chunks
 //!   position.rs   source-time position that stays correct while the speed changes
-//!   convert.rs    channel remap + linear resampler to the device format
+//!   convert.rs    channel remap + streaming sample-rate conversion (buffering, delay trim, tail flush)
+//!   sinc_core.rs  adapter over `rubato` (the only file that uses its API)
 //!   engine.rs     engine thread (owns decoder + cpal stream), `Player` handle, commands
 //!
 //! Data flow: engine thread: decode -> convert -> phase vocoder (speed) -> effects -> rtrb ring buffer -> cpal callback.
@@ -17,9 +18,10 @@
 //!       seek + position (frames counted in the callback, UI gets Status every 250 ms while playing),
 //!       play / pause / toggle / next / previous / repeat, 300 ms fade-in and 250 ms fade-out,
 //!       auto-advance at end of track, stream paused when idle (no CPU while paused).
+//!       rubato sinc resampler (convert.rs / sinc_core.rs), exact duration for files without a length header
+//!       (background scan, decode.rs), sample-accurate seek (frames before the target are dropped).
 //! TODO:
 //!   - gapless (now: queue of next file starts when the ring buffer is empty)
-//!   - replace the linear resampler with `rubato` (convert.rs)
 //!   - device change (headphones unplugged) -> re-open the stream and resume
 //!   - non-f32 device formats (now: error), skip unreadable files instead of stopping
 //!   - measure CPU and report it
@@ -28,6 +30,7 @@ mod convert;
 mod decode;
 mod engine;
 mod position;
+mod sinc_core;
 mod transport;
 
 pub use engine::{Command, Player, Status};
