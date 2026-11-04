@@ -119,7 +119,7 @@ fn scan_folder(
     std::thread::spawn(move || {
         let tracks = radiant_core::library::scan(&dir);
         let weak_for_ui = weak.clone();
-        let _ = weak.upgrade_in_event_loop(move |ui| {
+        let _ = weak.upgrade_in_event_loop(move |_ui| {
             if scan_gen.load(Ordering::Acquire) != ticket {
                 return;
             }
@@ -263,6 +263,7 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let player = player.clone();
         let library = library.clone();
+        let displayed = displayed.clone();
         ui.on_play_track(move |i| {
             if i < 0 {
                 return;
