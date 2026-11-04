@@ -48,6 +48,17 @@ fn default_device_name() -> Option<String> {
     cpal::default_host().default_output_device()?.name().ok()
 }
 
+/// cpal (WASAPI) can panic when a stream is used or closed after its device was unplugged: the stream's
+/// worker thread has already ended. An unhandled panic would kill the engine thread, and then nothing
+/// would ever play again. So every call on a stream goes through these helpers. false = it did not work.
+fn stream_play(stream: &cpal::Stream) -> bool {
+    catch_unwind(AssertUnwindSafe(|| stream.play().is_ok())).unwrap_or(false)
+}
+
+fn stream_pause(stream: &cpal::Stream) -> bool {
+    catch_unwind(AssertUnwindSafe(|| stream.pause().is_ok())).unwrap_or(false)
+}
+
 #[derive(Debug)]
 pub enum Command {
     /// Replace the queue and start playing `start`.
@@ -224,7 +235,7 @@ fn open_output() -> Result<Output, String> {
         )
         .map_err(|e| e.to_string())?;
     // Some backends start the stream right away; start paused so idle costs nothing.
-    let _ = stream.pause();
+    stream_pause(&stream);
 
     Ok(Output {
         stream,
@@ -334,16 +345,30 @@ fn run(rx: Receiver<Command>, tx: Sender<Command>, on_change: Box<dyn Fn(Status)
             Some(d) => rx.recv_timeout(d),
             None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
-        match msg {
-            Ok(cmd) => {
-                if !eng.handle(cmd) {
-                    break;
+        let step = catch_unwind(AssertUnwindSafe(|| {
+            match msg {
+                Ok(cmd) => {
+                    if !eng.handle(cmd) {
+                        return false;
+                    }
                 }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => return false,
             }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
+            eng.tick();
+            true
+        }));
+        match step {
+            Ok(true) => {}
+            Ok(false) => break,
+            Err(_) => {
+                // A panic must not kill the engine thread. Pause and ask for a fresh stream; Play retries.
+                eng.out.lost.store(true, Ordering::Relaxed);
+                eng.error = Some("Audio engine error, press Play to retry".into());
+                eng.pause();
+                eng.notify();
+            }
         }
-        eng.tick();
     }
 }
 
@@ -401,7 +426,9 @@ impl Engine {
         let speed = self.stretch.speed();
         new.volume.store(self.out.volume.load(Ordering::Relaxed), Ordering::Relaxed);
         let (rate, ch) = (new.rate, new.channels);
-        self.out = new; // the old stream is dropped (closed) here
+        let old = std::mem::replace(&mut self.out, new);
+        // Closing a stream whose device is gone can panic inside cpal; do not let that reach the thread.
+        let _ = catch_unwind(AssertUnwindSafe(move || drop(old)));
         // Everything that depends on the rate / channel count is rebuilt.
         self.stretch = TimeStretch::new(ch, rate);
         self.stretch.set_speed(speed);
@@ -420,7 +447,7 @@ impl Engine {
         self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, speed);
         self.fill();
         if self.transport.state == PlayState::Playing {
-            let _ = self.out.stream.play();
+            stream_play(&self.out.stream);
             self.out.playing.store(true, Ordering::Release);
             self.pause_deadline = None;
         }
@@ -563,7 +590,7 @@ impl Engine {
             _ => {
                 if let Some(d) = self.pause_deadline {
                     if Instant::now() >= d {
-                        let _ = self.out.stream.pause();
+                        stream_pause(&self.out.stream);
                         self.pause_deadline = None;
                     }
                 }
@@ -573,7 +600,10 @@ impl Engine {
 
     /// Wait (briefly) until the callback has drained the ring buffer.
     fn flush(&mut self) {
-        let _ = self.out.stream.play(); // the callback must run to see the request
+        if self.out.lost.load(Ordering::Relaxed) {
+            return; // dead stream: its callback never runs; the output is rebuilt in start()
+        }
+        stream_play(&self.out.stream); // the callback must run to see the request
         let req = self.out.flush_req.fetch_add(1, Ordering::AcqRel) + 1;
         let t0 = Instant::now();
         while self.out.flush_ack.load(Ordering::Acquire) != req
@@ -665,7 +695,9 @@ impl Engine {
             self.pause(); // no usable device; Play tries again
             return;
         }
-        let _ = self.out.stream.play();
+        if !stream_play(&self.out.stream) {
+            self.out.lost.store(true, Ordering::Relaxed); // tick() rebuilds the output
+        }
         self.out.playing.store(true, Ordering::Release);
         self.transport.state = PlayState::Playing;
         self.pause_deadline = None;
