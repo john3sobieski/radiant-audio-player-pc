@@ -664,6 +664,11 @@ fn apply_album_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
     if let Some(mut row) = model.row_data(i) {
         row.cover = px.to_image();
         row.has_cover = true;
+        // The album page of this album is open already (opened before its cover was decoded).
+        if ui.get_album_open() && ui.get_album_title() == row.title && ui.get_album_artist() == row.artist {
+            ui.set_album_cover(row.cover.clone());
+            ui.set_album_has_cover(true);
+        }
         model.set_row_data(i, row);
     }
 }
@@ -849,6 +854,27 @@ fn main() -> Result<(), slint::PlatformError> {
                 open_album(&ui, &library, i as usize);
             }
         });
+    }
+    {
+        // Context menu "Open album": which album (index in the grid) holds the track at this row of the list.
+        let (weak, displayed) = (ui_weak.clone(), displayed.clone());
+        ui.on_album_index_of_track(move |i| {
+            let Some(path) = displayed.lock().ok().and_then(|l| l.get(i.max(0) as usize).cloned()) else { return -1 };
+            let found = ALBUMS.lock().ok().and_then(|a| a.iter().position(|e| e.paths.contains(&path)));
+            match found {
+                Some(index) => {
+                    // The tile may never have been on screen: get its cover for the album page too.
+                    album_cover_wanted(weak.clone(), index);
+                    index as i32
+                }
+                None => -1,
+            }
+        });
+    }
+    {
+        // Context menu stubs: "Add to playlist" and "Create stems" are not implemented yet.
+        ui.on_add_to_playlist(|_row, _in_album| { /* TODO: playlists */ });
+        ui.on_create_stems(|_row, _in_album| { /* TODO: stems */ });
     }
     {
         // Click on a track of the open album: the queue is the album, starting at that track.

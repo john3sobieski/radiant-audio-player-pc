@@ -411,6 +411,54 @@ component FxRow inherits Rectangle {
     }
 }
 
+// Three vertical dots at the end of a track row; `open` gets the window position of the click.
+component MoreButton inherits Rectangle {
+    callback open(length, length);
+
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: ta.has-hover ? Theme.surface-hover : transparent;
+
+    for k in 3 : Rectangle {
+        x: (parent.width - 4px) / 2;
+        y: 4px + k * 8px;
+        width: 4px;
+        height: 4px;
+        border-radius: 2px;
+        background: ta.has-hover ? Theme.text : Theme.muted;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.open(self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y); }
+    }
+}
+
+// One line of the track context menu.
+component MenuItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> dim: false;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 8px;
+    background: ta.has-hover ? Theme.surface-hover : transparent;
+
+    Text {
+        x: 12px;
+        width: parent.width - 24px;
+        height: parent.height;
+        text: root.text;
+        color: root.dim ? Theme.muted : Theme.text;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 // Text toggle (Shuffle / Repeat): accent color when active.
 component ToggleText inherits Rectangle {
     in property <string> text;
@@ -552,17 +600,22 @@ export component MainWindow inherits Window {
     private property <bool> show-year: root.list-w >= 860px;
     private property <length> year-w: root.show-year ? 52px : 0px;
     // The right edge leaves room for the list's scroll bar.
-    private property <length> content-right: root.list-w - root.col-pad - 14px;
+    private property <length> right-pad: 32px;
+    private property <length> dots-w: 28px;
+    private property <length> content-right: root.list-w - root.right-pad - 14px;
+    private property <length> dots-x: root.content-right - root.dots-w;
+    // Right edge of the Time column: the three dots sit to its right.
+    private property <length> time-right: root.dots-x - 8px;
     private property <length> title-x: root.col-pad + root.num-w + root.col-gap;
     // Space shared by the title and album columns.
-    private property <length> flex-w: max(0px, root.content-right - root.title-x - root.dur-w - root.col-gap
+    private property <length> flex-w: max(0px, root.time-right - root.title-x - root.dur-w - root.col-gap
         - (root.show-year ? root.year-w + root.col-gap : 0px));
     private property <length> title-w: root.show-album ? root.flex-w * 0.56 : root.flex-w;
     private property <length> album-x: root.title-x + root.title-w + root.col-gap;
     private property <length> album-w: root.show-album ? max(0px, root.flex-w - root.title-w - root.col-gap) : 0px;
     private property <length> year-x: root.show-album ? root.album-x + root.album-w + root.col-gap
         : root.title-x + root.title-w + root.col-gap;
-    private property <length> dur-x: root.content-right - root.dur-w;
+    private property <length> dur-x: root.time-right - root.dur-w;
     in-out property <string> search-text: "";
     in-out property <int> sort-mode: 1;
     in-out property <bool> sort-descending: false;
@@ -599,7 +652,7 @@ export component MainWindow inherits Window {
     private property <length> detail-row-h: 52px;
     private property <length> album-side: 152px;
     private property <length> album-title-w: max(0px, root.width - 2 * root.album-side);
-    private property <length> album-list-title-w: max(0px, root.content-right - root.title-x - root.dur-w - root.col-gap);
+    private property <length> album-list-title-w: max(0px, root.time-right - root.title-x - root.dur-w - root.col-gap);
     callback album-shown(int);
     private property <length> grid-pad: 28px;
     private property <length> grid-gap: 22px;
@@ -742,6 +795,27 @@ export component MainWindow inherits Window {
     /// 12 equalizer gains in dB (model owned by Rust).
     in property <[float]> eq-gains;
     private property <[string]> eq-labels: ["32", "64", "125", "250", "500", "1k", "2k", "3.5k", "6k", "9k", "12.5k", "16k"];
+
+    // Track context menu (three dots / right click).
+    in-out property <bool> show-menu: false;
+    in-out property <length> menu-x: 0px;
+    in-out property <length> menu-y: 0px;
+    /// Row the menu was opened for (index in `tracks`, or in `album-tracks` when `menu-in-album`).
+    in-out property <int> menu-row: -1;
+    in-out property <bool> menu-in-album: false;
+    private property <length> menu-w: 220px;
+    private property <length> menu-h: 3 * 34px + 12px;
+    /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
+    callback album-index-of-track(int) -> int;
+    callback add-to-playlist(int, bool);
+    callback create-stems(int, bool);
+    function open-menu(mx: length, my: length, row: int, in-album: bool) {
+        root.menu-row = row;
+        root.menu-in-album = in-album;
+        root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
+        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.show-menu = true;
+    }
 
     callback choose-folder();
     callback search-changed(string);
@@ -1172,6 +1246,16 @@ export component MainWindow inherits Window {
                                         enabled: t.header == "";
                                         mouse-cursor: pointer;
                                         clicked => { root.play-album-track(i); }
+                                        pointer-event(event) => {
+                                            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                                root.open-menu(arow-ta.absolute-position.x + arow-ta.mouse-x, arow-ta.absolute-position.y + arow-ta.mouse-y, i, true);
+                                            }
+                                        }
+                                    }
+                                    if t.header == "" : MoreButton {
+                                        x: root.dots-x;
+                                        y: (parent.height - self.height) / 2;
+                                        open(mx, my) => { root.open-menu(mx, my, i, true); }
                                     }
                                 }
                             }
@@ -1398,6 +1482,9 @@ export component MainWindow inherits Window {
                     row-ta := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(event) => {
+                            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                root.open-menu(row-ta.absolute-position.x + row-ta.mouse-x, row-ta.absolute-position.y + row-ta.mouse-y, i, false);
+                            }
                             if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
                                 root.suppress-click = false;
                             }
@@ -1429,6 +1516,11 @@ export component MainWindow inherits Window {
                             if (root.suppress-click) { root.suppress-click = false; }
                             else { root.play-track(i); }
                         }
+                    }
+                    MoreButton {
+                        x: root.dots-x;
+                        y: (parent.height - self.height) / 2;
+                        open(mx, my) => { root.open-menu(mx, my, i, false); }
                     }
                 }
             }
@@ -2218,6 +2310,53 @@ export component MainWindow inherits Window {
                 value: g;
                 value-text: "\{(g * 2).round() / 2} dB";
                 edited(v) => { root.eq-changed(i, v); }
+            }
+        }
+    }
+    // ---- track context menu (overlay): click outside to close ----
+    if root.show-menu : TouchArea {
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.show-menu = false; }
+        }
+        scroll-event(e) => { root.show-menu = false; return accept; }
+    }
+    if root.show-menu : Rectangle {
+        x: root.menu-x;
+        y: root.menu-y;
+        width: root.menu-w;
+        height: root.menu-h;
+        background: Theme.surface;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.surface-hover;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #00000080;
+        drop-shadow-offset-y: 4px;
+
+        TouchArea { }
+        VerticalLayout {
+            padding: 6px;
+            MenuItem {
+                text: "Open album";
+                clicked => {
+                    root.show-menu = false;
+                    if (!root.menu-in-album) {
+                        let a = root.album-index-of-track(root.menu-row);
+                        if (a >= 0) {
+                            root.go-section(1);
+                            root.album-open = true;
+                            root.open-album(a);
+                        }
+                    }
+                }
+            }
+            MenuItem {
+                text: "Add to playlist";
+                clicked => { root.show-menu = false; root.add-to-playlist(root.menu-row, root.menu-in-album); }
+            }
+            MenuItem {
+                text: "Create stems";
+                clicked => { root.show-menu = false; root.create-stems(root.menu-row, root.menu-in-album); }
             }
         }
     }
