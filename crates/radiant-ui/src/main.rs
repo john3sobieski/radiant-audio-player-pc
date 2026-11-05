@@ -19,7 +19,7 @@ mod rays;
 use radiant_core::models::{AudioInfo, SortKey, SortState, Track};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -144,8 +144,12 @@ fn cover_key(t: &Track) -> String {
 
 /// Reads and shrinks the cover of one track (96 px is enough for the 40 px square on HiDPI screens).
 fn decode_cover(path: &Path) -> Option<CoverPixels> {
+    decode_cover_sized(path, 96)
+}
+
+fn decode_cover_sized(path: &Path, size: u32) -> Option<CoverPixels> {
     let bytes = radiant_core::library::read_cover(path)?;
-    let thumb = image::load_from_memory(&bytes).ok()?.thumbnail(96, 96).to_rgba8();
+    let thumb = image::load_from_memory(&bytes).ok()?.thumbnail(size, size).to_rgba8();
     let (width, height) = thumb.dimensions();
     Some(CoverPixels { width, height, rgba: Arc::new(thumb.into_raw()) })
 }
@@ -477,6 +481,115 @@ fn refresh_tracks(
         ui.set_tracks(ModelRc::new(VecModel::from(rows)));
         ui.set_status("".into());
     }
+    refresh_albums(weak, library, query);
+}
+
+// ---- Albums grid ----
+
+/// Cover size of the album tiles. 224 px is about 200 KB per cover; covers are decoded only for tiles
+/// that were on screen (the grid is virtualized and tells us through `album-shown`).
+const ALBUM_COVER_PX: u32 = 224;
+/// Decoded album covers kept in memory (the key is the album key).
+const ALBUM_CACHE_MAX: usize = 240;
+
+/// One album of the grid, in the order of the model.
+struct AlbumEntry {
+    key: String,
+    /// Tracks of the album in play order (track number, then title).
+    paths: Vec<PathBuf>,
+}
+
+static ALBUMS: Mutex<Vec<AlbumEntry>> = Mutex::new(Vec::new());
+static ALBUM_COVERS: Mutex<BTreeMap<String, Option<CoverPixels>>> = Mutex::new(BTreeMap::new());
+/// Albums whose cover is being decoded right now (no duplicate work while a tile scrolls in and out).
+static ALBUM_PENDING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Rebuilds the album grid from the library. The search box filters albums by name and artist.
+fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>>>, query: &Arc<Mutex<String>>) {
+    let tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
+    let needle = query.lock().map(|q| q.trim().to_lowercase()).unwrap_or_default();
+    let by_path: HashMap<&Path, &Track> = tracks.iter().map(|t| (t.path.as_path(), t)).collect();
+
+    let mut albums = radiant_core::library::group_albums(&tracks);
+    if !needle.is_empty() {
+        albums.retain(|a| {
+            a.name.as_deref().unwrap_or("").to_lowercase().contains(&needle)
+                || a.artist.as_deref().unwrap_or("").to_lowercase().contains(&needle)
+        });
+    }
+    // By name; albums without a name go last. Equal names: by artist.
+    albums.sort_by_key(|a| (a.name.is_none(), a.name.clone().unwrap_or_default().to_lowercase(), a.artist.clone().unwrap_or_default().to_lowercase()));
+
+    let cache = ALBUM_COVERS.lock().map(|c| c.clone()).unwrap_or_default();
+    let mut entries: Vec<AlbumEntry> = Vec::with_capacity(albums.len());
+    let mut rows: Vec<AlbumRow> = Vec::with_capacity(albums.len());
+    for a in albums {
+        let mut paths = a.tracks.clone();
+        paths.sort_by_key(|p| {
+            let t = by_path.get(p.as_path());
+            (
+                t.and_then(|t| t.track_no).unwrap_or(u32::MAX),
+                t.map(|t| t.title.to_lowercase()).unwrap_or_default(),
+            )
+        });
+        let title = a.name.clone().unwrap_or_else(|| "Unknown album".to_string());
+        let (cover, has_cover) = match cache.get(&a.key) {
+            Some(Some(px)) => (px.to_image(), true),
+            _ => (slint::Image::default(), false),
+        };
+        rows.push(AlbumRow {
+            letter: title.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into(),
+            title: title.into(),
+            artist: a.artist.clone().unwrap_or_else(|| "Unknown artist".to_string()).into(),
+            cover,
+            has_cover,
+        });
+        entries.push(AlbumEntry { key: a.key, paths });
+    }
+    if let Ok(mut all) = ALBUMS.lock() { *all = entries; }
+    if let Some(ui) = weak.upgrade() {
+        ui.set_albums(ModelRc::new(VecModel::from(rows)));
+    }
+}
+
+/// A tile came into view: make sure its cover is decoded and shown.
+fn album_cover_wanted(weak: slint::Weak<MainWindow>, index: usize) {
+    let Some((key, paths)) = ALBUMS.lock().ok().and_then(|a| a.get(index).map(|e| (e.key.clone(), e.paths.clone()))) else { return };
+    let cached = ALBUM_COVERS.lock().ok().and_then(|c| c.get(&key).cloned());
+    match cached {
+        Some(Some(px)) => {
+            let _ = weak.upgrade_in_event_loop(move |ui| apply_album_cover(&ui, &key, &px));
+        }
+        Some(None) => {} // looked for, none found
+        None => {
+            if !ALBUM_PENDING.lock().map(|mut p| p.insert(key.clone())).unwrap_or(false) {
+                return;
+            }
+            std::thread::spawn(move || {
+                // The first tracks of the album usually carry the cover; a few tries cover odd files.
+                let pixels = paths.iter().take(4).find_map(|p| decode_cover_sized(p, ALBUM_COVER_PX));
+                if let Ok(mut cache) = ALBUM_COVERS.lock() {
+                    if cache.len() >= ALBUM_CACHE_MAX { cache.clear(); }
+                    cache.insert(key.clone(), pixels.clone());
+                }
+                if let Ok(mut p) = ALBUM_PENDING.lock() { p.remove(&key); }
+                if let Some(px) = pixels {
+                    let _ = weak.upgrade_in_event_loop(move |ui| apply_album_cover(&ui, &key, &px));
+                }
+            });
+        }
+    }
+}
+
+/// Puts a decoded cover into the tile of its album (the position is looked up again: the grid may have changed).
+fn apply_album_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
+    let Some(i) = ALBUMS.lock().ok().and_then(|a| a.iter().position(|e| e.key == key)) else { return };
+    let model = ui.get_albums();
+    if let Some(mut row) = model.row_data(i) {
+        row.cover = px.to_image();
+        row.has_cover = true;
+        model.set_row_data(i, row);
+    }
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -641,6 +754,24 @@ fn main() -> Result<(), slint::PlatformError> {
             let queue = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect::<Vec<_>>()).unwrap_or_default();
             let Some(start) = queue.iter().position(|p| p == &path) else { return; };
             player.send(Command::SetQueue { queue, start });
+        });
+    }
+    {
+        // Click on an album tile: play the album from its first track.
+        let player = player.clone();
+        ui.on_play_album(move |i| {
+            let Some(queue) = ALBUMS.lock().ok().and_then(|a| a.get(i.max(0) as usize).map(|e| e.paths.clone())) else { return };
+            if !queue.is_empty() {
+                player.send(Command::SetQueue { queue, start: 0 });
+            }
+        });
+    }
+    {
+        let weak = ui_weak.clone();
+        ui.on_album_shown(move |i| {
+            if i >= 0 {
+                album_cover_wanted(weak.clone(), i as usize);
+            }
         });
     }
     {

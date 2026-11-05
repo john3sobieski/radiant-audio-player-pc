@@ -35,6 +35,15 @@ export struct LyricRow {
     time-ms: int,
 }
 
+// One album of the Albums grid (filled by Rust).
+export struct AlbumRow {
+    title: string,
+    artist: string,
+    letter: string,
+    cover: image,
+    has-cover: bool,
+}
+
 // One entry of the section rail.
 export struct NavItem {
     label: string,
@@ -77,6 +86,102 @@ component CoverArt inherits Rectangle {
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
+    }
+}
+
+// Album tile: big square cover with a soft shadow, title and artist underneath.
+// Hover: the cover lifts a little and a play mark appears. `shown` fires when the tile is created
+// (the grid is virtualized, so this is how Rust learns which covers are needed).
+component AlbumTile inherits Rectangle {
+    in property <image> art;
+    in property <bool> has-image: false;
+    in property <string> letter;
+    in property <string> title;
+    in property <string> artist;
+    callback clicked();
+    callback shown();
+
+    init => { root.shown(); }
+
+    // Cover (square, as wide as the tile).
+    Rectangle {
+        y: ta.has-hover ? -4px : 0px;
+        width: parent.width;
+        height: parent.width;
+        border-radius: 12px;
+        background: Theme.surface-hover;
+        drop-shadow-blur: ta.has-hover ? 22px : 14px;
+        drop-shadow-color: #000000a0;
+        drop-shadow-offset-y: ta.has-hover ? 10px : 5px;
+        animate y { duration: 140ms; easing: ease-out; }
+
+        Rectangle {
+            clip: true;
+            border-radius: 12px;
+            if root.has-image : Image {
+                width: parent.width;
+                height: parent.height;
+                source: root.art;
+                image-fit: cover;
+            }
+            if !root.has-image : Rectangle {
+                background: @linear-gradient(150deg, Theme.surface-hover 0%, Theme.surface 100%);
+                Text {
+                    text: root.letter;
+                    color: Theme.muted;
+                    font-size: parent.width / 3;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            // Play mark on hover.
+            Rectangle {
+                x: parent.width - 52px - 10px;
+                y: parent.height - 52px - 10px;
+                width: 52px;
+                height: 52px;
+                border-radius: 26px;
+                background: Theme.accent;
+                opacity: ta.has-hover ? 1 : 0;
+                animate opacity { duration: 140ms; }
+                Path {
+                    x: (parent.width - self.width) / 2 + 2px;
+                    y: (parent.height - self.height) / 2;
+                    width: 20px;
+                    height: 20px;
+                    viewbox-width: 20;
+                    viewbox-height: 20;
+                    commands: "M 4 0 L 19 10 L 4 20 Z";
+                    fill: #ffffff;
+                }
+            }
+        }
+    }
+    Text {
+        x: 2px;
+        y: root.width + 10px;
+        width: parent.width - 4px;
+        height: 20px;
+        text: root.title;
+        color: Theme.text;
+        font-size: 14px;
+        font-weight: 600;
+        overflow: elide;
+    }
+    Text {
+        x: 2px;
+        y: root.width + 31px;
+        width: parent.width - 4px;
+        height: 18px;
+        text: root.artist;
+        color: Theme.muted;
+        font-size: 12.5px;
+        overflow: elide;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
     }
 }
 
@@ -485,6 +590,19 @@ export component MainWindow inherits Window {
     /// Track count of each of the four queues (set by Rust once queues exist).
     in property <[int]> queue-counts: [0, 0, 0, 0];
     callback section-changed(int, int);
+
+    // Albums grid: tiles of at least `tile-min`, as many columns as fit, tiles stretch to fill the row.
+    in property <[AlbumRow]> albums;
+    callback play-album(int);
+    callback album-shown(int);
+    private property <length> grid-pad: 28px;
+    private property <length> grid-gap: 22px;
+    private property <length> tile-min: 190px;
+    private property <length> grid-w: root.width - 2 * root.grid-pad - 10px;
+    private property <int> album-cols: max(2, Math.floor((root.grid-w + root.grid-gap) / (root.tile-min + root.grid-gap)));
+    private property <length> tile-w: (root.grid-w - (root.album-cols - 1) * root.grid-gap) / root.album-cols;
+    private property <length> album-row-h: root.tile-w + 52px + 20px;
+    private property <int> album-rows: Math.ceil(root.albums.length / root.album-cols);
     // Section switcher ("lens"): the open section unfolds into its label, "Queues" also into four queue dots.
     private property <length> seg-w: 40px;
     private property <length> seg-gap: 2px;
@@ -814,6 +932,7 @@ export component MainWindow inherits Window {
                     width: 260px;
                     height: parent.height;
                     text: root.section == 0 ? "\{root.tracks.length} tracks"
+                        : root.section == 1 ? "\{root.albums.length} albums"
                         : root.section == 3 ? "Queue \{root.queue-index + 1} · \{root.queue-counts[root.queue-index]} tracks" : "";
                     color: Theme.muted;
                     font-size: 13px;
@@ -827,8 +946,46 @@ export component MainWindow inherits Window {
                 vertical-stretch: 1;
                 clip: true;
 
-                for k in 3 : Rectangle {
-                    x: (k + 1 - root.section) * parent.width;
+                // Albums: a grid of covers.
+                Rectangle {
+                    x: (1 - root.section) * parent.width;
+                    width: parent.width;
+                    height: parent.height;
+                    animate x { duration: 320ms; easing: ease-in-out; }
+
+                    if root.albums.length == 0 : Text {
+                        width: parent.width;
+                        height: parent.height;
+                        text: root.search-text == "" ? "No albums yet. Choose a music folder to start." : "No matching albums";
+                        color: Theme.muted;
+                        font-size: 16px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    if root.albums.length > 0 : ListView {
+                        for r in root.album-rows : Rectangle {
+                            height: root.album-row-h;
+                            for c in root.album-cols : Rectangle {
+                                if r * root.album-cols + c < root.albums.length : AlbumTile {
+                                    x: root.grid-pad + c * (root.tile-w + root.grid-gap);
+                                    y: 12px;
+                                    width: root.tile-w;
+                                    height: root.album-row-h - 12px;
+                                    art: root.albums[r * root.album-cols + c].cover;
+                                    has-image: root.albums[r * root.album-cols + c].has-cover;
+                                    letter: root.albums[r * root.album-cols + c].letter;
+                                    title: root.albums[r * root.album-cols + c].title;
+                                    artist: root.albums[r * root.album-cols + c].artist;
+                                    clicked => { root.play-album(r * root.album-cols + c); }
+                                    shown => { root.album-shown(r * root.album-cols + c); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for k in 2 : Rectangle {
+                    x: (k + 2 - root.section) * parent.width;
                     width: parent.width;
                     height: parent.height;
                     animate x { duration: 320ms; easing: ease-in-out; }
@@ -840,12 +997,12 @@ export component MainWindow inherits Window {
                         spacing: 12px;
                         alignment: start;
                         Text {
-                            text: k == 0 ? "Albums" : k == 1 ? "Playlists" : "Queue \{root.queue-index + 1}";
+                            text: k == 0 ? "Playlists" : "Queue \{root.queue-index + 1}";
                             color: Theme.text;
                             font-size: 22px;
                             font-weight: 700;
                         }
-                        if k == 2 : Rectangle {
+                        if k == 1 : Rectangle {
                             height: 40px;
                             HorizontalLayout {
                                 spacing: 10px;
@@ -869,8 +1026,7 @@ export component MainWindow inherits Window {
                         }
                         Text {
                             width: 100%;
-                            text: k == 0 ? "Albums will be grouped automatically by album artist and album."
-                                : k == 1 ? "Playlists will live here. \"Liked tracks\" always stays on top."
+                            text: k == 0 ? "Playlists will live here. \"Liked tracks\" always stays on top."
                                 : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
                             color: Theme.muted;
                             font-size: 15px;
