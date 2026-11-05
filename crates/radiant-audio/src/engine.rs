@@ -545,10 +545,10 @@ impl Engine {
             },
             Command::Stop => self.stop(),
             Command::Next => {
-                if self.transport.next(false).is_some() {
+                // On the last track (no repeat) "next" does nothing: the track keeps playing,
+                // so quick presses can never stop the player and leave "next" dead.
+                if self.transport.has_next() && self.transport.next(false).is_some() {
                     self.play_current(true);
-                } else {
-                    self.stop();
                 }
             }
             Command::Previous => {

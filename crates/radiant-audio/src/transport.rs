@@ -133,6 +133,11 @@ impl Transport {
         self.current()
     }
 
+    /// True when "next" has somewhere to go: another track follows, or repeat-all wraps around.
+    pub fn has_next(&self) -> bool {
+        !self.order.is_empty() && (self.pos + 1 < self.order.len() || self.repeat == RepeatMode::All)
+    }
+
     pub fn previous(&mut self) -> Option<&Path> {
         if self.order.is_empty() {
             return None;
@@ -206,5 +211,16 @@ mod tests {
         t.set_shuffle(false);
         assert_eq!(t.current(), Some(Path::new("3")));
         assert_eq!(t.next(false), Some(Path::new("4")));
+    }
+
+    #[test]
+    fn has_next_is_false_on_the_last_track_without_repeat() {
+        let mut t = q(2, 0);
+        assert!(t.has_next());
+        t.next(false);
+        assert!(!t.has_next());
+        t.repeat = RepeatMode::All;
+        assert!(t.has_next());
+        assert!(!Transport::default().has_next());
     }
 }

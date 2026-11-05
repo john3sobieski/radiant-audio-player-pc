@@ -695,7 +695,7 @@ component SleeveCard inherits Rectangle {
     callback clicked();
 
     width: 176px;
-    height: 184px;
+    height: 186px;
     private property <length> lift: ta.has-hover ? -3px : 0px;
     animate lift { duration: 140ms; easing: ease-out; }
 
@@ -726,6 +726,7 @@ component SleeveCard inherits Rectangle {
 
     // The sleeve.
     if !root.is-new : Rectangle {
+        x: 0px;
         y: root.lift;
         width: 134px;
         height: 134px;
@@ -779,6 +780,7 @@ component SleeveCard inherits Rectangle {
         }
     }
     if root.is-new : Rectangle {
+        x: 0px;
         y: root.lift;
         width: 134px;
         height: 134px;
@@ -800,7 +802,8 @@ component SleeveCard inherits Rectangle {
     }
 
     Text {
-        y: 140px;
+        x: 0px;
+        y: 142px;
         width: 134px;
         height: 20px;
         text: root.is-new ? "New playlist" : root.name;
@@ -810,7 +813,8 @@ component SleeveCard inherits Rectangle {
         overflow: elide;
     }
     Text {
-        y: 160px;
+        x: 0px;
+        y: 162px;
         width: 134px;
         height: 18px;
         text: root.is-new ? "Name it, pick a folder" : root.count;
@@ -1267,11 +1271,14 @@ export component MainWindow inherits Window {
     callback pl-open-delete-playlist();
     private property <length> pl-btn-x0: (root.width - (root.pl-page-liked ? 218px : 446px)) / 2;
 
-    private property <length> pl-w: min(640px, root.width - 32px);
-    private property <length> pl-h: min(580px, root.height - 32px);
-    private property <length> pl-inner-w: root.pl-w - 44px;
+    /// Views 3 (rename) and 4 (delete) are small dialogs; the others use the big window.
+    private property <length> pl-w: root.pl-view >= 3 ? min(420px, root.width - 32px) : min(640px, root.width - 32px);
+    private property <length> pl-h: root.pl-view == 3 ? min(236px, root.height - 32px)
+        : root.pl-view == 4 ? min(224px, root.height - 32px)
+        : min(580px, root.height - 32px);
+    private property <length> pl-inner-w: min(640px, root.width - 32px) - 44px;
     private property <length> sl-w: 176px;
-    private property <length> sl-h: 192px;
+    private property <length> sl-h: 196px;
     private property <length> sl-gap: 14px;
     private property <int> pl-cols: max(1, Math.floor((root.pl-inner-w + root.sl-gap) / (root.sl-w + root.sl-gap)));
     private property <int> pl-grid-rows: Math.ceil((root.pl-cards.length + 1) / root.pl-cols);
@@ -1744,6 +1751,10 @@ export component MainWindow inherits Window {
 
                     // Playlists: Liked tracks, loose playlists, then folders with their playlists.
                     if k == 0 : Rectangle {
+                      x: 0px;
+                      y: 0px;
+                      width: parent.width;
+                      height: parent.height;
                       VerticalLayout {
                         padding-top: 14px;
                         Rectangle {
@@ -1852,6 +1863,8 @@ export component MainWindow inherits Window {
                                         }
                                     }
                                     Rectangle {
+                                        x: 0px;
+                                        y: 0px;
                                         width: 44px;
                                         height: 44px;
                                         border-radius: 8px;
@@ -1941,11 +1954,16 @@ export component MainWindow inherits Window {
 
                       // Open playlist: slides in over the list.
                       Rectangle {
-                        x: root.pl-open ? 0px : parent.width;
-                        width: parent.width;
+                        x: root.pl-open ? 0px : root.width;
+                        y: 0px;
+                        width: root.width;
                         height: parent.height;
                         background: Theme.bg;
                         animate x { duration: 260ms; easing: ease-in-out; }
+                        // Never shows over another section, whatever happens to the strip.
+                        opacity: root.section == 2 ? 1 : 0;
+                        visible: self.opacity > 0.01;
+                        animate opacity { duration: 320ms; }
 
                         TouchArea {
                             scroll-event(e) => { return accept; }
@@ -3296,6 +3314,8 @@ export component MainWindow inherits Window {
             drop-shadow-color: #000000a0;
             drop-shadow-offset-y: 8px;
             animate y { duration: 220ms; easing: ease-out; }
+            animate width { duration: 160ms; easing: ease-out; }
+            animate height { duration: 160ms; easing: ease-out; }
 
             pl-fs := FocusScope {
                 key-pressed(e) => {
@@ -3313,9 +3333,10 @@ export component MainWindow inherits Window {
                 Rectangle {
                     height: 56px;
                     CoverArt {
+                        x: 0px;
+                        y: 4px;
                         width: 48px;
                         height: 48px;
-                        y: 4px;
                         art: root.pl-track-cover;
                         has-image: root.pl-track-has-cover;
                         letter: root.pl-track-letter;
@@ -3421,6 +3442,7 @@ export component MainWindow inherits Window {
                 Rectangle {
                     height: 44px;
                     IconButton {
+                        x: 0px;
                         y: 4px;
                         width: 36px;
                         height: 36px;
@@ -3472,6 +3494,7 @@ export component MainWindow inherits Window {
                 Rectangle {
                     height: 52px;
                     Text {
+                        x: 0px;
                         y: 2px;
                         width: parent.width - 44px;
                         height: 30px;
@@ -3482,6 +3505,7 @@ export component MainWindow inherits Window {
                         vertical-alignment: center;
                     }
                     Text {
+                        x: 0px;
                         y: 32px;
                         width: parent.width - 44px;
                         height: 18px;
@@ -3526,6 +3550,7 @@ export component MainWindow inherits Window {
                 Rectangle {
                     height: 44px;
                     Text {
+                        x: 0px;
                         width: parent.width - 44px;
                         height: parent.height;
                         text: root.pl-dialog-title;
