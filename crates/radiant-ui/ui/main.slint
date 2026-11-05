@@ -1137,16 +1137,25 @@ export component MainWindow inherits Window {
                                     x: parent.width / 2 - self.width - 6px;
                                     y: 122px;
                                     width: 110px;
-                                    text: "Play";
-                                    active: true;
-                                    clicked => { root.play-album(); }
+                                    text: (root.album-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                    active: root.album-current-index >= 0 && root.is-playing;
+                                    clicked => {
+                                        // A track of this album is loaded (started from anywhere): pause / resume it.
+                                        if (root.album-current-index >= 0) { root.toggle-play(); }
+                                        else { root.play-album(); }
+                                    }
                                 }
                                 PillButton {
                                     x: parent.width / 2 + 6px;
                                     y: 122px;
                                     width: 110px;
                                     text: "Shuffle";
-                                    clicked => { root.shuffle-album(); }
+                                    active: root.shuffle;
+                                    clicked => {
+                                        if (root.shuffle) { root.shuffle-changed(false); }
+                                        else if (root.album-current-index >= 0) { root.shuffle-changed(true); }
+                                        else { root.shuffle-album(); }
+                                    }
                                 }
                                 IconButton {
                                     x: 16px;
