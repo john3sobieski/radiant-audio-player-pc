@@ -687,7 +687,20 @@ struct PlState {
     target: Option<PathBuf>,
     /// Playlist that the folder view is about to move.
     moving: Option<String>,
+    /// Playlist whose page is open.
+    open: Option<String>,
+    /// What the rename / delete window is about.
+    edit: Option<Edit>,
 }
+
+/// Target of the rename / delete windows (an id in the store).
+enum Edit {
+    Playlist(String),
+    Folder(String),
+}
+
+/// Tracks of the open playlist page, same order as its rows (the file of every row).
+static PL_ROWS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 type PlRef = Rc<RefCell<PlState>>;
 
@@ -813,6 +826,66 @@ fn save_playlists(ui: &MainWindow, store: &PlaylistStore) {
     }
 }
 
+/// Fills the open playlist page. A playlist that no longer exists closes the page.
+fn fill_playlist_page(ui: &MainWindow, st: &PlState, library: &Arc<Mutex<Vec<Track>>>) {
+    let Some(id) = st.open.as_deref() else { return };
+    let Some(p) = st.store.playlist(id) else {
+        ui.set_pl_open(false);
+        return;
+    };
+    let tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
+    let by_path: HashMap<&Path, &Track> = tracks.iter().map(|t| (t.path.as_path(), t)).collect();
+    let mut rows: Vec<PlTrackRow> = Vec::with_capacity(p.track_paths.len());
+    let mut total_ms = 0_u64;
+    for (i, path) in p.track_paths.iter().enumerate() {
+        let no = (i + 1).to_string().into();
+        match by_path.get(path.as_path()) {
+            Some(t) => {
+                let duration = t.duration_ms.filter(|d| *d > 0);
+                total_ms += duration.unwrap_or(0);
+                rows.push(PlTrackRow {
+                    no,
+                    title: t.title.clone().into(),
+                    artist: t.artist.clone().unwrap_or_default().into(),
+                    duration: duration.map(fmt_time).unwrap_or_default().into(),
+                    missing: false,
+                });
+            }
+            None => rows.push(PlTrackRow {
+                no,
+                title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().into(),
+                artist: "File not found".into(),
+                duration: SharedString::default(),
+                missing: true,
+            }),
+        }
+    }
+    let mut meta = tracks_text(p.track_paths.len());
+    if total_ms > 0 {
+        meta.push_str(&format!(" · {}", fmt_total(total_ms)));
+    }
+    let name = pl_name(p);
+    let (color_a, color_b) = playlist_colors(&p.id);
+    let playing = LAST_NOW.lock().ok().and_then(|l| l.clone());
+    let current = playing.and_then(|c| p.track_paths.iter().position(|t| *t == c)).map_or(-1, |i| i as i32);
+    if let Ok(mut open) = PL_ROWS.lock() { *open = p.track_paths.clone(); }
+    ui.set_pl_page_letter(first_letter(&name));
+    ui.set_pl_page_title(name.into());
+    ui.set_pl_page_meta(meta.into());
+    ui.set_pl_page_liked(p.id == FAVORITES_ID);
+    ui.set_pl_page_color_a(color_a);
+    ui.set_pl_page_color_b(color_b);
+    ui.set_pl_current_index(current);
+    ui.set_pl_page_tracks(ModelRc::new(VecModel::from(rows)));
+}
+
+/// Tracks of the open playlist that are still in the library, in playlist order.
+fn playable_queue(st: &PlState, library: &Arc<Mutex<Vec<Track>>>) -> Vec<PathBuf> {
+    let Some(p) = st.open.as_deref().and_then(|id| st.store.playlist(id)) else { return Vec::new() };
+    let known: HashSet<PathBuf> = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect()).unwrap_or_default();
+    p.track_paths.iter().filter(|t| known.contains(*t)).cloned().collect()
+}
+
 /// Shows the playlist window in `view` (0 = pick, 1 = create, 2 = move to folder).
 fn show_pl_popup(ui: &MainWindow, st: &mut PlState, view: i32) {
     refresh_playlists(ui, st);
@@ -849,6 +922,13 @@ fn main() -> Result<(), slint::PlatformError> {
             .and_then(|c| OPEN_ROWS.lock().ok()?.iter().position(|p| p.as_ref() == Some(c)))
             .map_or(-1, |i| i as i32);
 
+        // The same for the open playlist page.
+        let pl_index = status
+            .current
+            .as_ref()
+            .and_then(|c| PL_ROWS.lock().ok()?.iter().position(|p| p == c))
+            .map_or(-1, |i| i as i32);
+
         // A new track started: the big player view needs its details (looked up only on a change).
         let changed_track: Option<Track> = match status.current.as_ref() {
             Some(current) => {
@@ -882,6 +962,7 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_lyric_index(lyric_index);
             ui.set_current_index(index);
             ui.set_album_current_index(album_index);
+            ui.set_pl_current_index(pl_index);
             ui.set_shuffle(status.shuffle);
             ui.set_repeat_mode(match status.repeat {
                 RepeatMode::Off => 0,
@@ -932,7 +1013,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 store
             }
         };
-        Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None }))
+        Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None, open: None, edit: None }))
     };
     refresh_playlists(&ui, &mut pl.borrow_mut());
     let ui_weak = ui.as_weak();
@@ -1078,7 +1159,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     {
         // A sleeve was clicked: add the track to that playlist, or take it out again.
-        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
         ui.on_pl_toggle(move |i| {
             let Some(ui) = weak.upgrade() else { return };
             let mut st = pl.borrow_mut();
@@ -1097,11 +1178,12 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.get_pl_cards().set_row_data(i, card);
             }
             refresh_playlist_rows(&ui, &mut st);
+            fill_playlist_page(&ui, &st, &library);
         });
     }
     {
         // "Create": new playlist (with the track when the window was opened for one).
-        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
         ui.on_pl_create(move |name, folder| {
             let Some(ui) = weak.upgrade() else { return false };
             let mut st = pl.borrow_mut();
@@ -1113,6 +1195,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             save_playlists(&ui, &st.store);
             refresh_playlists(&ui, &mut st);
+            fill_playlist_page(&ui, &st, &library);
             true
         });
     }
@@ -1172,8 +1255,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
-        // Click on a line of the Playlists page: a folder folds / unfolds, a playlist plays.
-        let (weak, pl, player, library) = (ui_weak.clone(), pl.clone(), player.clone(), library.clone());
+        // Click on a line of the Playlists page: a folder folds / unfolds, a playlist opens its page.
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
         ui.on_pl_row_clicked(move |row| {
             let Some(ui) = weak.upgrade() else { return };
             let mut st = pl.borrow_mut();
@@ -1186,16 +1269,180 @@ fn main() -> Result<(), slint::PlatformError> {
                     }
                 }
                 Some(ListEntry::Playlist(pi)) => {
-                    // Files that are gone from the library are skipped.
-                    let known: HashSet<PathBuf> = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect()).unwrap_or_default();
-                    let queue: Vec<PathBuf> = st.store.playlists[pi].track_paths.iter().filter(|p| known.contains(*p)).cloned().collect();
-                    if queue.is_empty() {
-                        ui.set_status("This playlist has no playable tracks yet".into());
-                    } else {
-                        player.send(Command::SetQueue { queue, start: 0 });
-                    }
+                    st.open = Some(st.store.playlists[pi].id.clone());
+                    fill_playlist_page(&ui, &st, &library);
+                    ui.set_pl_open(true);
                 }
                 None => {}
+            }
+        });
+    }
+    {
+        // Click on a track of the open playlist: the queue is the playlist, starting at that track.
+        let (weak, pl, player, library) = (ui_weak.clone(), pl.clone(), player.clone(), library.clone());
+        ui.on_pl_play_track(move |i| {
+            let Some(clicked) = PL_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return };
+            let queue = playable_queue(&pl.borrow(), &library);
+            match queue.iter().position(|p| *p == clicked) {
+                Some(start) => player.send(Command::SetQueue { queue, start }),
+                None => {
+                    if let Some(ui) = weak.upgrade() { ui.set_status("This file is not in the library".into()); }
+                }
+            }
+        });
+    }
+    {
+        let (weak, pl, player, library) = (ui_weak.clone(), pl.clone(), player.clone(), library.clone());
+        ui.on_pl_play_all(move || {
+            let queue = playable_queue(&pl.borrow(), &library);
+            if queue.is_empty() {
+                if let Some(ui) = weak.upgrade() { ui.set_status("This playlist has no playable tracks yet".into()); }
+                return;
+            }
+            player.send(Command::SetQueue { queue, start: 0 });
+        });
+    }
+    {
+        // "Shuffle" on the playlist page: shuffle on, start from a random track.
+        let (weak, pl, player, library, settings) = (ui_weak.clone(), pl.clone(), player.clone(), library.clone(), settings.clone());
+        ui.on_pl_shuffle_all(move || {
+            let queue = playable_queue(&pl.borrow(), &library);
+            if queue.is_empty() {
+                if let Some(ui) = weak.upgrade() { ui.set_status("This playlist has no playable tracks yet".into()); }
+                return;
+            }
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos() as usize)
+                .unwrap_or(0);
+            let start = nanos % queue.len();
+            player.send(Command::SetShuffle(true));
+            settings.borrow_mut().shuffle = true;
+            if let Some(ui) = weak.upgrade() { ui.set_shuffle(true); }
+            save_settings(&weak, &settings);
+            player.send(Command::SetQueue { queue, start });
+        });
+    }
+    {
+        // The cross on a row: take the track out of this playlist (the file stays).
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
+        ui.on_pl_remove_track(move |i| {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(path) = PL_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return };
+            let mut st = pl.borrow_mut();
+            let Some(id) = st.open.clone() else { return };
+            if st.store.remove_track(&id, &path) {
+                save_playlists(&ui, &st.store);
+                fill_playlist_page(&ui, &st, &library);
+                refresh_playlist_rows(&ui, &mut st);
+            }
+        });
+    }
+    {
+        // "Rename" on the playlist page.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_rename_playlist(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(p) = st.open.as_deref().and_then(|id| st.store.playlist(id)) else { return };
+            if p.id == FAVORITES_ID { return; }
+            let (id, name) = (p.id.clone(), p.name.clone());
+            st.target = None;
+            st.moving = None;
+            st.edit = Some(Edit::Playlist(id));
+            ui.set_pl_dialog_title("Rename playlist".into());
+            show_pl_popup(&ui, &mut st, 3);
+            ui.set_pl_name(name.into());
+        });
+    }
+    {
+        // "Delete" on the playlist page: asks first.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_delete_playlist(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(p) = st.open.as_deref().and_then(|id| st.store.playlist(id)) else { return };
+            if p.id == FAVORITES_ID { return; }
+            let (id, name) = (p.id.clone(), p.name.clone());
+            st.target = None;
+            st.moving = None;
+            st.edit = Some(Edit::Playlist(id));
+            ui.set_pl_dialog_title("Delete playlist?".into());
+            ui.set_pl_dialog_text(format!("\"{name}\" will be deleted. The tracks stay in your library.").into());
+            show_pl_popup(&ui, &mut st, 4);
+        });
+    }
+    {
+        // Pencil on a folder header.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_rename_folder(move |row| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(ListEntry::Folder(fi)) = st.rows.get(row.max(0) as usize).copied() else { return };
+            let (id, name) = (st.store.folders[fi].id.clone(), st.store.folders[fi].name.clone());
+            st.target = None;
+            st.moving = None;
+            st.edit = Some(Edit::Folder(id));
+            ui.set_pl_dialog_title("Rename folder".into());
+            show_pl_popup(&ui, &mut st, 3);
+            ui.set_pl_name(name.into());
+        });
+    }
+    {
+        // Trash on a folder header: asks first; the playlists inside stay.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_delete_folder(move |row| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(ListEntry::Folder(fi)) = st.rows.get(row.max(0) as usize).copied() else { return };
+            let (id, name) = (st.store.folders[fi].id.clone(), st.store.folders[fi].name.clone());
+            st.target = None;
+            st.moving = None;
+            st.edit = Some(Edit::Folder(id));
+            ui.set_pl_dialog_title("Delete folder?".into());
+            ui.set_pl_dialog_text(format!("The folder \"{name}\" will be deleted. Its playlists are kept and move out of the folder.").into());
+            show_pl_popup(&ui, &mut st, 4);
+        });
+    }
+    {
+        // "Save" in the rename window.
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
+        ui.on_pl_rename(move |name| {
+            let Some(ui) = weak.upgrade() else { return false };
+            let mut st = pl.borrow_mut();
+            let ok = match st.edit.take() {
+                Some(Edit::Playlist(id)) => st.store.rename_playlist(&id, &name),
+                Some(Edit::Folder(id)) => st.store.rename_folder(&id, &name),
+                None => false,
+            };
+            if ok {
+                save_playlists(&ui, &st.store);
+                refresh_playlists(&ui, &mut st);
+                fill_playlist_page(&ui, &st, &library);
+            }
+            ok
+        });
+    }
+    {
+        // "Delete" in the confirm window.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_delete(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let ok = match st.edit.take() {
+                Some(Edit::Playlist(id)) => {
+                    if st.open.as_deref() == Some(id.as_str()) {
+                        st.open = None;
+                        ui.set_pl_open(false);
+                    }
+                    st.store.delete_playlist(&id)
+                }
+                Some(Edit::Folder(id)) => st.store.delete_folder(&id),
+                None => false,
+            };
+            if ok {
+                save_playlists(&ui, &st.store);
+                refresh_playlists(&ui, &mut st);
             }
         });
     }

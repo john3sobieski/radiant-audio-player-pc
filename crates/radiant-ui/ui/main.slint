@@ -101,6 +101,15 @@ export struct PlaylistListRow {
     indent: bool,
 }
 
+// One track of the open playlist page. `missing`: the file is no longer in the library.
+export struct PlTrackRow {
+    no: string,
+    title: string,
+    artist: string,
+    duration: string,
+    missing: bool,
+}
+
 // Square cover: the picture, or a quiet tile with a letter when there is none.
 component CoverArt inherits Rectangle {
     in property <image> art;
@@ -613,12 +622,13 @@ component PillPreset inherits Rectangle {
 component AccentButton inherits Rectangle {
     in property <string> text;
     in property <bool> enabled: true;
+    in property <color> tone: Theme.accent;
     callback clicked();
 
     width: 120px;
     height: 40px;
     border-radius: 20px;
-    background: root.enabled ? (ta.has-hover ? Theme.accent.brighter(0.15) : Theme.accent) : Theme.surface-hover;
+    background: root.enabled ? (ta.has-hover ? root.tone.brighter(0.15) : root.tone) : Theme.surface-hover;
     animate background { duration: 120ms; }
 
     Text {
@@ -1056,6 +1066,7 @@ export component MainWindow inherits Window {
     }
     function go-section(s: int) {
         if (s == 1 && root.section == 1) { root.album-open = false; }
+        if (s == 2 && root.section == 2) { root.pl-open = false; }
         root.section = s;
         root.show-sort = false;
         root.section-changed(s, root.queue-index);
@@ -1229,6 +1240,32 @@ export component MainWindow inherits Window {
     callback pl-open-create();
     callback pl-open-move(int);
     callback pl-row-clicked(int);
+    /// Text of the rename / delete windows (views 3 and 4), set by Rust.
+    in property <string> pl-dialog-title;
+    in property <string> pl-dialog-text;
+    callback pl-rename(string) -> bool;
+    callback pl-delete();
+    callback pl-open-rename-folder(int);
+    callback pl-open-delete-folder(int);
+
+    // Open playlist page (slides over the Playlists list, like the album page).
+    in-out property <bool> pl-open: false;
+    in property <[PlTrackRow]> pl-page-tracks;
+    in property <string> pl-page-title;
+    in property <string> pl-page-meta;
+    in property <string> pl-page-letter;
+    in property <bool> pl-page-liked: false;
+    in property <color> pl-page-color-a: #8b6cff;
+    in property <color> pl-page-color-b: #3a2a8a;
+    /// Row of the playing track in `pl-page-tracks`, -1 = none.
+    in property <int> pl-current-index: -1;
+    callback pl-play-track(int);
+    callback pl-play-all();
+    callback pl-shuffle-all();
+    callback pl-remove-track(int);
+    callback pl-open-rename-playlist();
+    callback pl-open-delete-playlist();
+    private property <length> pl-btn-x0: (root.width - (root.pl-page-liked ? 218px : 446px)) / 2;
 
     private property <length> pl-w: min(640px, root.width - 32px);
     private property <length> pl-h: min(580px, root.height - 32px);
@@ -1706,7 +1743,8 @@ export component MainWindow inherits Window {
                     animate x { duration: 320ms; easing: ease-in-out; }
 
                     // Playlists: Liked tracks, loose playlists, then folders with their playlists.
-                    if k == 0 : VerticalLayout {
+                    if k == 0 : Rectangle {
+                      VerticalLayout {
                         padding-top: 14px;
                         Rectangle {
                             height: 52px;
@@ -1769,7 +1807,7 @@ export component MainWindow inherits Window {
                                 }
                                 if r.is-folder : Text {
                                     x: 84px;
-                                    width: parent.width - 84px - 200px;
+                                    width: parent.width - 84px - 290px;
                                     height: parent.height;
                                     text: r.name;
                                     color: Theme.text;
@@ -1779,8 +1817,8 @@ export component MainWindow inherits Window {
                                     overflow: elide;
                                 }
                                 if r.is-folder : Text {
-                                    x: parent.width - 28px - 170px;
-                                    width: 170px;
+                                    x: parent.width - 28px - 34px - 38px - 10px - 150px;
+                                    width: 150px;
                                     height: parent.height;
                                     text: r.sub;
                                     color: Theme.muted;
@@ -1866,6 +1904,27 @@ export component MainWindow inherits Window {
                                     mouse-cursor: pointer;
                                     clicked => { root.pl-row-clicked(i); }
                                 }
+                                // Folder header: rename / delete.
+                                if r.is-folder : IconButton {
+                                    x: parent.width - 28px - 34px - 38px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 34px;
+                                    height: 34px;
+                                    icon-size: 16px;
+                                    icon-color: Theme.muted;
+                                    commands: "M 3 14.5 V 17 H 5.5 L 14.8 7.7 L 12.3 5.2 Z M 16.7 5.8 L 14.2 3.3 L 12.9 4.6 L 15.4 7.1 Z";
+                                    clicked => { root.pl-open-rename-folder(i); }
+                                }
+                                if r.is-folder : IconButton {
+                                    x: parent.width - 28px - 34px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 34px;
+                                    height: 34px;
+                                    icon-size: 16px;
+                                    icon-color: Theme.muted;
+                                    commands: "M 6 3 H 14 L 14.8 4.5 H 17.5 V 6 H 2.5 V 4.5 H 5.2 Z M 4 7.5 H 16 L 15.2 17 H 4.8 Z";
+                                    clicked => { root.pl-open-delete-folder(i); }
+                                }
                                 // Move into a folder (Liked tracks has no folder).
                                 if !r.is-folder && !r.liked : IconButton {
                                     x: parent.width - 28px - self.width - 12px;
@@ -1878,6 +1937,242 @@ export component MainWindow inherits Window {
                                 }
                             }
                         }
+                      }
+
+                      // Open playlist: slides in over the list.
+                      Rectangle {
+                        x: root.pl-open ? 0px : parent.width;
+                        width: parent.width;
+                        height: parent.height;
+                        background: Theme.bg;
+                        animate x { duration: 260ms; easing: ease-in-out; }
+
+                        TouchArea {
+                            scroll-event(e) => { return accept; }
+                        }
+
+                        VerticalLayout {
+                            Rectangle {
+                                height: 164px;
+                                Text {
+                                    x: root.album-side;
+                                    y: 22px;
+                                    width: root.album-title-w;
+                                    height: 42px;
+                                    text: root.pl-page-title;
+                                    color: Theme.text;
+                                    font-size: 30px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    x: root.album-side;
+                                    y: 70px;
+                                    width: root.album-title-w;
+                                    height: 20px;
+                                    text: root.pl-page-meta;
+                                    color: Theme.muted;
+                                    font-size: 13px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                // Sleeve on the right, like the album cover.
+                                Rectangle {
+                                    x: parent.width - 28px - self.width;
+                                    y: 14px;
+                                    width: 104px;
+                                    height: 104px;
+                                    border-radius: 10px;
+                                    background: @linear-gradient(135deg, root.pl-page-color-a, root.pl-page-color-b);
+                                    if !root.pl-page-liked : Text {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        text: root.pl-page-letter;
+                                        color: #ffffff40;
+                                        font-size: 46px;
+                                        font-weight: 800;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                    if root.pl-page-liked : Path {
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                        width: 52px;
+                                        height: 52px;
+                                        viewbox-width: 20;
+                                        viewbox-height: 20;
+                                        commands: "M 10 17.5 C 2 11.5 2 5 6 4 C 8 3.5 9.5 4.5 10 6 C 10.5 4.5 12 3.5 14 4 C 18 5 18 11.5 10 17.5 Z";
+                                        fill: #ffffff66;
+                                    }
+                                }
+                                IconButton {
+                                    x: 16px;
+                                    y: 14px;
+                                    width: 36px;
+                                    height: 36px;
+                                    commands: "M 12.5 3 L 5.5 10 L 12.5 17 L 14 15.5 L 8.5 10 L 14 4.5 Z";
+                                    icon-size: 20px;
+                                    clicked => { root.pl-open = false; }
+                                }
+                                PillButton {
+                                    x: root.pl-btn-x0;
+                                    y: 122px;
+                                    width: 104px;
+                                    text: (root.pl-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                    active: root.pl-current-index >= 0 && root.is-playing;
+                                    clicked => {
+                                        if (root.pl-current-index >= 0) { root.toggle-play(); }
+                                        else { root.pl-play-all(); }
+                                    }
+                                }
+                                PillButton {
+                                    x: root.pl-btn-x0 + 114px;
+                                    y: 122px;
+                                    width: 104px;
+                                    text: "Shuffle";
+                                    active: root.shuffle;
+                                    clicked => {
+                                        if (root.shuffle) { root.shuffle-changed(false); }
+                                        else if (root.pl-current-index >= 0) { root.shuffle-changed(true); }
+                                        else { root.pl-shuffle-all(); }
+                                    }
+                                }
+                                if !root.pl-page-liked : PillButton {
+                                    x: root.pl-btn-x0 + 228px;
+                                    y: 122px;
+                                    width: 104px;
+                                    text: "Rename";
+                                    clicked => { root.pl-open-rename-playlist(); }
+                                }
+                                if !root.pl-page-liked : PillButton {
+                                    x: root.pl-btn-x0 + 342px;
+                                    y: 122px;
+                                    width: 104px;
+                                    text: "Delete";
+                                    clicked => { root.pl-open-delete-playlist(); }
+                                }
+                            }
+
+                            if root.pl-page-tracks.length == 0 : Rectangle {
+                                vertical-stretch: 1;
+                                Text {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    text: "No tracks yet. Use \"Add to playlist\" in the menu of a track.";
+                                    color: Theme.muted;
+                                    font-size: 15px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            if root.pl-page-tracks.length > 0 : Rectangle {
+                                height: 30px;
+                                Text {
+                                    x: root.col-pad;
+                                    width: root.num-w;
+                                    height: parent.height;
+                                    text: "#";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    x: root.title-x;
+                                    width: root.album-list-title-w;
+                                    height: parent.height;
+                                    text: "Title";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    x: root.dur-x;
+                                    width: root.dur-w;
+                                    height: parent.height;
+                                    text: "Time";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {
+                                    x: root.col-pad;
+                                    y: parent.height - 1px;
+                                    width: parent.width - 2 * root.col-pad;
+                                    height: 1px;
+                                    background: Theme.surface-hover;
+                                }
+                            }
+                            if root.pl-page-tracks.length > 0 : ListView {
+                                vertical-stretch: 1;
+                                for t[i] in root.pl-page-tracks : Rectangle {
+                                    height: root.detail-row-h;
+                                    background: i == root.pl-current-index ? Theme.accent.with-alpha(0.16)
+                                        : plt-ta.has-hover ? Theme.surface : transparent;
+                                    animate background { duration: 120ms; }
+
+                                    Text {
+                                        x: root.col-pad;
+                                        width: root.num-w;
+                                        height: parent.height;
+                                        text: t.no;
+                                        color: i == root.pl-current-index ? Theme.accent : Theme.muted;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        x: root.title-x;
+                                        y: t.artist == "" ? 0px : 8px;
+                                        width: root.album-list-title-w;
+                                        height: t.artist == "" ? parent.height : 22px;
+                                        text: t.title;
+                                        color: t.missing ? Theme.muted : i == root.pl-current-index ? Theme.accent : Theme.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    if t.artist != "" : Text {
+                                        x: root.title-x;
+                                        y: 30px;
+                                        width: root.album-list-title-w;
+                                        height: 18px;
+                                        text: t.artist;
+                                        color: Theme.muted;
+                                        font-size: 12px;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        x: root.dur-x;
+                                        width: root.dur-w;
+                                        height: parent.height;
+                                        text: t.duration;
+                                        color: Theme.muted;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                    }
+                                    plt-ta := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.pl-play-track(i); }
+                                    }
+                                    // Take the track out of this playlist (the file stays).
+                                    IconButton {
+                                        x: root.dots-x;
+                                        y: (parent.height - self.height) / 2;
+                                        width: 28px;
+                                        height: 28px;
+                                        icon-size: 12px;
+                                        icon-color: plt-ta.has-hover ? Theme.text : Theme.muted;
+                                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                                        clicked => { root.pl-remove-track(i); }
+                                    }
+                                }
+                            }
+                        }
+                      }
                     }
 
                     // Queue (stub until queues exist).
@@ -3220,6 +3515,85 @@ export component MainWindow inherits Window {
                         text: "Move";
                         width: 110px;
                         clicked => { root.pl-move(root.pl-folder-sel); root.show-pl-popup = false; }
+                    }
+                }
+            }
+
+            // View 3: rename a playlist or a folder.
+            if root.pl-view == 3 : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 44px;
+                    Text {
+                        width: parent.width - 44px;
+                        height: parent.height;
+                        text: root.pl-dialog-title;
+                        color: Theme.text;
+                        font-size: 20px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    IconButton {
+                        x: parent.width - self.width;
+                        y: 4px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        icon-color: Theme.muted;
+                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                        clicked => { root.show-pl-popup = false; }
+                    }
+                }
+                Text { text: "NAME"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                NameField {
+                    placeholder: "Name";
+                    value <=> root.pl-name;
+                    accepted(v) => { if (root.pl-rename(root.pl-name)) { root.show-pl-popup = false; } }
+                    init => { self.focus-input(); }
+                }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    AccentButton {
+                        text: "Save";
+                        width: 110px;
+                        enabled: root.pl-name != "";
+                        clicked => { if (root.pl-rename(root.pl-name)) { root.show-pl-popup = false; } }
+                    }
+                }
+            }
+
+            // View 4: confirm deleting a playlist or a folder.
+            if root.pl-view == 4 : VerticalLayout {
+                padding: 22px;
+                spacing: 12px;
+                Text {
+                    text: root.pl-dialog-title;
+                    color: Theme.text;
+                    font-size: 20px;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.pl-dialog-text;
+                    color: Theme.muted;
+                    font-size: 15px;
+                    wrap: word-wrap;
+                }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    AccentButton {
+                        text: "Delete";
+                        tone: #d64550;
+                        width: 110px;
+                        clicked => { root.pl-delete(); root.show-pl-popup = false; }
                     }
                 }
             }

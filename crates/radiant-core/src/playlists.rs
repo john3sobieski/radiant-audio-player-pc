@@ -140,6 +140,58 @@ impl PlaylistStore {
         true
     }
 
+    /// Renames a playlist. `false` = empty name, unknown playlist, or Liked tracks (cannot be renamed).
+    pub fn rename_playlist(&mut self, id: &str, name: &str) -> bool {
+        let Some(name) = clean_name(name) else { return false };
+        if id == FAVORITES_ID {
+            return false;
+        }
+        match self.playlists.iter_mut().find(|p| p.id == id) {
+            Some(p) => {
+                p.name = name;
+                p.updated_at = now_secs();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Deletes a playlist (the tracks themselves are untouched). Liked tracks cannot be deleted.
+    pub fn delete_playlist(&mut self, id: &str) -> bool {
+        if id == FAVORITES_ID {
+            return false;
+        }
+        let before = self.playlists.len();
+        self.playlists.retain(|p| p.id != id);
+        self.playlists.len() != before
+    }
+
+    pub fn rename_folder(&mut self, id: &str, name: &str) -> bool {
+        let Some(name) = clean_name(name) else { return false };
+        match self.folders.iter_mut().find(|f| f.id == id) {
+            Some(f) => {
+                f.name = name;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Deletes a folder; its playlists are kept and become folder-less.
+    pub fn delete_folder(&mut self, id: &str) -> bool {
+        let before = self.folders.len();
+        self.folders.retain(|f| f.id != id);
+        if self.folders.len() == before {
+            return false;
+        }
+        for p in &mut self.playlists {
+            if p.folder_id.as_deref() == Some(id) {
+                p.folder_id = None;
+            }
+        }
+        true
+    }
+
     pub fn toggle_folder_collapsed(&mut self, id: &str) -> bool {
         match self.folders.iter_mut().find(|f| f.id == id) {
             Some(f) => {
@@ -305,6 +357,32 @@ mod tests {
         assert!(!s.set_playlist_folder(FAVORITES_ID, Some(&f)));
         assert!(s.set_playlist_folder(&q, None));
         assert_eq!(s.playlist(&q).unwrap().folder_id, None);
+    }
+
+    #[test]
+    fn rename_and_delete() {
+        let mut s = fresh();
+        let f = s.create_folder("Gym").unwrap();
+        let p = s.create_playlist("Run", Some(&f)).unwrap();
+        assert!(s.rename_playlist(&p, "  Fast   run "));
+        assert_eq!(s.playlist(&p).unwrap().name, "Fast run");
+        assert!(!s.rename_playlist(&p, "   "));
+        assert!(!s.rename_playlist(FAVORITES_ID, "Mine"));
+        assert!(!s.rename_playlist("nope", "x"));
+        assert!(s.rename_folder(&f, "Sport"));
+        assert_eq!(s.folder(&f).unwrap().name, "Sport");
+        assert!(!s.rename_folder(&f, ""));
+
+        // Deleting a folder keeps its playlists.
+        assert!(s.delete_folder(&f));
+        assert_eq!(s.playlist(&p).unwrap().folder_id, None);
+        assert!(!s.delete_folder(&f));
+
+        assert!(!s.delete_playlist(FAVORITES_ID));
+        assert!(s.delete_playlist(&p));
+        assert!(s.playlist(&p).is_none());
+        assert!(!s.delete_playlist(&p));
+        assert_eq!(s.playlists[0].id, FAVORITES_ID);
     }
 
     #[test]
