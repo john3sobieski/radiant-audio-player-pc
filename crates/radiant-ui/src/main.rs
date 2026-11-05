@@ -887,6 +887,33 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
+        // "Play" on the album page: the whole album from its first track.
+        let player = player.clone();
+        ui.on_play_album(move || {
+            let queue: Vec<PathBuf> = OPEN_ROWS.lock().map(|r| r.iter().flatten().cloned().collect()).unwrap_or_default();
+            if queue.is_empty() { return; }
+            player.send(Command::SetQueue { queue, start: 0 });
+        });
+    }
+    {
+        // "Shuffle" on the album page: turns shuffle on and starts from a random track of the album.
+        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
+        ui.on_shuffle_album(move || {
+            let queue: Vec<PathBuf> = OPEN_ROWS.lock().map(|r| r.iter().flatten().cloned().collect()).unwrap_or_default();
+            if queue.is_empty() { return; }
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos() as usize)
+                .unwrap_or(0);
+            let start = nanos % queue.len();
+            player.send(Command::SetShuffle(true));
+            settings.borrow_mut().shuffle = true;
+            if let Some(ui) = weak.upgrade() { ui.set_shuffle(true); }
+            save_settings(&weak, &settings);
+            player.send(Command::SetQueue { queue, start });
+        });
+    }
+    {
         let weak = ui_weak.clone();
         ui.on_album_shown(move |i| {
             if i >= 0 {

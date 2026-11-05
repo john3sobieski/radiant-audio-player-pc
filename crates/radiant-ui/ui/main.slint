@@ -638,6 +638,9 @@ export component MainWindow inherits Window {
     in property <[AlbumRow]> albums;
     callback open-album(int);
     callback play-album-track(int);
+    /// Play / Shuffle buttons of the open album page.
+    callback play-album();
+    callback shuffle-album();
     // Open album page (tracks in tag order, like a CD booklet).
     in-out property <bool> album-open: false;
     in property <[AlbumTrackRow]> album-tracks;
@@ -803,7 +806,7 @@ export component MainWindow inherits Window {
     /// Row the menu was opened for (index in `tracks`, or in `album-tracks` when `menu-in-album`).
     in-out property <int> menu-row: -1;
     in-out property <bool> menu-in-album: false;
-    private property <length> menu-w: 220px;
+    private property <length> menu-w: 156px;
     private property <length> menu-h: 3 * 34px + 12px;
     /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
     callback album-index-of-track(int) -> int;
@@ -1081,7 +1084,7 @@ export component MainWindow inherits Window {
                         VerticalLayout {
                             // Header: title and artist centered in the window, cover on the right, back button on the left.
                             Rectangle {
-                                height: 132px;
+                                height: 164px;
                                 Text {
                                     x: root.album-side;
                                     y: 22px;
@@ -1129,6 +1132,21 @@ export component MainWindow inherits Window {
                                     has-image: root.album-has-cover;
                                     letter: root.album-letter;
                                     letter-size: 40px;
+                                }
+                                PillButton {
+                                    x: parent.width / 2 - self.width - 6px;
+                                    y: 122px;
+                                    width: 110px;
+                                    text: "Play";
+                                    active: true;
+                                    clicked => { root.play-album(); }
+                                }
+                                PillButton {
+                                    x: parent.width / 2 + 6px;
+                                    y: 122px;
+                                    width: 110px;
+                                    text: "Shuffle";
+                                    clicked => { root.shuffle-album(); }
                                 }
                                 IconButton {
                                     x: 16px;
