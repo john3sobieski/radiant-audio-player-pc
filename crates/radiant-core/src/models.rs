@@ -3,6 +3,7 @@
 //! `None` for album/artist means "unknown": the UI shows a translated placeholder,
 //! the translated text is never stored.
 
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -48,13 +49,27 @@ pub struct Album {
     pub tracks: Vec<PathBuf>,
 }
 
-#[derive(Debug, Clone)]
+/// A playlist. Saved in `playlists.json` (see `playlists.rs`); times are Unix seconds.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Playlist {
     pub id: String,
     pub name: String,
     pub track_paths: Vec<PathBuf>,
     pub created_at: u64,
     pub updated_at: u64,
+    /// Folder the playlist lives in; `None` = no folder.
+    pub folder_id: Option<String>,
+}
+
+/// A folder that groups playlists (one level only, no folders inside folders).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PlaylistFolder {
+    pub id: String,
+    pub name: String,
+    /// Folded in the Playlists list.
+    pub collapsed: bool,
 }
 
 /// One of exactly four fixed queues (id 0..QUEUE_COUNT).

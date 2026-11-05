@@ -69,6 +69,38 @@ export struct InfoRow {
     value: string,
 }
 
+// One record sleeve of the "Add to playlist" window (filled by Rust).
+export struct PlaylistCard {
+    name: string,
+    count: string,
+    letter: string,
+    color-a: color,
+    color-b: color,
+    /// The track the window works on is already in this playlist.
+    added: bool,
+    liked: bool,
+}
+
+// A folder in the folder picker.
+export struct FolderChip {
+    id: string,
+    name: string,
+}
+
+// One line of the Playlists page: a folder header or a playlist.
+export struct PlaylistListRow {
+    is-folder: bool,
+    name: string,
+    sub: string,
+    letter: string,
+    color-a: color,
+    color-b: color,
+    liked: bool,
+    collapsed: bool,
+    /// Playlist inside a folder.
+    indent: bool,
+}
+
 // Square cover: the picture, or a quiet tile with a letter when there is none.
 component CoverArt inherits Rectangle {
     in property <image> art;
@@ -577,6 +609,333 @@ component PillPreset inherits Rectangle {
     }
 }
 
+// Primary (accent) button; grey while disabled.
+component AccentButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: 120px;
+    height: 40px;
+    border-radius: 20px;
+    background: root.enabled ? (ta.has-hover ? Theme.accent.brighter(0.15) : Theme.accent) : Theme.surface-hover;
+    animate background { duration: 120ms; }
+
+    Text {
+        text: root.text;
+        color: root.enabled ? #ffffff : Theme.muted;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Single-line text field with a placeholder.
+component NameField inherits Rectangle {
+    in-out property <string> value;
+    in property <string> placeholder;
+    callback accepted(string);
+    public function focus-input() { ti.focus(); }
+
+    height: 44px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: ti.has-focus ? Theme.accent : Theme.surface-hover;
+    background: Theme.bg;
+    animate border-color { duration: 120ms; }
+
+    Text {
+        x: 14px;
+        width: parent.width - 28px;
+        height: parent.height;
+        text: root.placeholder;
+        color: Theme.muted;
+        vertical-alignment: center;
+        visible: root.value == "";
+    }
+    ti := TextInput {
+        x: 14px;
+        width: parent.width - 28px;
+        height: parent.height;
+        text <=> root.value;
+        color: Theme.text;
+        font-size: 15px;
+        vertical-alignment: center;
+        single-line: true;
+        accepted => { root.accepted(self.text); }
+    }
+}
+
+// A record sleeve with the vinyl peeking out: the record slides out on hover,
+// all the way out (and a check appears) when the track is already inside.
+component SleeveCard inherits Rectangle {
+    in property <string> name;
+    in property <string> count;
+    in property <string> letter;
+    in property <color> color-a: #8b6cff;
+    in property <color> color-b: #3a2a8a;
+    in property <bool> added: false;
+    in property <bool> liked: false;
+    in property <bool> is-new: false;
+    callback clicked();
+
+    width: 176px;
+    height: 184px;
+    private property <length> lift: ta.has-hover ? -3px : 0px;
+    animate lift { duration: 140ms; easing: ease-out; }
+
+    // The record, behind the sleeve.
+    if !root.is-new : Rectangle {
+        x: root.added ? 58px : ta.has-hover ? 38px : 20px;
+        y: 10px + root.lift;
+        width: 114px;
+        height: 114px;
+        border-radius: 57px;
+        background: #0c0c0f;
+        border-width: 1px;
+        border-color: #ffffff18;
+        animate x { duration: 280ms; easing: ease-out; }
+
+        Rectangle { x: 12px; y: 12px; width: 90px; height: 90px; border-radius: 45px; border-width: 1px; border-color: #ffffff12; }
+        Rectangle { x: 24px; y: 24px; width: 66px; height: 66px; border-radius: 33px; border-width: 1px; border-color: #ffffff12; }
+        Rectangle {
+            x: 38px;
+            y: 38px;
+            width: 38px;
+            height: 38px;
+            border-radius: 19px;
+            background: @linear-gradient(135deg, root.color-a, root.color-b);
+        }
+        Rectangle { x: 54px; y: 54px; width: 6px; height: 6px; border-radius: 3px; background: #0c0c0f; }
+    }
+
+    // The sleeve.
+    if !root.is-new : Rectangle {
+        y: root.lift;
+        width: 134px;
+        height: 134px;
+        border-radius: 12px;
+        background: @linear-gradient(135deg, root.color-a, root.color-b);
+        drop-shadow-blur: 14px;
+        drop-shadow-color: #00000070;
+        drop-shadow-offset-y: 4px;
+
+        if !root.liked : Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.letter;
+            color: #ffffff40;
+            font-size: 56px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        if root.liked : Path {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 64px;
+            height: 64px;
+            viewbox-width: 20;
+            viewbox-height: 20;
+            commands: "M 10 17.5 C 2 11.5 2 5 6 4 C 8 3.5 9.5 4.5 10 6 C 10.5 4.5 12 3.5 14 4 C 18 5 18 11.5 10 17.5 Z";
+            fill: #ffffff55;
+        }
+        Rectangle {
+            x: parent.width - 36px;
+            y: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: Theme.accent;
+            opacity: root.added ? 1 : 0;
+            animate opacity { duration: 180ms; }
+            Path {
+                x: 4px;
+                y: 4px;
+                width: 20px;
+                height: 20px;
+                viewbox-width: 20;
+                viewbox-height: 20;
+                commands: "M 4 10.5 L 8 14.5 L 16 6";
+                stroke: #ffffff;
+                stroke-width: 2.4px;
+                fill: transparent;
+            }
+        }
+    }
+    if root.is-new : Rectangle {
+        y: root.lift;
+        width: 134px;
+        height: 134px;
+        border-radius: 12px;
+        background: Theme.surface;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(ta.has-hover ? 0.8 : 0.4);
+        animate border-color { duration: 140ms; }
+        Path {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 44px;
+            height: 44px;
+            viewbox-width: 20;
+            viewbox-height: 20;
+            commands: "M 9 3 H 11 V 9 H 17 V 11 H 11 V 17 H 9 V 11 H 3 V 9 H 9 Z";
+            fill: Theme.accent.brighter(0.5);
+        }
+    }
+
+    Text {
+        y: 140px;
+        width: 134px;
+        height: 20px;
+        text: root.is-new ? "New playlist" : root.name;
+        color: Theme.text;
+        font-size: 14px;
+        font-weight: 600;
+        overflow: elide;
+    }
+    Text {
+        y: 160px;
+        width: 134px;
+        height: 18px;
+        text: root.is-new ? "Name it, pick a folder" : root.count;
+        color: Theme.muted;
+        font-size: 12px;
+        overflow: elide;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// One line of the folder picker ("No folder", a folder, or "New folder...").
+component FolderRow inherits Rectangle {
+    in property <string> name;
+    in property <bool> active: false;
+    in property <bool> plus: false;
+    in property <bool> blank: false;
+    callback clicked();
+
+    height: 40px;
+    border-radius: 10px;
+    background: root.active ? Theme.accent.with-alpha(0.18) : ta.has-hover ? Theme.surface-hover : transparent;
+    animate background { duration: 120ms; }
+
+    if !root.plus && !root.blank : Path {
+        x: 14px;
+        y: (parent.height - self.height) / 2;
+        width: 18px;
+        height: 18px;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        commands: "M 1 4 Q 1 2 3 2 H 8 L 10 4 H 17 Q 19 4 19 6 V 15 Q 19 17 17 17 H 3 Q 1 17 1 15 Z";
+        fill: root.active ? Theme.accent.brighter(0.5) : Theme.muted;
+    }
+    if root.plus : Path {
+        x: 14px;
+        y: (parent.height - self.height) / 2;
+        width: 18px;
+        height: 18px;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        commands: "M 9 3 H 11 V 9 H 17 V 11 H 11 V 17 H 9 V 11 H 3 V 9 H 9 Z";
+        fill: Theme.accent.brighter(0.5);
+    }
+    Text {
+        x: 44px;
+        width: parent.width - 44px - 44px;
+        height: parent.height;
+        text: root.name;
+        color: root.plus ? Theme.accent.brighter(0.5) : root.blank ? Theme.muted : Theme.text;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    if !root.plus : Rectangle {
+        x: parent.width - 32px;
+        y: (parent.height - self.height) / 2;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        border-width: 2px;
+        border-color: root.active ? Theme.accent : Theme.muted.with-alpha(0.6);
+        Rectangle {
+            x: 3px;
+            y: 3px;
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: Theme.accent;
+            visible: root.active;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Choose one folder (or none), or make a new one on the spot.
+component FolderPicker inherits Rectangle {
+    in property <[FolderChip]> folders;
+    in-out property <string> selected;
+    callback create-folder(string);
+    private property <bool> adding: false;
+    private property <string> new-name: "";
+    function commit() {
+        if (root.new-name != "") { root.create-folder(root.new-name); }
+        root.new-name = "";
+        root.adding = false;
+    }
+
+    VerticalLayout {
+        spacing: 4px;
+        FolderRow {
+            name: "No folder";
+            blank: true;
+            active: root.selected == "";
+            clicked => { root.selected = ""; }
+        }
+        ListView {
+            vertical-stretch: 1;
+            for f in root.folders : FolderRow {
+                name: f.name;
+                active: root.selected == f.id;
+                clicked => { root.selected = f.id; }
+            }
+        }
+        if !root.adding : FolderRow {
+            name: "New folder...";
+            plus: true;
+            clicked => { root.adding = true; }
+        }
+        if root.adding : Rectangle {
+            height: 44px;
+            HorizontalLayout {
+                spacing: 8px;
+                NameField {
+                    placeholder: "Folder name";
+                    value <=> root.new-name;
+                    accepted(v) => { root.commit(); }
+                    init => { self.focus-input(); }
+                }
+                AccentButton {
+                    width: 80px;
+                    height: 44px;
+                    text: "Add";
+                    enabled: root.new-name != "";
+                    clicked => { root.commit(); }
+                }
+            }
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Radiant";
     preferred-width: 900px;
@@ -844,6 +1203,55 @@ export component MainWindow inherits Window {
     callback eq-preset-selected(int);
     callback fx-reset();
 
+    // ---- Playlists ----
+    /// "Add to playlist" window: 0 = pick a playlist, 1 = create one, 2 = move a playlist to a folder.
+    in-out property <bool> show-pl-popup: false;
+    in-out property <int> pl-view: 0;
+    in property <[PlaylistCard]> pl-cards;
+    in property <[FolderChip]> pl-folders;
+    in property <[PlaylistListRow]> pl-rows;
+    in property <int> pl-total: 1;
+    /// The window was opened for a track (false: opened to create a playlist or move one).
+    in property <bool> pl-has-track: false;
+    in property <string> pl-track-title;
+    in property <string> pl-track-artist;
+    in property <string> pl-track-letter;
+    in property <image> pl-track-cover;
+    in property <bool> pl-track-has-cover: false;
+    in property <string> pl-move-name;
+    in-out property <string> pl-name: "";
+    /// Folder id chosen in the create / move view, "" = no folder.
+    in-out property <string> pl-folder-sel: "";
+    callback pl-toggle(int);
+    callback pl-create(string, string) -> bool;
+    callback pl-folder-create(string) -> string;
+    callback pl-move(string);
+    callback pl-open-create();
+    callback pl-open-move(int);
+    callback pl-row-clicked(int);
+
+    private property <length> pl-w: min(640px, root.width - 32px);
+    private property <length> pl-h: min(580px, root.height - 32px);
+    private property <length> pl-inner-w: root.pl-w - 44px;
+    private property <length> sl-w: 176px;
+    private property <length> sl-h: 192px;
+    private property <length> sl-gap: 14px;
+    private property <int> pl-cols: max(1, Math.floor((root.pl-inner-w + root.sl-gap) / (root.sl-w + root.sl-gap)));
+    private property <int> pl-grid-rows: Math.ceil((root.pl-cards.length + 1) / root.pl-cols);
+    private property <length> pl-grid-x: max(0px, (root.pl-inner-w - (root.pl-cols * root.sl-w + (root.pl-cols - 1) * root.sl-gap)) / 2);
+    function pl-submit() {
+        if (root.pl-create(root.pl-name, root.pl-folder-sel)) {
+            root.pl-name = "";
+            if (root.pl-has-track) { root.pl-view = 0; } else { root.show-pl-popup = false; }
+        }
+    }
+    function pl-back() {
+        if (root.pl-has-track && root.pl-view == 1) { root.pl-view = 0; } else { root.show-pl-popup = false; }
+    }
+    changed show-pl-popup => {
+        if (self.show-pl-popup) { pl-fs.focus(); }
+    }
+
     VerticalLayout {
         // ---- header ----
         Rectangle {
@@ -1017,6 +1425,7 @@ export component MainWindow inherits Window {
                     height: parent.height;
                     text: root.section == 0 ? "\{root.tracks.length} tracks"
                         : root.section == 1 ? "\{root.albums.length} albums"
+                        : root.section == 2 ? "\{root.pl-total} playlists"
                         : root.section == 3 ? "Queue \{root.queue-index + 1} · \{root.queue-counts[root.queue-index]} tracks" : "";
                     color: Theme.muted;
                     font-size: 13px;
@@ -1296,19 +1705,195 @@ export component MainWindow inherits Window {
                     height: parent.height;
                     animate x { duration: 320ms; easing: ease-in-out; }
 
-                    VerticalLayout {
+                    // Playlists: Liked tracks, loose playlists, then folders with their playlists.
+                    if k == 0 : VerticalLayout {
+                        padding-top: 14px;
+                        Rectangle {
+                            height: 52px;
+                            Text {
+                                x: 28px;
+                                height: parent.height;
+                                text: "Playlists";
+                                color: Theme.text;
+                                font-size: 22px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+                            PillButton {
+                                x: parent.width - self.width - 28px;
+                                y: 9px;
+                                width: 140px;
+                                text: "New playlist";
+                                clicked => { root.pl-open-create(); }
+                            }
+                        }
+                        if root.pl-rows.length <= 1 : Rectangle {
+                            height: 34px;
+                            Text {
+                                x: 28px;
+                                width: parent.width - 56px;
+                                height: parent.height;
+                                text: "Add tracks from the three-dot menu of any track, or press New playlist.";
+                                color: Theme.muted;
+                                font-size: 14px;
+                                wrap: word-wrap;
+                            }
+                        }
+                        ListView {
+                            vertical-stretch: 1;
+                            for r[i] in root.pl-rows : Rectangle {
+                                height: r.is-folder ? 50px : 64px;
+                                background: plrow-ta.has-hover ? Theme.surface : transparent;
+                                animate background { duration: 120ms; }
+
+                                // Folder header.
+                                if r.is-folder : Path {
+                                    x: 28px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 12px;
+                                    height: 12px;
+                                    viewbox-width: 10;
+                                    viewbox-height: 10;
+                                    commands: r.collapsed ? "M 2 0 L 9 5 L 2 10 Z" : "M 0 2 L 10 2 L 5 9 Z";
+                                    fill: Theme.muted;
+                                }
+                                if r.is-folder : Path {
+                                    x: 52px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 20px;
+                                    height: 20px;
+                                    viewbox-width: 20;
+                                    viewbox-height: 20;
+                                    commands: "M 1 4 Q 1 2 3 2 H 8 L 10 4 H 17 Q 19 4 19 6 V 15 Q 19 17 17 17 H 3 Q 1 17 1 15 Z";
+                                    fill: Theme.accent.brighter(0.5);
+                                }
+                                if r.is-folder : Text {
+                                    x: 84px;
+                                    width: parent.width - 84px - 200px;
+                                    height: parent.height;
+                                    text: r.name;
+                                    color: Theme.text;
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                if r.is-folder : Text {
+                                    x: parent.width - 28px - 170px;
+                                    width: 170px;
+                                    height: parent.height;
+                                    text: r.sub;
+                                    color: Theme.muted;
+                                    font-size: 13px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+
+                                // Playlist: small sleeve with the record peeking out.
+                                if !r.is-folder : Rectangle {
+                                    x: r.indent ? 56px : 28px;
+                                    y: (parent.height - 44px) / 2;
+                                    width: 100px;
+                                    height: 44px;
+                                    Rectangle {
+                                        x: 14px;
+                                        y: 3px;
+                                        width: 38px;
+                                        height: 38px;
+                                        border-radius: 19px;
+                                        background: #0c0c0f;
+                                        border-width: 1px;
+                                        border-color: #ffffff18;
+                                        Rectangle {
+                                            x: 12px;
+                                            y: 12px;
+                                            width: 14px;
+                                            height: 14px;
+                                            border-radius: 7px;
+                                            background: r.color-a;
+                                        }
+                                    }
+                                    Rectangle {
+                                        width: 44px;
+                                        height: 44px;
+                                        border-radius: 8px;
+                                        background: @linear-gradient(135deg, r.color-a, r.color-b);
+                                        if !r.liked : Text {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            text: r.letter;
+                                            color: #ffffff55;
+                                            font-size: 20px;
+                                            font-weight: 800;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                        if r.liked : Path {
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                            width: 22px;
+                                            height: 22px;
+                                            viewbox-width: 20;
+                                            viewbox-height: 20;
+                                            commands: "M 10 17.5 C 2 11.5 2 5 6 4 C 8 3.5 9.5 4.5 10 6 C 10.5 4.5 12 3.5 14 4 C 18 5 18 11.5 10 17.5 Z";
+                                            fill: #ffffff80;
+                                        }
+                                    }
+                                }
+                                if !r.is-folder : Text {
+                                    x: (r.indent ? 56px : 28px) + 66px;
+                                    y: 11px;
+                                    width: parent.width - self.x - 28px - 48px;
+                                    height: 22px;
+                                    text: r.name;
+                                    color: Theme.text;
+                                    font-size: 15px;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                if !r.is-folder : Text {
+                                    x: (r.indent ? 56px : 28px) + 66px;
+                                    y: 33px;
+                                    width: parent.width - self.x - 28px - 48px;
+                                    height: 20px;
+                                    text: r.sub;
+                                    color: Theme.muted;
+                                    font-size: 13px;
+                                    overflow: elide;
+                                }
+                                plrow-ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.pl-row-clicked(i); }
+                                }
+                                // Move into a folder (Liked tracks has no folder).
+                                if !r.is-folder && !r.liked : IconButton {
+                                    x: parent.width - 28px - self.width - 12px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 34px;
+                                    height: 34px;
+                                    icon-color: Theme.muted;
+                                    commands: "M 1 4 Q 1 2 3 2 H 8 L 10 4 H 17 Q 19 4 19 6 V 15 Q 19 17 17 17 H 3 Q 1 17 1 15 Z";
+                                    clicked => { root.pl-open-move(i); }
+                                }
+                            }
+                        }
+                    }
+
+                    // Queue (stub until queues exist).
+                    if k == 1 : VerticalLayout {
                         padding-left: 28px;
                         padding-right: 28px;
                         padding-top: 14px;
                         spacing: 12px;
                         alignment: start;
                         Text {
-                            text: k == 0 ? "Playlists" : "Queue \{root.queue-index + 1}";
+                            text: "Queue \{root.queue-index + 1}";
                             color: Theme.text;
                             font-size: 22px;
                             font-weight: 700;
                         }
-                        if k == 1 : Rectangle {
+                        Rectangle {
                             height: 40px;
                             HorizontalLayout {
                                 spacing: 10px;
@@ -1332,8 +1917,7 @@ export component MainWindow inherits Window {
                         }
                         Text {
                             width: 100%;
-                            text: k == 0 ? "Playlists will live here. \"Liked tracks\" always stays on top."
-                                : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
+                            text: "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
                             color: Theme.muted;
                             font-size: 15px;
                             wrap: word-wrap;
@@ -2384,6 +2968,260 @@ export component MainWindow inherits Window {
             MenuItem {
                 text: "Create stems";
                 clicked => { root.show-menu = false; root.create-stems(root.menu-row, root.menu-in-album); }
+            }
+        }
+    }
+
+    // ---- "Add to playlist" window: centered over a dimmed backdrop ----
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #000000b0;
+        opacity: root.show-pl-popup ? 1 : 0;
+        visible: self.opacity > 0.01;
+        animate opacity { duration: 180ms; }
+
+        TouchArea {
+            clicked => { root.show-pl-popup = false; }
+            scroll-event(e) => { return accept; }
+        }
+
+        Rectangle {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2 + (root.show-pl-popup ? 0px : 18px);
+            width: root.pl-w;
+            height: root.pl-h;
+            background: Theme.surface;
+            border-radius: 18px;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: #000000a0;
+            drop-shadow-offset-y: 8px;
+            animate y { duration: 220ms; easing: ease-out; }
+
+            pl-fs := FocusScope {
+                key-pressed(e) => {
+                    if (e.text == Key.Escape) { root.pl-back(); return accept; }
+                    return reject;
+                }
+            }
+            // Keeps clicks inside the window from closing it.
+            TouchArea { scroll-event(e) => { return accept; } }
+
+            // View 0: pick playlists.
+            if root.pl-view == 0 : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 56px;
+                    CoverArt {
+                        width: 48px;
+                        height: 48px;
+                        y: 4px;
+                        art: root.pl-track-cover;
+                        has-image: root.pl-track-has-cover;
+                        letter: root.pl-track-letter;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 4px;
+                        width: parent.width - 60px - 44px;
+                        height: 14px;
+                        text: "ADD TO PLAYLIST";
+                        color: Theme.accent.brighter(0.5);
+                        font-size: 11px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 18px;
+                        width: parent.width - 60px - 44px;
+                        height: 24px;
+                        text: root.pl-track-title;
+                        color: Theme.text;
+                        font-size: 17px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 42px;
+                        width: parent.width - 60px - 44px;
+                        height: 18px;
+                        text: root.pl-track-artist;
+                        color: Theme.muted;
+                        font-size: 13px;
+                        overflow: elide;
+                    }
+                    IconButton {
+                        x: parent.width - self.width;
+                        y: 8px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        icon-color: Theme.muted;
+                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                        clicked => { root.show-pl-popup = false; }
+                    }
+                }
+                ListView {
+                    vertical-stretch: 1;
+                    for r in root.pl-grid-rows : Rectangle {
+                        height: root.sl-h + 8px;
+                        for c in root.pl-cols : Rectangle {
+                            if r * root.pl-cols + c < root.pl-cards.length + 1 : SleeveCard {
+                                x: root.pl-grid-x + c * (root.sl-w + root.sl-gap);
+                                y: 8px;
+                                is-new: r * root.pl-cols + c == 0;
+                                name: root.pl-cards[r * root.pl-cols + c - 1].name;
+                                count: root.pl-cards[r * root.pl-cols + c - 1].count;
+                                letter: root.pl-cards[r * root.pl-cols + c - 1].letter;
+                                color-a: root.pl-cards[r * root.pl-cols + c - 1].color-a;
+                                color-b: root.pl-cards[r * root.pl-cols + c - 1].color-b;
+                                added: root.pl-cards[r * root.pl-cols + c - 1].added;
+                                liked: root.pl-cards[r * root.pl-cols + c - 1].liked;
+                                clicked => {
+                                    if (r * root.pl-cols + c == 0) {
+                                        root.pl-name = "";
+                                        root.pl-folder-sel = "";
+                                        root.pl-view = 1;
+                                    } else {
+                                        root.pl-toggle(r * root.pl-cols + c - 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 44px;
+                    Text {
+                        x: 2px;
+                        width: parent.width - 120px;
+                        height: parent.height;
+                        text: "Click a record to add the track, click again to take it out.";
+                        color: Theme.muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    AccentButton {
+                        x: parent.width - self.width;
+                        y: 2px;
+                        width: 100px;
+                        text: "Done";
+                        clicked => { root.show-pl-popup = false; }
+                    }
+                }
+            }
+
+            // View 1: create a playlist (name, optional folder).
+            if root.pl-view == 1 : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 44px;
+                    IconButton {
+                        y: 4px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        commands: "M 12.5 3.5 L 14 5 L 9 10 L 14 15 L 12.5 16.5 L 6 10 Z";
+                        clicked => { root.pl-back(); }
+                    }
+                    Text {
+                        x: 48px;
+                        height: parent.height;
+                        text: "New playlist";
+                        color: Theme.text;
+                        font-size: 20px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+                Text { text: "NAME"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                NameField {
+                    placeholder: "Playlist name";
+                    value <=> root.pl-name;
+                    accepted(v) => { root.pl-submit(); }
+                    init => { self.focus-input(); }
+                }
+                Text { text: "FOLDER (optional)"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                FolderPicker {
+                    vertical-stretch: 1;
+                    folders: root.pl-folders;
+                    selected <=> root.pl-folder-sel;
+                    create-folder(n) => { root.pl-folder-sel = root.pl-folder-create(n); }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton { text: "Cancel"; clicked => { root.pl-back(); } }
+                    AccentButton {
+                        text: root.pl-has-track ? "Create and add" : "Create";
+                        width: 150px;
+                        enabled: root.pl-name != "";
+                        clicked => { root.pl-submit(); }
+                    }
+                }
+            }
+
+            // View 2: move an existing playlist into a folder.
+            if root.pl-view == 2 : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 52px;
+                    Text {
+                        y: 2px;
+                        width: parent.width - 44px;
+                        height: 30px;
+                        text: "Move to folder";
+                        color: Theme.text;
+                        font-size: 20px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        y: 32px;
+                        width: parent.width - 44px;
+                        height: 18px;
+                        text: root.pl-move-name;
+                        color: Theme.muted;
+                        font-size: 13px;
+                        overflow: elide;
+                    }
+                    IconButton {
+                        x: parent.width - self.width;
+                        y: 4px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        icon-color: Theme.muted;
+                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                        clicked => { root.show-pl-popup = false; }
+                    }
+                }
+                FolderPicker {
+                    vertical-stretch: 1;
+                    folders: root.pl-folders;
+                    selected <=> root.pl-folder-sel;
+                    create-folder(n) => { root.pl-folder-sel = root.pl-folder-create(n); }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    AccentButton {
+                        text: "Move";
+                        width: 110px;
+                        clicked => { root.pl-move(root.pl-folder-sel); root.show-pl-popup = false; }
+                    }
+                }
             }
         }
     }

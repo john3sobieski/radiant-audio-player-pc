@@ -16,7 +16,8 @@ use radiant_audio::{
 use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
 mod rays;
 
-use radiant_core::models::{AudioInfo, SortKey, SortState, Track};
+use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
+use radiant_core::playlists::{self, ListEntry, PlaylistStore};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -673,6 +674,154 @@ fn apply_album_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
     }
 }
 
+// ---- Playlists ----
+
+/// Everything the playlist windows need (UI thread only).
+struct PlState {
+    store: PlaylistStore,
+    /// Playlist ids of the sleeves in the "Add to playlist" window (same order as `pl-cards`).
+    card_ids: Vec<String>,
+    /// What each line of the Playlists page is (same order as `pl-rows`).
+    rows: Vec<ListEntry>,
+    /// Track the window works on; `None` = opened to create a playlist or to move one.
+    target: Option<PathBuf>,
+    /// Playlist that the folder view is about to move.
+    moving: Option<String>,
+}
+
+type PlRef = Rc<RefCell<PlState>>;
+
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let hp = h.rem_euclid(360.0) / 60.0;
+    let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
+    let (r, g, b) = match hp as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    let to = |v: f32| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    (to(r), to(g), to(b))
+}
+
+/// Two colors of a playlist sleeve, taken from its id so they never change.
+fn playlist_colors(id: &str) -> (slint::Color, slint::Color) {
+    if id == FAVORITES_ID {
+        return (slint::Color::from_rgb_u8(0xff, 0x5d, 0x8f), slint::Color::from_rgb_u8(0x8b, 0x6c, 0xff));
+    }
+    let mut h: u32 = 0x811c_9dc5;
+    for b in id.bytes() {
+        h ^= b as u32;
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    let hue = (h % 360) as f32;
+    let (r1, g1, b1) = hsl_to_rgb(hue, 0.62, 0.55);
+    let (r2, g2, b2) = hsl_to_rgb(hue + 40.0, 0.58, 0.36);
+    (slint::Color::from_rgb_u8(r1, g1, b1), slint::Color::from_rgb_u8(r2, g2, b2))
+}
+
+fn pl_name(p: &Playlist) -> String {
+    if p.id == FAVORITES_ID { "Liked tracks".to_string() } else { p.name.clone() }
+}
+
+fn tracks_text(n: usize) -> String {
+    format!("{n} {}", if n == 1 { "track" } else { "tracks" })
+}
+
+fn first_letter(text: &str) -> SharedString {
+    text.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into()
+}
+
+fn make_card(st: &PlState, index: usize) -> PlaylistCard {
+    let p = &st.store.playlists[index];
+    let (color_a, color_b) = playlist_colors(&p.id);
+    let name = pl_name(p);
+    PlaylistCard {
+        letter: first_letter(&name),
+        name: name.into(),
+        count: tracks_text(p.track_paths.len()).into(),
+        color_a,
+        color_b,
+        added: st.target.as_ref().map_or(false, |t| p.track_paths.contains(t)),
+        liked: p.id == FAVORITES_ID,
+    }
+}
+
+/// Rebuilds the sleeves of the "Add to playlist" window, the folder list and the Playlists page.
+fn refresh_playlists(ui: &MainWindow, st: &mut PlState) {
+    let order = st.store.popup_order();
+    st.card_ids = order.iter().map(|&i| st.store.playlists[i].id.clone()).collect();
+    let cards: Vec<PlaylistCard> = order.iter().map(|&i| make_card(st, i)).collect();
+    ui.set_pl_cards(ModelRc::new(VecModel::from(cards)));
+
+    let folders: Vec<FolderChip> = st
+        .store
+        .folder_order()
+        .into_iter()
+        .map(|i| FolderChip { id: st.store.folders[i].id.clone().into(), name: st.store.folders[i].name.clone().into() })
+        .collect();
+    ui.set_pl_folders(ModelRc::new(VecModel::from(folders)));
+    refresh_playlist_rows(ui, st);
+}
+
+fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
+    st.rows = st.store.list_entries();
+    let rows: Vec<PlaylistListRow> = st
+        .rows
+        .iter()
+        .map(|entry| match *entry {
+            ListEntry::Folder(fi) => {
+                let f = &st.store.folders[fi];
+                let n = st.store.playlists.iter().filter(|p| p.folder_id.as_deref() == Some(f.id.as_str())).count();
+                PlaylistListRow {
+                    is_folder: true,
+                    name: f.name.clone().into(),
+                    sub: format!("{n} {}", if n == 1 { "playlist" } else { "playlists" }).into(),
+                    collapsed: f.collapsed,
+                    ..Default::default()
+                }
+            }
+            ListEntry::Playlist(pi) => {
+                let p = &st.store.playlists[pi];
+                let (color_a, color_b) = playlist_colors(&p.id);
+                let name = pl_name(p);
+                PlaylistListRow {
+                    is_folder: false,
+                    letter: first_letter(&name),
+                    name: name.into(),
+                    sub: tracks_text(p.track_paths.len()).into(),
+                    color_a,
+                    color_b,
+                    liked: p.id == FAVORITES_ID,
+                    collapsed: false,
+                    indent: p.folder_id.is_some(),
+                }
+            }
+        })
+        .collect();
+    ui.set_pl_rows(ModelRc::new(VecModel::from(rows)));
+    ui.set_pl_total(st.store.playlists.len() as i32);
+}
+
+fn save_playlists(ui: &MainWindow, store: &PlaylistStore) {
+    if let Err(e) = playlists::save(store) {
+        ui.set_status(format!("Could not save playlists: {e}").into());
+    }
+}
+
+/// Shows the playlist window in `view` (0 = pick, 1 = create, 2 = move to folder).
+fn show_pl_popup(ui: &MainWindow, st: &mut PlState, view: i32) {
+    refresh_playlists(ui, st);
+    ui.set_pl_has_track(st.target.is_some());
+    ui.set_pl_name("".into());
+    ui.set_pl_view(view);
+    ui.set_show_pl_popup(true);
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
 
@@ -773,6 +922,19 @@ fn main() -> Result<(), slint::PlatformError> {
             Rc::new(RefCell::new(AppSettings::default()))
         }
     };
+    let pl: PlRef = {
+        let store = match playlists::load() {
+            Ok(store) => store,
+            Err(e) => {
+                ui.set_status(format!("Could not read playlists: {e}").into());
+                let mut store = PlaylistStore::default();
+                store.normalize();
+                store
+            }
+        };
+        Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None }))
+    };
+    refresh_playlists(&ui, &mut pl.borrow_mut());
     let ui_weak = ui.as_weak();
     // Bumped on every folder scan so a late result cannot replace a newer one.
     let scan_gen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
@@ -872,9 +1034,170 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
-        // Context menu stubs: "Add to playlist" and "Create stems" are not implemented yet.
-        ui.on_add_to_playlist(|_row, _in_album| { /* TODO: playlists */ });
+        // Context menu stub: "Create stems" is not implemented yet.
         ui.on_create_stems(|_row, _in_album| { /* TODO: stems */ });
+    }
+    {
+        // Context menu "Add to playlist": opens the window for the track of this row.
+        let (weak, pl, library, displayed) = (ui_weak.clone(), pl.clone(), library.clone(), displayed.clone());
+        ui.on_add_to_playlist(move |row, in_album| {
+            let row = row.max(0) as usize;
+            let path = if in_album {
+                OPEN_ROWS.lock().ok().and_then(|r| r.get(row).cloned()).flatten()
+            } else {
+                displayed.lock().ok().and_then(|l| l.get(row).cloned())
+            };
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            let track = library.lock().ok().and_then(|l| l.iter().find(|t| t.path == path).cloned());
+            let title = track
+                .as_ref()
+                .map(|t| t.title.clone())
+                .unwrap_or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+            ui.set_pl_track_letter(first_letter(&title));
+            ui.set_pl_track_title(title.into());
+            ui.set_pl_track_artist(track.as_ref().and_then(|t| t.artist.clone()).unwrap_or_default().into());
+            let cached = track
+                .as_ref()
+                .and_then(|t| COVER_CACHE.lock().ok().and_then(|c| c.get(&cover_key(t)).cloned()))
+                .flatten();
+            match cached {
+                Some(px) => {
+                    ui.set_pl_track_cover(px.to_image());
+                    ui.set_pl_track_has_cover(true);
+                }
+                None => {
+                    ui.set_pl_track_cover(slint::Image::default());
+                    ui.set_pl_track_has_cover(false);
+                }
+            }
+            let mut st = pl.borrow_mut();
+            st.target = Some(path);
+            st.moving = None;
+            show_pl_popup(&ui, &mut st, 0);
+        });
+    }
+    {
+        // A sleeve was clicked: add the track to that playlist, or take it out again.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_toggle(move |i| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let i = i.max(0) as usize;
+            let (Some(target), Some(id)) = (st.target.clone(), st.card_ids.get(i).cloned()) else { return };
+            let changed = if st.store.contains(&id, &target) {
+                st.store.remove_track(&id, &target)
+            } else {
+                st.store.add_track(&id, &target)
+            };
+            if !changed { return; }
+            save_playlists(&ui, &st.store);
+            // Only this sleeve changes, so its record slides instead of the whole grid being rebuilt.
+            if let Some(index) = st.store.playlists.iter().position(|p| p.id == id) {
+                let card = make_card(&st, index);
+                ui.get_pl_cards().set_row_data(i, card);
+            }
+            refresh_playlist_rows(&ui, &mut st);
+        });
+    }
+    {
+        // "Create": new playlist (with the track when the window was opened for one).
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_create(move |name, folder| {
+            let Some(ui) = weak.upgrade() else { return false };
+            let mut st = pl.borrow_mut();
+            let folder = folder.to_string();
+            let folder = if folder.is_empty() { None } else { Some(folder) };
+            let Some(id) = st.store.create_playlist(&name, folder.as_deref()) else { return false };
+            if let Some(target) = st.target.clone() {
+                st.store.add_track(&id, &target);
+            }
+            save_playlists(&ui, &st.store);
+            refresh_playlists(&ui, &mut st);
+            true
+        });
+    }
+    {
+        // New folder made inside the window; its id is handed back so the picker selects it.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_folder_create(move |name| {
+            let Some(ui) = weak.upgrade() else { return SharedString::default() };
+            let mut st = pl.borrow_mut();
+            let Some(id) = st.store.create_folder(&name) else { return SharedString::default() };
+            save_playlists(&ui, &st.store);
+            refresh_playlists(&ui, &mut st);
+            id.into()
+        });
+    }
+    {
+        // "New playlist" button of the Playlists page.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_create(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            st.target = None;
+            st.moving = None;
+            ui.set_pl_folder_sel("".into());
+            show_pl_popup(&ui, &mut st, 1);
+        });
+    }
+    {
+        // Folder button of a playlist row: choose its folder.
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_open_move(move |row| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(ListEntry::Playlist(pi)) = st.rows.get(row.max(0) as usize).copied() else { return };
+            let p = &st.store.playlists[pi];
+            if p.id == FAVORITES_ID { return; }
+            let (id, name, folder) = (p.id.clone(), p.name.clone(), p.folder_id.clone().unwrap_or_default());
+            st.target = None;
+            st.moving = Some(id);
+            ui.set_pl_move_name(name.into());
+            ui.set_pl_folder_sel(folder.into());
+            show_pl_popup(&ui, &mut st, 2);
+        });
+    }
+    {
+        let (weak, pl) = (ui_weak.clone(), pl.clone());
+        ui.on_pl_move(move |folder| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            let Some(id) = st.moving.take() else { return };
+            let folder = folder.to_string();
+            let folder = if folder.is_empty() { None } else { Some(folder) };
+            if st.store.set_playlist_folder(&id, folder.as_deref()) {
+                save_playlists(&ui, &st.store);
+                refresh_playlist_rows(&ui, &mut st);
+            }
+        });
+    }
+    {
+        // Click on a line of the Playlists page: a folder folds / unfolds, a playlist plays.
+        let (weak, pl, player, library) = (ui_weak.clone(), pl.clone(), player.clone(), library.clone());
+        ui.on_pl_row_clicked(move |row| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = pl.borrow_mut();
+            match st.rows.get(row.max(0) as usize).copied() {
+                Some(ListEntry::Folder(fi)) => {
+                    let id = st.store.folders[fi].id.clone();
+                    if st.store.toggle_folder_collapsed(&id) {
+                        save_playlists(&ui, &st.store);
+                        refresh_playlist_rows(&ui, &mut st);
+                    }
+                }
+                Some(ListEntry::Playlist(pi)) => {
+                    // Files that are gone from the library are skipped.
+                    let known: HashSet<PathBuf> = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect()).unwrap_or_default();
+                    let queue: Vec<PathBuf> = st.store.playlists[pi].track_paths.iter().filter(|p| known.contains(*p)).cloned().collect();
+                    if queue.is_empty() {
+                        ui.set_status("This playlist has no playable tracks yet".into());
+                    } else {
+                        player.send(Command::SetQueue { queue, start: 0 });
+                    }
+                }
+                None => {}
+            }
+        });
     }
     {
         // Click on a track of the open album: the queue is the album, starting at that track.

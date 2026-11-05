@@ -117,7 +117,7 @@ fn write_at(path: &Path, settings: &AppSettings) -> Result<(), String> {
     replace_file(&tmp, path)
 }
 
-fn replace_file(tmp: &Path, path: &Path) -> Result<(), String> {
+pub(crate) fn replace_file(tmp: &Path, path: &Path) -> Result<(), String> {
     // Windows cannot rename over a file that already exists.
     match fs::rename(tmp, path) {
         Ok(()) => Ok(()),
