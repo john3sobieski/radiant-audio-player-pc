@@ -44,6 +44,17 @@ export struct AlbumRow {
     has-cover: bool,
 }
 
+// One row of the open album: a track, or a "Disc N" caption (header != "") on multi-disc albums.
+export struct AlbumTrackRow {
+    /// Track number from the tags (as on a CD); empty for captions.
+    no: string,
+    title: string,
+    /// Shown under the title only when it differs from the album artist.
+    artist: string,
+    duration: string,
+    header: string,
+}
+
 // One entry of the section rail.
 export struct NavItem {
     label: string,
@@ -90,7 +101,7 @@ component CoverArt inherits Rectangle {
 }
 
 // Album tile: big square cover with a soft shadow, title and artist underneath.
-// Hover: the cover lifts a little and a play mark appears. `shown` fires when the tile is created
+// Hover: the cover lifts a little. `shown` fires when the tile is created
 // (the grid is virtualized, so this is how Rust learns which covers are needed).
 component AlbumTile inherits Rectangle {
     in property <image> art;
@@ -133,27 +144,6 @@ component AlbumTile inherits Rectangle {
                     font-weight: 700;
                     horizontal-alignment: center;
                     vertical-alignment: center;
-                }
-            }
-            // Play mark on hover.
-            Rectangle {
-                x: parent.width - 52px - 10px;
-                y: parent.height - 52px - 10px;
-                width: 52px;
-                height: 52px;
-                border-radius: 26px;
-                background: Theme.accent;
-                opacity: ta.has-hover ? 1 : 0;
-                animate opacity { duration: 140ms; }
-                Path {
-                    x: (parent.width - self.width) / 2 + 2px;
-                    y: (parent.height - self.height) / 2;
-                    width: 20px;
-                    height: 20px;
-                    viewbox-width: 20;
-                    viewbox-height: 20;
-                    commands: "M 4 0 L 19 10 L 4 20 Z";
-                    fill: #ffffff;
                 }
             }
         }
@@ -593,7 +583,23 @@ export component MainWindow inherits Window {
 
     // Albums grid: tiles of at least `tile-min`, as many columns as fit, tiles stretch to fill the row.
     in property <[AlbumRow]> albums;
-    callback play-album(int);
+    callback open-album(int);
+    callback play-album-track(int);
+    // Open album page (tracks in tag order, like a CD booklet).
+    in-out property <bool> album-open: false;
+    in property <[AlbumTrackRow]> album-tracks;
+    in property <string> album-title;
+    in property <string> album-artist;
+    in property <string> album-meta;
+    in property <image> album-cover;
+    in property <bool> album-has-cover: false;
+    in property <string> album-letter;
+    /// Row of the playing track in `album-tracks`, -1 = none.
+    in property <int> album-current-index: -1;
+    private property <length> detail-row-h: 52px;
+    private property <length> album-side: 152px;
+    private property <length> album-title-w: max(0px, root.width - 2 * root.album-side);
+    private property <length> album-list-title-w: max(0px, root.content-right - root.title-x - root.dur-w - root.col-gap);
     callback album-shown(int);
     private property <length> grid-pad: 28px;
     private property <length> grid-gap: 22px;
@@ -634,6 +640,7 @@ export component MainWindow inherits Window {
         }
     }
     function go-section(s: int) {
+        if (s == 1 && root.section == 1) { root.album-open = false; }
         root.section = s;
         root.show-sort = false;
         root.section-changed(s, root.queue-index);
@@ -951,6 +958,7 @@ export component MainWindow inherits Window {
                     x: (1 - root.section) * parent.width;
                     width: parent.width;
                     height: parent.height;
+                    clip: true;
                     animate x { duration: 320ms; easing: ease-in-out; }
 
                     if root.albums.length == 0 : Text {
@@ -976,8 +984,195 @@ export component MainWindow inherits Window {
                                     letter: root.albums[r * root.album-cols + c].letter;
                                     title: root.albums[r * root.album-cols + c].title;
                                     artist: root.albums[r * root.album-cols + c].artist;
-                                    clicked => { root.play-album(r * root.album-cols + c); }
+                                    clicked => { root.album-open = true; root.open-album(r * root.album-cols + c); }
                                     shown => { root.album-shown(r * root.album-cols + c); }
+                                }
+                            }
+                        }
+                    }
+
+                    // Open album: slides in over the grid.
+                    Rectangle {
+                        x: root.album-open ? 0px : parent.width;
+                        width: parent.width;
+                        height: parent.height;
+                        background: Theme.bg;
+                        animate x { duration: 260ms; easing: ease-in-out; }
+
+                        // Keeps clicks and the wheel away from the grid underneath.
+                        TouchArea {
+                            scroll-event(e) => { return accept; }
+                        }
+
+                        VerticalLayout {
+                            // Header: title and artist centered in the window, cover on the right, back button on the left.
+                            Rectangle {
+                                height: 132px;
+                                Text {
+                                    x: root.album-side;
+                                    y: 22px;
+                                    width: root.album-title-w;
+                                    height: 42px;
+                                    text: root.album-title;
+                                    color: Theme.text;
+                                    font-size: 30px;
+                                    font-weight: 800;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    x: root.album-side;
+                                    y: 66px;
+                                    width: root.album-title-w;
+                                    height: 24px;
+                                    text: root.album-artist;
+                                    color: Theme.text;
+                                    font-size: 17px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    x: root.album-side;
+                                    y: 92px;
+                                    width: root.album-title-w;
+                                    height: 18px;
+                                    text: root.album-meta;
+                                    color: Theme.muted;
+                                    font-size: 12.5px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                CoverArt {
+                                    x: parent.width - 28px - self.width;
+                                    y: 14px;
+                                    width: 104px;
+                                    height: 104px;
+                                    border-radius: 10px;
+                                    art: root.album-cover;
+                                    has-image: root.album-has-cover;
+                                    letter: root.album-letter;
+                                    letter-size: 40px;
+                                }
+                                IconButton {
+                                    x: 16px;
+                                    y: 14px;
+                                    width: 36px;
+                                    height: 36px;
+                                    commands: "M 12.5 3 L 5.5 10 L 12.5 17 L 14 15.5 L 8.5 10 L 14 4.5 Z";
+                                    icon-size: 20px;
+                                    clicked => { root.album-open = false; }
+                                }
+                            }
+
+                            // Column captions.
+                            Rectangle {
+                                height: 30px;
+                                Text {
+                                    x: root.col-pad;
+                                    width: root.num-w;
+                                    height: parent.height;
+                                    text: "#";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    x: root.title-x;
+                                    width: root.album-list-title-w;
+                                    height: parent.height;
+                                    text: "Title";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    x: root.dur-x;
+                                    width: root.dur-w;
+                                    height: parent.height;
+                                    text: "Time";
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {
+                                    x: root.col-pad;
+                                    y: parent.height - 1px;
+                                    width: parent.width - 2 * root.col-pad;
+                                    height: 1px;
+                                    background: Theme.surface-hover;
+                                }
+                            }
+
+                            ListView {
+                                vertical-stretch: 1;
+                                for t[i] in root.album-tracks : Rectangle {
+                                    height: root.detail-row-h;
+                                    background: t.header != "" ? transparent
+                                        : i == root.album-current-index ? Theme.accent.with-alpha(0.16)
+                                        : arow-ta.has-hover ? Theme.surface : transparent;
+                                    animate background { duration: 120ms; }
+
+                                    // "Disc N" caption (multi-disc albums).
+                                    if t.header != "" : Text {
+                                        x: root.col-pad;
+                                        y: 10px;
+                                        width: parent.width - 2 * root.col-pad;
+                                        height: parent.height - 10px;
+                                        text: t.header;
+                                        color: Theme.accent.brighter(0.5);
+                                        font-size: 13px;
+                                        font-weight: 700;
+                                        vertical-alignment: center;
+                                    }
+                                    if t.header == "" : Text {
+                                        x: root.col-pad;
+                                        width: root.num-w;
+                                        height: parent.height;
+                                        text: t.no;
+                                        color: i == root.album-current-index ? Theme.accent : Theme.muted;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                    }
+                                    if t.header == "" : Text {
+                                        x: root.title-x;
+                                        y: t.artist == "" ? 0px : 8px;
+                                        width: root.album-list-title-w;
+                                        height: t.artist == "" ? parent.height : 22px;
+                                        text: t.title;
+                                        color: i == root.album-current-index ? Theme.accent : Theme.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    if t.header == "" && t.artist != "" : Text {
+                                        x: root.title-x;
+                                        y: 30px;
+                                        width: root.album-list-title-w;
+                                        height: 18px;
+                                        text: t.artist;
+                                        color: Theme.muted;
+                                        font-size: 12px;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    if t.header == "" : Text {
+                                        x: root.dur-x;
+                                        width: root.dur-w;
+                                        height: parent.height;
+                                        text: t.duration;
+                                        color: Theme.muted;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                    }
+                                    arow-ta := TouchArea {
+                                        enabled: t.header == "";
+                                        mouse-cursor: pointer;
+                                        clicked => { root.play-album-track(i); }
+                                    }
                                 }
                             }
                         }

@@ -136,6 +136,9 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
     track.track_no = tags
         .get(&StandardTagKey::TrackNumber)
         .and_then(|v| v.split('/').next()?.trim().parse().ok());
+    track.disc_no = tags
+        .get(&StandardTagKey::DiscNumber)
+        .and_then(|v| v.split('/').next()?.trim().parse().ok());
     track.year = [StandardTagKey::Date, StandardTagKey::ReleaseDate, StandardTagKey::OriginalDate]
         .iter()
         .find_map(|key| tags.get(key).and_then(|v| parse_year(v)));

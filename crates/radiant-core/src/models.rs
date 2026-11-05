@@ -27,6 +27,8 @@ pub struct Track {
     pub album: Option<String>,
     pub duration_ms: Option<u64>,
     pub track_no: Option<u32>,
+    /// Disc number from the tag ("2" or "2/3"), if present.
+    pub disc_no: Option<u32>,
     /// Release year from the date tag (4 digits), if present.
     pub year: Option<u32>,
     pub info: AudioInfo,

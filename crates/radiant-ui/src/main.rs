@@ -495,11 +495,13 @@ const ALBUM_CACHE_MAX: usize = 240;
 /// One album of the grid, in the order of the model.
 struct AlbumEntry {
     key: String,
-    /// Tracks of the album in play order (track number, then title).
+    /// Tracks of the album in play order (disc, track number, then title).
     paths: Vec<PathBuf>,
 }
 
 static ALBUMS: Mutex<Vec<AlbumEntry>> = Mutex::new(Vec::new());
+/// Rows of the open album page (same order as the model): the file of a track, `None` for a "Disc N" caption.
+static OPEN_ROWS: Mutex<Vec<Option<PathBuf>>> = Mutex::new(Vec::new());
 static ALBUM_COVERS: Mutex<BTreeMap<String, Option<CoverPixels>>> = Mutex::new(BTreeMap::new());
 /// Albums whose cover is being decoded right now (no duplicate work while a tile scrolls in and out).
 static ALBUM_PENDING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
@@ -528,6 +530,7 @@ fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>
         paths.sort_by_key(|p| {
             let t = by_path.get(p.as_path());
             (
+                t.and_then(|t| t.disc_no).unwrap_or(1),
                 t.and_then(|t| t.track_no).unwrap_or(u32::MAX),
                 t.map(|t| t.title.to_lowercase()).unwrap_or_default(),
             )
@@ -550,6 +553,79 @@ fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>
     if let Some(ui) = weak.upgrade() {
         ui.set_albums(ModelRc::new(VecModel::from(rows)));
     }
+}
+
+/// Total length: "54:12", or "1:02:30" from an hour up.
+fn fmt_total(ms: u64) -> String {
+    let s = ms / 1000;
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s % 3600 / 60, s % 60)
+    } else {
+        fmt_time(ms)
+    }
+}
+
+/// Fills the album page with the tracks of album `index` (tag order: disc, then track number).
+/// Multi-disc albums get a "Disc N" caption row before each disc. The cover is the one of the tile.
+fn open_album(ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>, index: usize) {
+    let Some(paths) = ALBUMS.lock().ok().and_then(|a| a.get(index).map(|e| e.paths.clone())) else { return };
+    let Some(tile) = ui.get_albums().row_data(index) else { return };
+    let tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
+    let by_path: HashMap<&Path, &Track> = tracks.iter().map(|t| (t.path.as_path(), t)).collect();
+    let album_artist = tile.artist.to_string();
+
+    let discs: BTreeSet<u32> = paths.iter().map(|p| by_path.get(p.as_path()).and_then(|t| t.disc_no).unwrap_or(1)).collect();
+    let multi_disc = discs.len() > 1;
+
+    let mut rows: Vec<AlbumTrackRow> = Vec::with_capacity(paths.len() + discs.len());
+    let mut row_paths: Vec<Option<PathBuf>> = Vec::with_capacity(paths.len() + discs.len());
+    let mut last_disc: Option<u32> = None;
+    let mut seq = 0_u32;
+    let mut total_ms = 0_u64;
+    for p in &paths {
+        let t = by_path.get(p.as_path()).copied();
+        let disc = t.and_then(|t| t.disc_no).unwrap_or(1);
+        if multi_disc && last_disc != Some(disc) {
+            rows.push(AlbumTrackRow { header: format!("Disc {disc}").into(), ..Default::default() });
+            row_paths.push(None);
+            last_disc = Some(disc);
+            seq = 0;
+        }
+        seq += 1;
+        let duration = t.and_then(|t| t.duration_ms).filter(|d| *d > 0);
+        total_ms += duration.unwrap_or(0);
+        // The number from the tag; a file without one gets its place in the order.
+        let no = t.and_then(|t| t.track_no).filter(|n| *n > 0).unwrap_or(seq);
+        let artist = t.and_then(|t| t.artist.clone()).filter(|a| *a != album_artist).unwrap_or_default();
+        rows.push(AlbumTrackRow {
+            no: no.to_string().into(),
+            title: t.map(|t| t.title.clone()).unwrap_or_else(|| p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()).into(),
+            artist: artist.into(),
+            duration: duration.map(fmt_time).unwrap_or_default().into(),
+            header: SharedString::default(),
+        });
+        row_paths.push(Some(p.clone()));
+    }
+
+    let count = paths.len();
+    let mut meta = format!("{} {}", count, if count == 1 { "track" } else { "tracks" });
+    if total_ms > 0 {
+        meta.push_str(&format!(" · {}", fmt_total(total_ms)));
+    }
+    let playing = LAST_NOW.lock().ok().and_then(|l| l.clone());
+    let current = playing
+        .and_then(|c| row_paths.iter().position(|p| p.as_ref() == Some(&c)))
+        .map_or(-1, |i| i as i32);
+
+    if let Ok(mut open) = OPEN_ROWS.lock() { *open = row_paths; }
+    ui.set_album_title(tile.title.clone());
+    ui.set_album_artist(tile.artist.clone());
+    ui.set_album_meta(meta.into());
+    ui.set_album_cover(tile.cover.clone());
+    ui.set_album_has_cover(tile.has_cover);
+    ui.set_album_letter(tile.letter.clone());
+    ui.set_album_current_index(current);
+    ui.set_album_tracks(ModelRc::new(VecModel::from(rows)));
 }
 
 /// A tile came into view: make sure its cover is decoded and shown.
@@ -612,6 +688,12 @@ fn main() -> Result<(), slint::PlatformError> {
             .as_ref()
             .and_then(|c| status_library.lock().ok()?.iter().position(|p| p == c))
             .map_or(-1, |i| i as i32);
+        // The same for the open album page.
+        let album_index = status
+            .current
+            .as_ref()
+            .and_then(|c| OPEN_ROWS.lock().ok()?.iter().position(|p| p.as_ref() == Some(c)))
+            .map_or(-1, |i| i as i32);
 
         // A new track started: the big player view needs its details (looked up only on a change).
         let changed_track: Option<Track> = match status.current.as_ref() {
@@ -645,6 +727,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             ui.set_lyric_index(lyric_index);
             ui.set_current_index(index);
+            ui.set_album_current_index(album_index);
             ui.set_shuffle(status.shuffle);
             ui.set_repeat_mode(match status.repeat {
                 RepeatMode::Off => 0,
@@ -704,6 +787,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, library, displayed, query, sort) = (ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone());
         ui.on_search_changed(move |value| {
             if let Ok(mut q) = query.lock() { *q = value.to_string(); }
+            if let Some(ui) = weak.upgrade() { ui.set_album_open(false); }
             let state = *sort.lock().unwrap_or_else(|e| e.into_inner());
             refresh_tracks(&weak, &library, &displayed, &query, state);
         });
@@ -757,13 +841,23 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
-        // Click on an album tile: play the album from its first track.
-        let player = player.clone();
-        ui.on_play_album(move |i| {
-            let Some(queue) = ALBUMS.lock().ok().and_then(|a| a.get(i.max(0) as usize).map(|e| e.paths.clone())) else { return };
-            if !queue.is_empty() {
-                player.send(Command::SetQueue { queue, start: 0 });
+        // Click on an album tile: open its page (the window slides it in itself).
+        let (weak, library) = (ui_weak.clone(), library.clone());
+        ui.on_open_album(move |i| {
+            if i < 0 { return; }
+            if let Some(ui) = weak.upgrade() {
+                open_album(&ui, &library, i as usize);
             }
+        });
+    }
+    {
+        // Click on a track of the open album: the queue is the album, starting at that track.
+        let player = player.clone();
+        ui.on_play_album_track(move |i| {
+            let Some(Some(clicked)) = OPEN_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return };
+            let queue: Vec<PathBuf> = OPEN_ROWS.lock().map(|r| r.iter().flatten().cloned().collect()).unwrap_or_default();
+            let Some(start) = queue.iter().position(|p| p == &clicked) else { return };
+            player.send(Command::SetQueue { queue, start });
         });
     }
     {
