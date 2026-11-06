@@ -851,6 +851,18 @@ component FolderRow inherits Rectangle {
         commands: "M 1 4 Q 1 2 3 2 H 8 L 10 4 H 17 Q 19 4 19 6 V 15 Q 19 17 17 17 H 3 Q 1 17 1 15 Z";
         fill: root.active ? Theme.accent.brighter(0.5) : Theme.muted;
     }
+    if root.blank : Path {
+        x: 14px;
+        y: (parent.height - self.height) / 2;
+        width: 18px;
+        height: 18px;
+        viewbox-width: 20;
+        viewbox-height: 20;
+        commands: "M 10 2.5 A 7.5 7.5 0 1 1 9.99 2.5 Z M 4.7 4.7 L 15.3 15.3";
+        stroke: root.active ? Theme.accent.brighter(0.5) : Theme.muted;
+        stroke-width: 1.6px;
+        fill: transparent;
+    }
     if root.plus : Path {
         x: 14px;
         y: (parent.height - self.height) / 2;
@@ -879,8 +891,8 @@ component FolderRow inherits Rectangle {
         border-width: 2px;
         border-color: root.active ? Theme.accent : Theme.muted.with-alpha(0.6);
         Rectangle {
-            x: 3px;
-            y: 3px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
             width: 8px;
             height: 8px;
             border-radius: 4px;
@@ -1180,6 +1192,8 @@ export component MainWindow inherits Window {
     /// Row the menu was opened for (index in `tracks`, or in `album-tracks` when `menu-in-album`).
     in-out property <int> menu-row: -1;
     in-out property <bool> menu-in-album: false;
+    /// The menu was opened for a track of the open playlist page (`menu-row` = row of `pl-page-tracks`).
+    in-out property <bool> menu-in-pl: false;
     private property <length> menu-w: 156px;
     private property <length> menu-h: 3 * 34px + 12px;
     /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
@@ -1189,6 +1203,15 @@ export component MainWindow inherits Window {
     function open-menu(mx: length, my: length, row: int, in-album: bool) {
         root.menu-row = row;
         root.menu-in-album = in-album;
+        root.menu-in-pl = false;
+        root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
+        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.show-menu = true;
+    }
+    function open-pl-menu(mx: length, my: length, row: int) {
+        root.menu-row = row;
+        root.menu-in-album = false;
+        root.menu-in-pl = true;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
         root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
         root.show-menu = true;
@@ -1266,7 +1289,14 @@ export component MainWindow inherits Window {
     callback pl-play-track(int);
     callback pl-play-all();
     callback pl-shuffle-all();
-    callback pl-remove-track(int);
+    callback pl-move-track(int, int);
+    callback pl-page-add-to-playlist(int);
+    callback album-index-of-pl-track(int) -> int;
+    // Manual order of the open playlist: drag a row.
+    in-out property <bool> pl-drag-active: false;
+    in-out property <int> pl-drag-from: -1;
+    in-out property <int> pl-drag-to: -1;
+    in-out property <bool> pl-drag-moved: false;
     callback pl-open-rename-playlist();
     callback pl-open-delete-playlist();
     private property <length> pl-btn-x0: (root.width - (root.pl-page-liked ? 218px : 446px)) / 2;
@@ -2129,9 +2159,18 @@ export component MainWindow inherits Window {
                                 vertical-stretch: 1;
                                 for t[i] in root.pl-page-tracks : Rectangle {
                                     height: root.detail-row-h;
-                                    background: i == root.pl-current-index ? Theme.accent.with-alpha(0.16)
+                                    background: root.pl-drag-active && i == root.pl-drag-from ? Theme.accent.with-alpha(0.28)
+                                        : i == root.pl-current-index ? Theme.accent.with-alpha(0.16)
                                         : plt-ta.has-hover ? Theme.surface : transparent;
                                     animate background { duration: 120ms; }
+
+                                    if root.pl-drag-active && i == root.pl-drag-to : Rectangle {
+                                        x: 12px;
+                                        y: root.pl-drag-to > root.pl-drag-from ? parent.height - 2px : 0px;
+                                        width: parent.width - 24px;
+                                        height: 2px;
+                                        background: Theme.accent;
+                                    }
 
                                     Text {
                                         x: root.col-pad;
@@ -2174,18 +2213,44 @@ export component MainWindow inherits Window {
                                     }
                                     plt-ta := TouchArea {
                                         mouse-cursor: pointer;
-                                        clicked => { root.pl-play-track(i); }
+                                        pointer-event(event) => {
+                                            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                                root.open-pl-menu(plt-ta.absolute-position.x + plt-ta.mouse-x, plt-ta.absolute-position.y + plt-ta.mouse-y, i);
+                                            }
+                                            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                                root.suppress-click = false;
+                                                root.pl-drag-from = i;
+                                                root.pl-drag-to = i;
+                                                root.pl-drag-active = true;
+                                                root.pl-drag-moved = false;
+                                            } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.pl-drag-active) {
+                                                if (root.pl-drag-moved && root.pl-drag-from != root.pl-drag-to) {
+                                                    root.pl-move-track(root.pl-drag-from, root.pl-drag-to);
+                                                    root.suppress-click = true;
+                                                }
+                                                root.pl-drag-active = false;
+                                                root.pl-drag-moved = false;
+                                            }
+                                        }
+                                        moved => {
+                                            if (self.pressed && root.pl-drag-active) {
+                                                let target = max(0, min(root.pl-page-tracks.length - 1,
+                                                    i + ((self.mouse-y - self.pressed-y) / root.detail-row-h).round()));
+                                                if (target != root.pl-drag-to) {
+                                                    root.pl-drag-to = target;
+                                                    root.pl-drag-moved = true;
+                                                }
+                                            }
+                                        }
+                                        clicked => {
+                                            if (root.suppress-click) { root.suppress-click = false; }
+                                            else { root.pl-play-track(i); }
+                                        }
                                     }
-                                    // Take the track out of this playlist (the file stays).
-                                    IconButton {
+                                    MoreButton {
                                         x: root.dots-x;
                                         y: (parent.height - self.height) / 2;
-                                        width: 28px;
-                                        height: 28px;
-                                        icon-size: 12px;
-                                        icon-color: plt-ta.has-hover ? Theme.text : Theme.muted;
-                                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
-                                        clicked => { root.pl-remove-track(i); }
+                                        open(mx, my) => { root.open-pl-menu(mx, my, i); }
                                     }
                                 }
                             }
@@ -3264,7 +3329,14 @@ export component MainWindow inherits Window {
                 text: "Open album";
                 clicked => {
                     root.show-menu = false;
-                    if (!root.menu-in-album) {
+                    if (root.menu-in-pl) {
+                        let a = root.album-index-of-pl-track(root.menu-row);
+                        if (a >= 0) {
+                            root.go-section(1);
+                            root.album-open = true;
+                            root.open-album(a);
+                        }
+                    } else if (!root.menu-in-album) {
                         let a = root.album-index-of-track(root.menu-row);
                         if (a >= 0) {
                             root.go-section(1);
@@ -3276,11 +3348,18 @@ export component MainWindow inherits Window {
             }
             MenuItem {
                 text: "Add to playlist";
-                clicked => { root.show-menu = false; root.add-to-playlist(root.menu-row, root.menu-in-album); }
+                clicked => {
+                    root.show-menu = false;
+                    if (root.menu-in-pl) { root.pl-page-add-to-playlist(root.menu-row); }
+                    else { root.add-to-playlist(root.menu-row, root.menu-in-album); }
+                }
             }
             MenuItem {
                 text: "Create stems";
-                clicked => { root.show-menu = false; root.create-stems(root.menu-row, root.menu-in-album); }
+                clicked => {
+                    root.show-menu = false;
+                    if (!root.menu-in-pl) { root.create-stems(root.menu-row, root.menu-in-album); }
+                }
             }
         }
     }

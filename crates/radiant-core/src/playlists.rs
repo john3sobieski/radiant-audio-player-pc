@@ -130,6 +130,17 @@ impl PlaylistStore {
         changed
     }
 
+    /// Moves the track at `from` to position `to` (manual order). `false` = nothing changed.
+    pub fn move_track(&mut self, id: &str, from: usize, to: usize) -> bool {
+        let Some(p) = self.playlists.iter_mut().find(|p| p.id == id) else { return false };
+        if from == to || from >= p.track_paths.len() || to >= p.track_paths.len() {
+            return false;
+        }
+        let track = p.track_paths.remove(from);
+        p.track_paths.insert(to, track);
+        true
+    }
+
     /// Moves a playlist into a folder (`None` = out of any folder). Liked tracks cannot be moved.
     pub fn set_playlist_folder(&mut self, id: &str, folder_id: Option<&str>) -> bool {
         if id == FAVORITES_ID || folder_id.map_or(false, |f| self.folder(f).is_none()) {
@@ -383,6 +394,26 @@ mod tests {
         assert!(s.playlist(&p).is_none());
         assert!(!s.delete_playlist(&p));
         assert_eq!(s.playlists[0].id, FAVORITES_ID);
+    }
+
+    #[test]
+    fn manual_track_order() {
+        let mut s = fresh();
+        let id = s.create_playlist("Mix", None).unwrap();
+        for name in ["a.mp3", "b.mp3", "c.mp3", "d.mp3"] {
+            s.add_track(&id, Path::new(name));
+        }
+        let names = |s: &PlaylistStore| -> Vec<String> {
+            s.playlist(&id).unwrap().track_paths.iter().map(|p| p.to_string_lossy().into_owned()).collect()
+        };
+        assert!(s.move_track(&id, 0, 2));
+        assert_eq!(names(&s), ["b.mp3", "c.mp3", "a.mp3", "d.mp3"]);
+        assert!(s.move_track(&id, 3, 0));
+        assert_eq!(names(&s), ["d.mp3", "b.mp3", "c.mp3", "a.mp3"]);
+        assert!(!s.move_track(&id, 1, 1));
+        assert!(!s.move_track(&id, 1, 4));
+        assert!(!s.move_track(&id, 9, 0));
+        assert!(!s.move_track("nope", 0, 1));
     }
 
     #[test]

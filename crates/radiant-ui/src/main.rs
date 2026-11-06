@@ -886,6 +886,37 @@ fn playable_queue(st: &PlState, library: &Arc<Mutex<Vec<Track>>>) -> Vec<PathBuf
     p.track_paths.iter().filter(|t| known.contains(*t)).cloned().collect()
 }
 
+/// Opens the "Add to playlist" window for one track (menu of the Tracks list, of an album or of a playlist page).
+/// The playlists that already hold the track are ticked; clicking a ticked one takes the track out again.
+fn open_add_window(ui: &MainWindow, pl: &PlRef, library: &Arc<Mutex<Vec<Track>>>, path: PathBuf) {
+    let track = library.lock().ok().and_then(|l| l.iter().find(|t| t.path == path).cloned());
+    let title = track
+        .as_ref()
+        .map(|t| t.title.clone())
+        .unwrap_or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+    ui.set_pl_track_letter(first_letter(&title));
+    ui.set_pl_track_title(title.into());
+    ui.set_pl_track_artist(track.as_ref().and_then(|t| t.artist.clone()).unwrap_or_default().into());
+    let cached = track
+        .as_ref()
+        .and_then(|t| COVER_CACHE.lock().ok().and_then(|c| c.get(&cover_key(t)).cloned()))
+        .flatten();
+    match cached {
+        Some(px) => {
+            ui.set_pl_track_cover(px.to_image());
+            ui.set_pl_track_has_cover(true);
+        }
+        None => {
+            ui.set_pl_track_cover(slint::Image::default());
+            ui.set_pl_track_has_cover(false);
+        }
+    }
+    let mut st = pl.borrow_mut();
+    st.target = Some(path);
+    st.moving = None;
+    show_pl_popup(ui, &mut st, 0);
+}
+
 /// Shows the playlist window in `view` (0 = pick, 1 = create, 2 = move to folder).
 fn show_pl_popup(ui: &MainWindow, st: &mut PlState, view: i32) {
     refresh_playlists(ui, st);
@@ -1129,32 +1160,32 @@ fn main() -> Result<(), slint::PlatformError> {
                 displayed.lock().ok().and_then(|l| l.get(row).cloned())
             };
             let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
-            let track = library.lock().ok().and_then(|l| l.iter().find(|t| t.path == path).cloned());
-            let title = track
-                .as_ref()
-                .map(|t| t.title.clone())
-                .unwrap_or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
-            ui.set_pl_track_letter(first_letter(&title));
-            ui.set_pl_track_title(title.into());
-            ui.set_pl_track_artist(track.as_ref().and_then(|t| t.artist.clone()).unwrap_or_default().into());
-            let cached = track
-                .as_ref()
-                .and_then(|t| COVER_CACHE.lock().ok().and_then(|c| c.get(&cover_key(t)).cloned()))
-                .flatten();
-            match cached {
-                Some(px) => {
-                    ui.set_pl_track_cover(px.to_image());
-                    ui.set_pl_track_has_cover(true);
+            open_add_window(&ui, &pl, &library, path);
+        });
+    }
+    {
+        // The same menu entry on a track of the open playlist page: its playlist shows up ticked,
+        // so a second click on it takes the track out of the playlist.
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
+        ui.on_pl_page_add_to_playlist(move |row| {
+            let path = PL_ROWS.lock().ok().and_then(|r| r.get(row.max(0) as usize).cloned());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_add_window(&ui, &pl, &library, path);
+        });
+    }
+    {
+        // Menu "Open album" on a track of the playlist page.
+        let weak = ui_weak.clone();
+        ui.on_album_index_of_pl_track(move |i| {
+            let Some(path) = PL_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return -1 };
+            let found = ALBUMS.lock().ok().and_then(|a| a.iter().position(|e| e.paths.contains(&path)));
+            match found {
+                Some(index) => {
+                    album_cover_wanted(weak.clone(), index);
+                    index as i32
                 }
-                None => {
-                    ui.set_pl_track_cover(slint::Image::default());
-                    ui.set_pl_track_has_cover(false);
-                }
+                None => -1,
             }
-            let mut st = pl.borrow_mut();
-            st.target = Some(path);
-            st.moving = None;
-            show_pl_popup(&ui, &mut st, 0);
         });
     }
     {
@@ -1324,17 +1355,16 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
-        // The cross on a row: take the track out of this playlist (the file stays).
+        // Drag on a row of the open playlist: the new order is saved with the playlist.
         let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
-        ui.on_pl_remove_track(move |i| {
+        ui.on_pl_move_track(move |from, to| {
             let Some(ui) = weak.upgrade() else { return };
-            let Some(path) = PL_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return };
+            if from < 0 || to < 0 { return; }
             let mut st = pl.borrow_mut();
             let Some(id) = st.open.clone() else { return };
-            if st.store.remove_track(&id, &path) {
+            if st.store.move_track(&id, from as usize, to as usize) {
                 save_playlists(&ui, &st.store);
                 fill_playlist_page(&ui, &st, &library);
-                refresh_playlist_rows(&ui, &mut st);
             }
         });
     }
