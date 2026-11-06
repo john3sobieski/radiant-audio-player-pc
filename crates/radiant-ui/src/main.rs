@@ -65,20 +65,6 @@ fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>
     }
 }
 
-/// Copies the current effect settings to the engine and to the settings file.
-/// The `fx` borrow ends before `settings` is borrowed, so the two cells never overlap.
-fn commit_fx(
-    weak: &slint::Weak<MainWindow>,
-    player: &Player,
-    fx: &RefCell<AudioFxSettings>,
-    settings: &RefCell<AppSettings>,
-) {
-    let snapshot = fx.borrow().clone();
-    player.send(Command::SetFx(snapshot.clone()));
-    settings.borrow_mut().fx = snapshot;
-    save_settings(weak, settings);
-}
-
 fn apply_settings(
     ui: &MainWindow,
     player: &Rc<Player>,

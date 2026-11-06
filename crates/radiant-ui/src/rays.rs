@@ -7,7 +7,7 @@
 //! numbers), the left and right half map the spectrum differently and `phase` slowly turns the whole
 //! picture. So it looks like glowing sun rays, not like an equalizer.
 
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 
 pub const RAY_COUNT: usize = 168;
 /// Ring radius in box units; the Slint file sizes the box to `ring-d * 1.4` to match.
@@ -196,6 +196,6 @@ mod tests {
         assert_eq!(rnd(5, 2), rnd(5, 2));
         let mean: f32 = (0..1000).map(|j| rnd(j, 1)).sum::<f32>() / 1000.0;
         assert!((mean - 0.5).abs() < 0.05, "mean {mean}");
-        assert!(PI > 3.0);
+        assert!(std::f32::consts::PI > 3.0);
     }
 }
