@@ -7,21 +7,49 @@
 
 import { ListView, Palette } from "std-widgets.slint";
 
-// Colors of the whole app. `mode` is the user's choice; everything else follows from it.
-// Color sub-themes (red, blue, orange ...) will be added through `palette`: change `accent`
-// (and, if wanted, a tint of `bg` / `surface`) below depending on it.
+// Colors of the whole app. `mode` is the user's choice (theme); the palette is the accent color
+// chosen for the current theme kind (light / dark / black): 10 presets each, or an own color.
+// The surfaces get a faint tint of the accent. Black keeps its pure #000 background.
 export global Theme {
     /// 0 = System (follows Windows), 1 = Light, 2 = Dark, 3 = Black (OLED). Set from Rust at start.
     in-out property <int> mode: 2;
-    /// Color sub-theme. Reserved: 0 = default violet.
-    in-out property <int> palette: 0;
     out property <bool> light: mode == 1 || (mode == 0 && Palette.color-scheme == ColorScheme.light);
     out property <bool> black: mode == 3;
+    /// 0 = light, 1 = dark, 2 = black (what the colors are really using now; System resolves to light or dark).
+    out property <int> kind: light ? 0 : (black ? 2 : 1);
 
-    out property <color> bg: light ? #f3f3f7 : black ? #000000 : #131316;
-    out property <color> surface: light ? #ffffff : black ? #0c0c0e : #1b1b20;
-    out property <color> surface-hover: light ? #e6e6ee : black ? #19191d : #24242b;
-    out property <color> accent: light ? #6b4de6 : #8b6cff;
+    /// Chosen palette per kind: 0..9 = preset, 10 = own color. Set from Rust at start.
+    in-out property <int> sel-light: 0;
+    in-out property <int> sel-dark: 0;
+    in-out property <int> sel-black: 0;
+    /// Own accent color (+ the text color that reads well on it). Set from Rust.
+    in-out property <color> custom: #8b6cff;
+    in-out property <color> custom-ink: #ffffff;
+
+    // The 10 presets: Violet, Blue, Cyan, Teal, Green, Yellow, Orange, Red, Pink, Graphite.
+    private property <[color]> acc-light: [#6b4de6, #2f6be0, #0b8fae, #0b9a80, #2f9e44, #b58900, #e0701a, #d6393f, #d6408c, #5b6173];
+    private property <[color]> acc-dark: [#8b6cff, #4f8dff, #2ec4e6, #26c6a6, #5fd068, #e8c547, #ff9142, #ff5a5f, #ff6fb5, #a7adbd];
+    private property <[color]> acc-black: [#9376ff, #5a96ff, #33ceee, #2dd4b2, #66d96f, #f0cf4f, #ff9a4d, #ff6166, #ff78bc, #b4bac9];
+    out property <[color]> presets: light ? acc-light : (black ? acc-black : acc-dark);
+
+    /// Palette of the current kind.
+    out property <int> sel: kind == 0 ? sel-light : (kind == 2 ? sel-black : sel-dark);
+    public function pick(i: int) {
+        if (kind == 0) { sel-light = i; }
+        else if (kind == 2) { sel-black = i; }
+        else { sel-dark = i; }
+    }
+
+    out property <color> accent: sel == 10 ? custom : presets[sel];
+    /// Text / icons on the accent color (dark on the light presets: yellow, graphite in dark themes).
+    out property <color> on-accent: sel == 10 ? custom-ink : ((kind != 0 && (sel == 5 || sel == 9)) ? #1a1405 : #ffffff);
+
+    private property <color> bg-base: light ? #f3f3f7 : (black ? #000000 : #131316);
+    private property <color> surface-base: light ? #ffffff : (black ? #0c0c0e : #1b1b20);
+    private property <color> hover-base: light ? #e6e6ee : (black ? #19191d : #24242b);
+    out property <color> bg: black ? bg-base : bg-base.mix(accent, 0.97);
+    out property <color> surface: light ? surface-base : surface-base.mix(accent, 0.96);
+    out property <color> surface-hover: hover-base.mix(accent, 0.94);
     out property <color> text: light ? #1b1b22 : #ececf2;
     out property <color> muted: light ? #6a6a7a : #8d8d9b;
 }
@@ -787,7 +815,7 @@ component SegmentedControl inherits Rectangle {
         height: root.height;
         Text {
             text: label;
-            color: k == root.current ? #ffffff : (seg-ta.has-hover ? Theme.text : Theme.muted);
+            color: k == root.current ? Theme.on-accent : (seg-ta.has-hover ? Theme.text : Theme.muted);
             font-size: 12px;
             font-weight: k == root.current ? 700 : 400;
             horizontal-alignment: center;
@@ -910,7 +938,7 @@ component AccentButton inherits Rectangle {
 
     Text {
         text: root.text;
-        color: root.enabled ? #ffffff : Theme.muted;
+        color: root.enabled ? (root.tone == Theme.accent ? Theme.on-accent : #ffffff) : Theme.muted;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -1050,7 +1078,7 @@ component SleeveCard inherits Rectangle {
                 viewbox-width: 20;
                 viewbox-height: 20;
                 commands: "M 4 10.5 L 8 14.5 L 16 6";
-                stroke: #ffffff;
+                stroke: Theme.on-accent;
                 stroke-width: 2.4px;
                 fill: transparent;
             }
@@ -1359,6 +1387,17 @@ component SettingsPage inherits Rectangle {
     in-out property <int> section: 0;
     callback close();
     callback theme-changed(int);
+    callback palette-changed(int, int, int);
+    callback custom-color-edited(float, float, float);
+    callback custom-save();
+    callback custom-pick(int);
+    callback custom-remove(int);
+    /// Own colors the user saved as presets (set from Rust).
+    in property <[color]> saved-colors;
+    /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
+    in-out property <float> cu-h;
+    in-out property <float> cu-s;
+    in-out property <float> cu-v;
 
     // To add a section: extend the four lists below (same order), nothing else.
     private property <[string]> names: ["Appearance", "Language", "Security", "AI & stems", "Library"];
@@ -1372,8 +1411,7 @@ component SettingsPage inherits Rectangle {
     ];
     private property <[[SettingsCardInfo]]> pages: [
         [
-            // The Theme card itself is drawn separately (it has a control); see `theme-card`.
-            { title: "Color palettes", text: "Color variants of every theme (red, blue, orange ...) will appear here." },
+            // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
         ],
         [
             { title: "Interface language", text: "10 languages plus System; switches on the fly without stopping the music." },
@@ -1398,7 +1436,16 @@ component SettingsPage inherits Rectangle {
     private property <length> content-x: 320px;
     private property <length> content-w: max(0px, root.width - root.content-x - 40px);
     // Room taken by the hand-made card at the top of a section (Appearance: the theme switch).
-    private property <length> extra-h: root.section == 0 ? 136px : 0px;
+    private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px : 0px;
+    // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
+    private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
+    private property <int> pal-rows: Math.ceil(11.0 / root.pal-cols);
+    // Own color section: 3 sliders, the "Save color" row, then the saved colors (small circles, wrapped).
+    private property <int> saved-cols: Math.max(1, Math.floor((root.content-w - 32px + 8px) / 34px));
+    private property <int> saved-rows: Math.ceil(root.saved-colors.length / root.saved-cols);
+    private property <length> custom-h: 142px + root.saved-rows * 34px + 8px;
+    private property <length> pal-h: 72px + root.pal-rows * 44px + 16px + (Theme.sel == 10 ? root.custom-h : 0px);
+    animate pal-h { duration: 200ms; easing: ease-in-out; }
 
     background: Theme.bg;
     clip: true;
@@ -1577,6 +1624,161 @@ component SettingsPage inherits Rectangle {
                 selected(k) => {
                     Theme.mode = k;
                     root.theme-changed(k);
+                }
+            }
+        }
+        if root.section == 0 : Rectangle {
+            x: 0px;
+            y: 136px;
+            width: parent.width;
+            height: root.pal-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: "Color palette";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 38px;
+                width: parent.width - 32px;
+                text: "Ten colors for every theme. The last circle is your own color.";
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            for i in 11 : Rectangle {
+                x: 16px + Math.mod(i, root.pal-cols) * 44px;
+                y: 72px + Math.floor(i / root.pal-cols) * 44px;
+                width: 34px;
+                height: 34px;
+                border-radius: 17px;
+                background: i == 10 ? Theme.custom : Theme.presets[i];
+
+                // Ring around the chosen one.
+                Rectangle {
+                    x: -4px;
+                    y: -4px;
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 21px;
+                    border-width: 2px;
+                    border-color: Theme.text;
+                    opacity: Theme.sel == i ? 1 : 0;
+                    animate opacity { duration: 150ms; }
+                }
+                if i == 10 : Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: "+";
+                    color: Theme.custom-ink;
+                    font-size: 22px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Theme.pick(i);
+                        root.palette-changed(Theme.sel-light, Theme.sel-dark, Theme.sel-black);
+                    }
+                }
+            }
+            // Own color: hue / saturation / brightness.
+            if Theme.sel == 10 : Rectangle {
+                x: 0px;
+                y: 72px + root.pal-rows * 44px + 4px;
+                width: parent.width;
+                height: root.custom-h;
+                PillButton {
+                    x: 16px;
+                    y: 100px;
+                    width: 112px;
+                    text: "Save color";
+                    clicked => { root.custom-save(); }
+                }
+                Text {
+                    x: 140px;
+                    y: 100px;
+                    width: max(0px, parent.width - 156px);
+                    height: 34px;
+                    text: root.saved-colors.length == 0 ? "Save it to reuse it later" : "Right-click to remove";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                for c[i] in root.saved-colors : Rectangle {
+                    x: 16px + Math.mod(i, root.saved-cols) * 34px;
+                    y: 146px + Math.floor(i / root.saved-cols) * 34px;
+                    width: 26px;
+                    height: 26px;
+                    border-radius: 13px;
+                    background: c;
+                    // Ring around the color that is active now.
+                    Rectangle {
+                        x: -3px;
+                        y: -3px;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
+                        border-width: 2px;
+                        border-color: Theme.text;
+                        opacity: Theme.custom == c ? 1 : 0;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(e) => {
+                            if (e.kind == PointerEventKind.down) {
+                                if (e.button == PointerEventButton.right) {
+                                    root.custom-remove(i);
+                                } else if (e.button == PointerEventButton.left) {
+                                    root.custom-pick(i);
+                                }
+                            }
+                        }
+                    }
+                }
+                for lab[j] in ["Hue", "Saturation", "Brightness"] : Rectangle {
+                    x: 16px;
+                    y: j * 32px;
+                    width: parent.width - 32px;
+                    height: 28px;
+                    Text {
+                        x: 0px;
+                        y: 0px;
+                        width: 90px;
+                        height: parent.height;
+                        text: lab;
+                        color: Theme.muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                    FxSlider {
+                        x: 96px;
+                        y: (parent.height - self.height) / 2;
+                        width: max(0px, parent.width - 96px);
+                        lo: 0;
+                        hi: 1;
+                        wheel-step: 0.02;
+                        value: j == 0 ? root.cu-h : (j == 1 ? root.cu-s : root.cu-v);
+                        edited(v) => {
+                            if (j == 0) { root.cu-h = v; }
+                            else if (j == 1) { root.cu-s = v; }
+                            else { root.cu-v = v; }
+                            root.custom-color-edited(root.cu-h, root.cu-s, root.cu-v);
+                        }
+                    }
                 }
             }
         }
@@ -2046,6 +2248,19 @@ export component MainWindow inherits Window {
     callback rescan-folder();
     /// The theme was changed in the settings (0 System, 1 Light, 2 Dark, 3 Black); Rust remembers it.
     callback theme-changed(int);
+    /// Palette choice per theme kind (light, dark, black): 0..9 preset, 10 own color; Rust remembers it.
+    callback palette-changed(int, int, int);
+    /// The own color moved (hue, saturation, value, each 0..1); Rust remembers it and updates `Theme`.
+    callback custom-color-edited(float, float, float);
+    /// The own color as the settings sliders show it (set from Rust).
+    callback custom-save();
+    callback custom-pick(int);
+    callback custom-remove(int);
+    /// Own colors saved as presets (set from Rust).
+    in property <[color]> saved-colors;
+    in-out property <float> cu-h: 0.75;
+    in-out property <float> cu-s: 0.55;
+    in-out property <float> cu-v: 1.0;
     callback search-changed(string);
     callback sort-changed(int, bool);
     callback reorder-tracks(int, int);
@@ -2366,7 +2581,7 @@ export component MainWindow inherits Window {
                                 animate background { duration: 150ms; }
                                 Text {
                                     text: q + 1;
-                                    color: q == root.queue-index ? #ffffff : Theme.text;
+                                    color: q == root.queue-index ? Theme.on-accent : Theme.text;
                                     font-size: 12px;
                                     font-weight: 600;
                                     horizontal-alignment: center;
@@ -3755,7 +3970,7 @@ export component MainWindow inherits Window {
                         width: 52px;
                         height: 52px;
                         icon-size: 20px;
-                        icon-color: #ffffff;
+                        icon-color: Theme.on-accent;
                         idle-color: Theme.accent;
                         hover-color: Theme.accent.brighter(0.2);
                         commands: root.is-playing
@@ -4110,7 +4325,7 @@ export component MainWindow inherits Window {
                         width: parent.width;
                         height: parent.height;
                         text: root.np-quality-tier == 2 ? "Hi-Res" : "Lossless";
-                        color: root.np-quality-tier == 2 ? #1a1405 : #ffffff;
+                        color: root.np-quality-tier == 2 ? #1a1405 : Theme.on-accent;
                         font-size: 9.5px;
                         font-weight: 800;
                         horizontal-alignment: center;
@@ -4274,7 +4489,7 @@ export component MainWindow inherits Window {
                     drop-shadow-color: #00000080;
                     Text {
                         text: "Back to current line";
-                        color: #ffffff;
+                        color: Theme.on-accent;
                         font-size: 12px;
                         font-weight: 700;
                         horizontal-alignment: center;
@@ -4927,7 +5142,7 @@ export component MainWindow inherits Window {
                         background: root.q-added[q] ? Theme.accent : Theme.surface-hover;
                         Text {
                             text: q + 1;
-                            color: root.q-added[q] ? #ffffff : Theme.text;
+                            color: root.q-added[q] ? Theme.on-accent : Theme.text;
                             font-size: 16px;
                             font-weight: 700;
                             horizontal-alignment: center;
@@ -5346,5 +5561,14 @@ export component MainWindow inherits Window {
         opacity: root.settings-t;
         close => { root.show-settings = false; }
         theme-changed(k) => { root.theme-changed(k); }
+        palette-changed(l, d, b) => { root.palette-changed(l, d, b); }
+        custom-color-edited(h, sat, v) => { root.custom-color-edited(h, sat, v); }
+        custom-save() => { root.custom-save(); }
+        custom-pick(i) => { root.custom-pick(i); }
+        custom-remove(i) => { root.custom-remove(i); }
+        saved-colors: root.saved-colors;
+        cu-h <=> root.cu-h;
+        cu-s <=> root.cu-s;
+        cu-v <=> root.cu-v;
     }
 }

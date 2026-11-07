@@ -69,6 +69,9 @@ pub struct TrackSound {
     pub subsonic_percent: f32,
 }
 
+/// How many own colors can be saved as presets.
+pub const MAX_SAVED_COLORS: usize = 12;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -101,8 +104,12 @@ pub struct AppSettings {
     pub album_order: Vec<String>,
     /// Color theme: 0 = System (follows Windows), 1 = Light, 2 = Dark, 3 = Black (OLED).
     pub theme: u8,
-    /// Color sub-theme inside a theme (reserved: 0 = default violet; red, blue, orange... come later).
-    pub palette: u8,
+    /// Chosen palette per theme kind [light, dark, black]: 0..=9 = preset, 10 = own color.
+    pub palettes: [u8; 3],
+    /// The own accent color as [hue, saturation, value], each 0.0..=1.0 (shared by all themes).
+    pub custom_hsv: [f32; 3],
+    /// Own colors the user saved as presets ([hue, saturation, value]); at most `MAX_SAVED_COLORS`.
+    pub saved_colors: Vec<[f32; 3]>,
 }
 
 impl Default for AppSettings {
@@ -126,7 +133,9 @@ impl Default for AppSettings {
             album_sort_desc: false,
             album_order: Vec::new(),
             theme: 2,
-            palette: 0,
+            palettes: [0, 0, 0],
+            custom_hsv: [0.75, 0.55, 1.0],
+            saved_colors: Vec::new(),
         }
     }
 }
@@ -301,7 +310,19 @@ fn sanitize(settings: &mut AppSettings) {
     settings.album_sort = settings.album_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.theme = settings.theme.min(3);
-    settings.palette = 0; // only the default palette exists for now
+    for p in settings.palettes.iter_mut() {
+        *p = (*p).min(10);
+    }
+    settings.saved_colors.truncate(MAX_SAVED_COLORS);
+    for color in settings.saved_colors.iter_mut() {
+        for c in color.iter_mut() {
+            *c = finite(*c, 0.0).clamp(0.0, 1.0);
+        }
+    }
+    let defaults = [0.75, 0.55, 1.0];
+    for (c, d) in settings.custom_hsv.iter_mut().zip(defaults) {
+        *c = finite(*c, d).clamp(0.0, 1.0);
+    }
     settings.speed_t = snap(finite(settings.speed_t, 0.0).clamp(-2.0, 2.0), 10.0);
     let fx = &mut settings.fx;
     fx.bass_db = snap(finite(fx.bass_db, 0.0).clamp(0.0, 15.0), 2.0);

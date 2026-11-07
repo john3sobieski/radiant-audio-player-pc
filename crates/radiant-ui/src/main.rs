@@ -67,6 +67,35 @@ fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>
     }
 }
 
+/// Own accent color: the HSV sliders in the settings and the `Theme` colors.
+fn apply_custom_color(ui: &MainWindow, hsv: [f32; 3]) {
+    let rgb = radiant_core::theme::hsv_to_rgb(hsv[0], hsv[1], hsv[2]);
+    let theme = ui.global::<Theme>();
+    theme.set_custom(slint::Color::from_rgb_u8(rgb.0, rgb.1, rgb.2));
+    // Text on the accent: dark on light colors (yellow...), white otherwise.
+    let ink = if radiant_core::theme::needs_dark_text(rgb) {
+        slint::Color::from_rgb_u8(0x1a, 0x14, 0x05)
+    } else {
+        slint::Color::from_rgb_u8(0xff, 0xff, 0xff)
+    };
+    theme.set_custom_ink(ink);
+    ui.set_cu_h(hsv[0]);
+    ui.set_cu_s(hsv[1]);
+    ui.set_cu_v(hsv[2]);
+}
+
+/// Pushes the saved own colors to the settings page (small circles).
+fn refresh_saved_colors(ui: &MainWindow, colors: &[[f32; 3]]) {
+    let model: Vec<slint::Color> = colors
+        .iter()
+        .map(|c| {
+            let (r, g, b) = radiant_core::theme::hsv_to_rgb(c[0], c[1], c[2]);
+            slint::Color::from_rgb_u8(r, g, b)
+        })
+        .collect();
+    ui.set_saved_colors(ModelRc::new(VecModel::from(model)));
+}
+
 fn apply_settings(
     ui: &MainWindow,
     player: &Rc<Player>,
@@ -77,8 +106,12 @@ fn apply_settings(
     {
         let theme = ui.global::<Theme>();
         theme.set_mode(settings.theme as i32);
-        theme.set_palette(settings.palette as i32);
+        theme.set_sel_light(settings.palettes[0] as i32);
+        theme.set_sel_dark(settings.palettes[1] as i32);
+        theme.set_sel_black(settings.palettes[2] as i32);
     }
+    apply_custom_color(ui, settings.custom_hsv);
+    refresh_saved_colors(ui, &settings.saved_colors);
     ui.set_volume(settings.volume);
     ui.set_section(settings.section as i32);
     ui.set_queue_index(settings.queue_index as i32);
@@ -2120,6 +2153,76 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_volume_changed(move |v| {
             player.send(Command::SetVolume(v));
             settings.borrow_mut().volume = v;
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Palette choice per theme kind: the UI already switched itself, here it is only remembered.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_palette_changed(move |light, dark, black| {
+            settings.borrow_mut().palettes = [light.clamp(0, 10) as u8, dark.clamp(0, 10) as u8, black.clamp(0, 10) as u8];
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Save the current own color as a preset (no duplicates, at most MAX_SAVED_COLORS).
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_custom_save(move || {
+            {
+                let mut st = settings.borrow_mut();
+                let cur = st.custom_hsv;
+                let rgb = |c: &[f32; 3]| radiant_core::theme::hsv_to_rgb(c[0], c[1], c[2]);
+                let exists = st.saved_colors.iter().any(|c| rgb(c) == rgb(&cur));
+                if !exists && st.saved_colors.len() < settings::MAX_SAVED_COLORS {
+                    st.saved_colors.push(cur);
+                }
+            }
+            if let Some(ui) = weak.upgrade() {
+                refresh_saved_colors(&ui, &settings.borrow().saved_colors);
+            }
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Click on a saved own color: it becomes the current own color.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_custom_pick(move |i| {
+            let hsv = settings.borrow().saved_colors.get(i.max(0) as usize).copied();
+            if let Some(hsv) = hsv {
+                settings.borrow_mut().custom_hsv = hsv;
+                if let Some(ui) = weak.upgrade() {
+                    apply_custom_color(&ui, hsv);
+                }
+                save_settings(&weak, &settings);
+            }
+        });
+    }
+    {
+        // Right click on a saved own color: remove it.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_custom_remove(move |i| {
+            {
+                let mut st = settings.borrow_mut();
+                let i = i.max(0) as usize;
+                if i < st.saved_colors.len() {
+                    st.saved_colors.remove(i);
+                }
+            }
+            if let Some(ui) = weak.upgrade() {
+                refresh_saved_colors(&ui, &settings.borrow().saved_colors);
+            }
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Own accent color (HSV sliders in the settings).
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_custom_color_edited(move |h, s, v| {
+            let hsv = [h.clamp(0.0, 1.0), s.clamp(0.0, 1.0), v.clamp(0.0, 1.0)];
+            settings.borrow_mut().custom_hsv = hsv;
+            if let Some(ui) = weak.upgrade() {
+                apply_custom_color(&ui, hsv);
+            }
             save_settings(&weak, &settings);
         });
     }
