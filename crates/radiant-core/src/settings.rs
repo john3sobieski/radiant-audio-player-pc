@@ -2,6 +2,7 @@
 
 use radiant_dsp::AudioFxSettings;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
@@ -19,6 +20,42 @@ pub enum RepeatModeSetting {
     One,
 }
 
+/// How the 12-band equalizer curve is chosen. The other sound effects (bass, treble, ...) do not depend on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EqMode {
+    /// The equalizer is bypassed; all curves stay stored.
+    Off,
+    /// One curve (`fx.eq_gains_db`) for every track.
+    #[default]
+    Global,
+    /// Every track has its own curve, stored by file path; a track without one plays flat.
+    PerTrack,
+}
+
+impl EqMode {
+    pub fn to_index(self) -> i32 {
+        match self {
+            EqMode::Off => 0,
+            EqMode::Global => 1,
+            EqMode::PerTrack => 2,
+        }
+    }
+
+    pub fn from_index(i: i32) -> Self {
+        match i {
+            0 => EqMode::Off,
+            2 => EqMode::PerTrack,
+            _ => EqMode::Global,
+        }
+    }
+}
+
+/// Key of a track in `AppSettings::track_eq`.
+pub fn eq_key(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -28,7 +65,11 @@ pub struct AppSettings {
     pub repeat_mode: RepeatModeSetting,
     /// Playback speed slider position, -2 ..= +2 in steps of 0.1.
     pub speed_t: f32,
+    /// Sound effects. `fx.eq_gains_db` is the curve of the "one curve for all tracks" mode.
     pub fx: AudioFxSettings,
+    pub eq_mode: EqMode,
+    /// Own equalizer curves by track path (used in `EqMode::PerTrack`); flat curves are not stored.
+    pub track_eq: BTreeMap<String, [f32; 12]>,
     /// Track order set by hand (dragging) in the "Manual order" sort mode.
     pub manual_order: Vec<PathBuf>,
     /// Open section: 0 = Tracks, 1 = Albums, 2 = Playlists, 3 = Queues.
@@ -54,6 +95,8 @@ impl Default for AppSettings {
             repeat_mode: RepeatModeSetting::Off,
             speed_t: 0.0,
             fx: AudioFxSettings::default(),
+            eq_mode: EqMode::Global,
+            track_eq: BTreeMap::new(),
             manual_order: Vec::new(),
             section: 0,
             queue_index: 0,
@@ -62,6 +105,80 @@ impl Default for AppSettings {
             album_sort: 1,
             album_sort_desc: false,
             album_order: Vec::new(),
+        }
+    }
+}
+
+impl AppSettings {
+    /// The curve that is audible for `track` in the current mode (flat when off / unknown track).
+    pub fn effective_eq(&self, track: Option<&Path>) -> [f32; 12] {
+        match self.eq_mode {
+            EqMode::Off => [0.0; 12],
+            EqMode::Global => self.fx.eq_gains_db,
+            EqMode::PerTrack => track
+                .and_then(|t| self.track_eq.get(&eq_key(t)))
+                .copied()
+                .unwrap_or([0.0; 12]),
+        }
+    }
+
+    /// True when the sliders and presets may change a curve now.
+    pub fn eq_editable(&self, track: Option<&Path>) -> bool {
+        match self.eq_mode {
+            EqMode::Off => false,
+            EqMode::Global => true,
+            EqMode::PerTrack => track.is_some(),
+        }
+    }
+
+    /// True when `track` has its own stored curve.
+    pub fn has_track_eq(&self, track: Option<&Path>) -> bool {
+        track.is_some_and(|t| self.track_eq.contains_key(&eq_key(t)))
+    }
+
+    /// Stores `gains` as the active curve (global, or the one of `track`). A flat per-track curve removes
+    /// the entry. Returns false (nothing changed) when the mode does not allow editing.
+    pub fn set_active_eq(&mut self, track: Option<&Path>, gains: [f32; 12]) -> bool {
+        match self.eq_mode {
+            EqMode::Off => false,
+            EqMode::Global => {
+                self.fx.eq_gains_db = gains;
+                true
+            }
+            EqMode::PerTrack => {
+                let Some(track) = track else { return false };
+                if gains == [0.0; 12] {
+                    self.track_eq.remove(&eq_key(track));
+                } else {
+                    self.track_eq.insert(eq_key(track), gains);
+                }
+                true
+            }
+        }
+    }
+
+    /// Takes the effects that do not belong to the equalizer curve from `fx` (the engine copy of the
+    /// settings may carry another curve than the one to store here).
+    pub fn set_fx_keep_eq(&mut self, fx: &AudioFxSettings) {
+        let curve = self.fx.eq_gains_db;
+        self.fx = fx.clone();
+        self.fx.eq_gains_db = curve;
+    }
+
+    /// "Reset" of the sound panel: effects back to defaults and the ACTIVE curve flat; curves that are
+    /// not active (other tracks, or all curves while the equalizer is off) are kept.
+    pub fn reset_sound(&mut self, track: Option<&Path>) {
+        let curve = self.fx.eq_gains_db;
+        self.fx = AudioFxSettings::default();
+        match self.eq_mode {
+            EqMode::Global => {}
+            EqMode::Off => self.fx.eq_gains_db = curve,
+            EqMode::PerTrack => {
+                self.fx.eq_gains_db = curve;
+                if let Some(t) = track {
+                    self.track_eq.remove(&eq_key(t));
+                }
+            }
         }
     }
 }
@@ -107,6 +224,12 @@ fn sanitize(settings: &mut AppSettings) {
     for gain in &mut fx.eq_gains_db {
         *gain = snap(finite(*gain, 0.0).clamp(-12.0, 12.0), 2.0);
     }
+    for curve in settings.track_eq.values_mut() {
+        for gain in curve.iter_mut() {
+            *gain = snap(finite(*gain, 0.0).clamp(-12.0, 12.0), 2.0);
+        }
+    }
+    settings.track_eq.retain(|_, curve| *curve != [0.0; 12]);
 }
 
 fn finite(v: f32, default: f32) -> f32 {
@@ -189,6 +312,8 @@ mod tests {
         s.fx.subsonic_percent = 30.0;
         s.fx.eq_gains_db[0] = -3.5;
         s.fx.eq_gains_db[11] = 6.0;
+        s.eq_mode = EqMode::PerTrack;
+        s.track_eq.insert("D:/Музыка/а.mp3".to_string(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, -1.0, -2.0, -3.0, -4.0, -5.0, -6.0]);
         s.manual_order = vec![PathBuf::from("D:/Музыка/б.mp3"), PathBuf::from("D:/Музыка/а.mp3")];
         s.playlist_sort = 2;
         s.playlist_sort_desc = true;
@@ -257,6 +382,114 @@ mod tests {
         assert_eq!(s.fx.subsonic_percent, 100.0);
         assert_eq!(s.fx.eq_gains_db[0], 12.0);
         assert_eq!(s.fx.eq_gains_db[11], -12.0);
+    }
+
+    #[test]
+    fn old_file_without_eq_mode_uses_one_curve_for_all() {
+        let s = parse(r#"{"fx": {"eq_gains_db": [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}"#).unwrap();
+        assert_eq!(s.eq_mode, EqMode::Global);
+        assert!(s.track_eq.is_empty());
+        assert_eq!(s.effective_eq(None)[0], 2.0);
+    }
+
+    #[test]
+    fn eq_mode_is_stored_as_text() {
+        let mut s = AppSettings::default();
+        s.eq_mode = EqMode::PerTrack;
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains("\"eq_mode\":\"per_track\""));
+        assert_eq!(EqMode::from_index(EqMode::Off.to_index()), EqMode::Off);
+        assert_eq!(EqMode::from_index(EqMode::Global.to_index()), EqMode::Global);
+        assert_eq!(EqMode::from_index(EqMode::PerTrack.to_index()), EqMode::PerTrack);
+    }
+
+    #[test]
+    fn modes_choose_the_curve() {
+        let a = Path::new("a.mp3");
+        let b = Path::new("b.mp3");
+        let mut curve = [0.0_f32; 12];
+        curve[3] = 4.0;
+        let mut s = AppSettings::default();
+
+        // One curve for all tracks.
+        assert!(s.set_active_eq(Some(a), curve));
+        assert_eq!(s.effective_eq(Some(a)), curve);
+        assert_eq!(s.effective_eq(Some(b)), curve);
+        assert_eq!(s.effective_eq(None), curve);
+
+        // Off: bypassed, but nothing is thrown away and nothing can be edited.
+        s.eq_mode = EqMode::Off;
+        assert_eq!(s.effective_eq(Some(a)), [0.0; 12]);
+        assert!(!s.eq_editable(Some(a)));
+        assert!(!s.set_active_eq(Some(a), [1.0; 12]));
+        assert_eq!(s.fx.eq_gains_db, curve);
+
+        // Per track: independent curves, flat until set, needs a current track.
+        s.eq_mode = EqMode::PerTrack;
+        assert_eq!(s.effective_eq(Some(a)), [0.0; 12]);
+        assert!(!s.eq_editable(None));
+        assert!(!s.set_active_eq(None, curve));
+        let mut other = [0.0_f32; 12];
+        other[9] = -6.0;
+        assert!(s.set_active_eq(Some(a), curve));
+        assert!(s.set_active_eq(Some(b), other));
+        assert_eq!(s.effective_eq(Some(a)), curve);
+        assert_eq!(s.effective_eq(Some(b)), other);
+        assert!(s.has_track_eq(Some(a)));
+        assert_eq!(s.fx.eq_gains_db, curve, "the global curve must stay untouched");
+
+        // A flat curve frees the entry.
+        assert!(s.set_active_eq(Some(a), [0.0; 12]));
+        assert!(!s.has_track_eq(Some(a)));
+        assert!(s.has_track_eq(Some(b)));
+    }
+
+    #[test]
+    fn set_fx_keep_eq_leaves_the_stored_curve() {
+        let mut s = AppSettings::default();
+        s.fx.eq_gains_db[0] = 5.0;
+        let mut engine_copy = s.fx.clone();
+        engine_copy.eq_gains_db = [0.0; 12]; // e.g. equalizer off
+        engine_copy.bass_db = 3.0;
+        engine_copy.mono = true;
+        s.set_fx_keep_eq(&engine_copy);
+        assert_eq!(s.fx.eq_gains_db[0], 5.0);
+        assert_eq!(s.fx.bass_db, 3.0);
+        assert!(s.fx.mono);
+    }
+
+    #[test]
+    fn reset_flattens_only_the_active_curve() {
+        let a = Path::new("a.mp3");
+        let b = Path::new("b.mp3");
+        let mut s = AppSettings::default();
+        s.fx.bass_db = 6.0;
+        s.fx.eq_gains_db[1] = 3.0;
+        s.eq_mode = EqMode::PerTrack;
+        s.track_eq.insert(eq_key(a), [1.0; 12]);
+        s.track_eq.insert(eq_key(b), [2.0; 12]);
+        s.reset_sound(Some(a));
+        assert_eq!(s.fx.bass_db, 0.0);
+        assert!(!s.has_track_eq(Some(a)));
+        assert!(s.has_track_eq(Some(b)));
+        assert_eq!(s.fx.eq_gains_db[1], 3.0, "global curve is not the active one");
+
+        s.eq_mode = EqMode::Global;
+        s.reset_sound(Some(b));
+        assert_eq!(s.fx.eq_gains_db, [0.0; 12]);
+        assert!(s.has_track_eq(Some(b)));
+    }
+
+    #[test]
+    fn track_curves_are_clamped_and_flat_ones_dropped() {
+        let s = parse(
+            r#"{"eq_mode": "per_track", "track_eq": {"a.mp3": [99.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -99.0], "b.mp3": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.eq_mode, EqMode::PerTrack);
+        assert_eq!(s.track_eq.len(), 1);
+        assert_eq!(s.track_eq["a.mp3"][0], 12.0);
+        assert_eq!(s.track_eq["a.mp3"][11], -12.0);
     }
 
     #[test]

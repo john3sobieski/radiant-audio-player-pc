@@ -398,6 +398,7 @@ component FxSlider inherits Rectangle {
     in property <float> value;
     /// Change per wheel notch.
     in property <float> wheel-step: 0.5;
+    in property <bool> enabled: true;
     callback edited(float);
     height: 20px;
 
@@ -429,7 +430,8 @@ component FxSlider inherits Rectangle {
         y: (parent.height - self.height) / 2;
     }
     ta := TouchArea {
-        mouse-cursor: pointer;
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         pointer-event(event) => {
             if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
                 root.edited(root.value-at(self.mouse-x));
@@ -455,6 +457,7 @@ component FxRow inherits Rectangle {
     in property <float> hi: 1;
     in property <float> value;
     in property <float> wheel-step: 0.5;
+    in property <bool> enabled: true;
     callback edited(float);
     height: 22px;
 
@@ -472,6 +475,7 @@ component FxRow inherits Rectangle {
             hi: root.hi;
             value: root.value;
             wheel-step: root.wheel-step;
+            enabled: root.enabled;
             edited(v) => { root.edited(v); }
         }
         Text {
@@ -678,22 +682,169 @@ component SearchField inherits Rectangle {
 // Small preset chip in the sound panel.
 component PillPreset inherits Rectangle {
     in property <string> text;
+    /// The current curve is exactly this preset.
+    in property <bool> active: false;
+    in property <bool> enabled: true;
     callback clicked();
 
     height: 26px;
     border-radius: 13px;
-    background: ta.has-hover ? Theme.surface-hover : Theme.bg;
+    background: root.active ? Theme.accent.with-alpha(0.22)
+        : (ta.has-hover && root.enabled) ? Theme.surface-hover : Theme.bg;
+    border-width: 1px;
+    border-color: root.active ? Theme.accent.with-alpha(0.7) : transparent;
+    animate background { duration: 120ms; }
 
     Text {
         text: root.text;
-        color: Theme.text;
+        color: root.active ? Theme.accent : Theme.text;
         font-size: 11px;
+        font-weight: root.active ? 700 : 400;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
     ta := TouchArea {
-        mouse-cursor: pointer;
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => { root.clicked(); }
+    }
+}
+
+// Segmented switch: a colored pill slides under the chosen label.
+component SegmentedControl inherits Rectangle {
+    in property <[string]> labels;
+    in property <int> current;
+    callback selected(int);
+
+    height: 32px;
+    border-radius: 16px;
+    background: Theme.bg;
+
+    property <length> seg-w: (root.width - 6px) / max(1, root.labels.length);
+
+    Rectangle {
+        x: 3px + root.current * root.seg-w;
+        y: 3px;
+        width: root.seg-w;
+        height: root.height - 6px;
+        border-radius: (root.height - 6px) / 2;
+        background: Theme.accent;
+        drop-shadow-color: Theme.accent.with-alpha(0.5);
+        drop-shadow-blur: 10px;
+        animate x { duration: 220ms; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
+    }
+    for label[k] in root.labels : Rectangle {
+        x: 3px + k * root.seg-w;
+        y: 0px;
+        width: root.seg-w;
+        height: root.height;
+        Text {
+            text: label;
+            color: k == root.current ? #ffffff : (seg-ta.has-hover ? Theme.text : Theme.muted);
+            font-size: 12px;
+            font-weight: k == root.current ? 700 : 400;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            animate color { duration: 160ms; }
+        }
+        seg-ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.selected(k); }
+        }
+    }
+}
+
+// Small response graph of the equalizer curve with a caption that tells which curve is active.
+// The path strings come from Rust (`eq_curve.rs`); the box there is 328 x 46 units, 1 unit = 1 px high.
+component EqGraph inherits Rectangle {
+    in property <[float]> gains;
+    in property <string> line;
+    in property <string> fill;
+    /// 0 = off, 1 = one curve for all tracks, 2 = own curve per track.
+    in property <int> mode;
+    in property <bool> editable;
+    in property <string> track-name;
+    in property <bool> saved;
+
+    height: 46px;
+    border-radius: 10px;
+    background: Theme.bg;
+    clip: true;
+
+    property <bool> chip-visible: root.mode == 2 && root.track-name != "";
+
+    // Zero line.
+    Rectangle {
+        x: 8px;
+        y: 29px;
+        width: root.width - 16px;
+        height: 1px;
+        background: Theme.surface-hover;
+    }
+    Path {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        viewbox-width: 328;
+        viewbox-height: 46;
+        commands: root.fill;
+        fill: Theme.accent.with-alpha(root.editable ? 0.18 : 0.05);
+    }
+    Path {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        viewbox-width: 328;
+        viewbox-height: 46;
+        commands: root.line;
+        stroke: root.editable ? Theme.accent : Theme.muted;
+        stroke-width: 2px;
+        stroke-line-join: round;
+        stroke-line-cap: round;
+        fill: transparent;
+    }
+    // One dot per band.
+    for g[i] in root.gains : Rectangle {
+        visible: root.editable;
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: Theme.text;
+        x: (8.0 + 312.0 * i / 11.0) / 328.0 * root.width - 3px;
+        y: (29.0 - Math.min(12.0, Math.max(-12.0, g)) / 12.0 * 11.0) * 1px - 3px;
+    }
+    // Caption.
+    Text {
+        x: 10px;
+        y: 2px;
+        width: root.width - 20px - (root.chip-visible ? 64px : 0px);
+        height: 13px;
+        font-size: 10px;
+        color: Theme.muted;
+        overflow: elide;
+        vertical-alignment: center;
+        text: root.mode == 0 ? "Bypassed \u{2014} your curves are kept"
+            : root.mode == 1 ? "One curve for every track"
+            : root.track-name == "" ? "Play a track to give it its own curve"
+            : "\u{266A} " + root.track-name;
+    }
+    if root.chip-visible : Rectangle {
+        x: root.width - 62px;
+        y: 2px;
+        width: 54px;
+        height: 13px;
+        border-radius: 6.5px;
+        background: root.saved ? Theme.accent.with-alpha(0.25) : Theme.surface-hover;
+        Text {
+            text: root.saved ? "own curve" : "flat";
+            color: root.saved ? Theme.accent : Theme.muted;
+            font-size: 9px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
 }
 
@@ -1446,6 +1597,22 @@ export component MainWindow inherits Window {
     callback subsonic-changed(float);
     callback speed-changed(float);
     callback eq-changed(int, float);
+    /// Equalizer mode: 0 = off, 1 = one curve for all tracks, 2 = own curve per track.
+    in-out property <int> eq-mode: 1;
+    callback eq-mode-changed(int);
+    /// The sliders and presets can be used now (not in the Off mode; per-track mode needs a track).
+    in property <bool> eq-editable: true;
+    /// Title of the track whose curve is shown (per-track mode); empty when nothing has played yet.
+    in property <string> eq-track-name;
+    /// That track has its own stored curve.
+    in property <bool> eq-track-saved: false;
+    /// Smooth line / area of the curve for the small graph (SVG path strings from Rust).
+    in property <string> eq-curve-line;
+    in property <string> eq-curve-fill;
+    /// Index of the preset equal to the current curve, -1 for none.
+    in property <int> eq-active-preset: -1;
+    /// The status timer reports that another track started (Rust loads its equalizer curve).
+    callback now-track-changed(string);
     /// Names of the EQ presets (set by Rust from radiant-dsp).
     in property <[string]> eq-preset-names;
     callback eq-preset-selected(int);
@@ -3805,16 +3972,28 @@ export component MainWindow inherits Window {
                     root.subsonic-changed(v);
                 }
             }
-            Text {
-                text: "Equalizer";
-                color: Theme.muted;
-                font-size: 12px;
-                height: 24px;
-                vertical-alignment: bottom;
+            SegmentedControl {
+                labels: ["Off", "All tracks", "Per track"];
+                current: root.eq-mode;
+                selected(k) => {
+                    root.eq-mode = k;
+                    root.eq-mode-changed(k);
+                }
+            }
+            EqGraph {
+                gains: root.eq-gains;
+                line: root.eq-curve-line;
+                fill: root.eq-curve-fill;
+                mode: root.eq-mode;
+                editable: root.eq-editable;
+                track-name: root.eq-track-name;
+                saved: root.eq-track-saved;
             }
             // Presets: two rows of five buttons.
             for row in [0, 1] : Rectangle {
                 height: 30px;
+                opacity: root.eq-editable ? 1.0 : 0.4;
+                animate opacity { duration: 160ms; }
                 // Explicit positions (no layout): 5 chips of 62 px with 4 px gaps = 326 px.
                 for name[k] in root.eq-preset-names : PillPreset {
                     x: (k - row * 5) * 66px;
@@ -3822,16 +4001,29 @@ export component MainWindow inherits Window {
                     width: 62px;
                     visible: k >= row * 5 && k < row * 5 + 5;
                     text: name;
+                    active: k == root.eq-active-preset;
+                    enabled: root.eq-editable;
                     clicked => { root.eq-preset-selected(k); }
                 }
             }
-            for g[i] in root.eq-gains : FxRow {
-                label: root.eq-labels[i] + " Hz";
-                lo: -12;
-                hi: 12;
-                value: g;
-                value-text: "\{(g * 2).round() / 2} dB";
-                edited(v) => { root.eq-changed(i, v); }
+            // 12 bands (compact: no gaps between the rows); dimmed while the curve cannot be edited.
+            Rectangle {
+                height: 252px;
+                opacity: root.eq-editable ? 1.0 : 0.4;
+                animate opacity { duration: 160ms; }
+                VerticalLayout {
+                    spacing: 0px;
+                    for g[i] in root.eq-gains : FxRow {
+                        height: 21px;
+                        label: root.eq-labels[i] + " Hz";
+                        lo: -12;
+                        hi: 12;
+                        value: g;
+                        enabled: root.eq-editable;
+                        value-text: "\{(g * 2).round() / 2} dB";
+                        edited(v) => { root.eq-changed(i, v); }
+                    }
+                }
             }
         }
     }

@@ -13,7 +13,8 @@ slint::include_modules!();
 use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
 };
-use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
+use radiant_core::settings::{self, AppSettings, EqMode, RepeatModeSetting};
+mod eq_curve;
 mod rays;
 
 use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
@@ -88,15 +89,79 @@ fn apply_settings(
     ui.set_fx_bass(settings.fx.bass_db);
     ui.set_fx_treble(settings.fx.treble_db);
     ui.set_fx_subsonic(settings.fx.subsonic_percent);
-    for (i, gain) in settings.fx.eq_gains_db.iter().enumerate() {
-        eq_model.set_row_data(i, *gain);
-    }
-    *fx.borrow_mut() = settings.fx.clone();
+    // Nothing is playing yet, so a per-track curve is flat here; it is loaded when a track starts.
+    refresh_eq(ui, player, fx, eq_model, settings, None);
     player.send(Command::SetVolume(settings.volume));
     player.send(Command::SetShuffle(settings.shuffle));
     player.send(Command::SetRepeat(repeat_mode_to_engine(settings.repeat_mode)));
     player.send(Command::SetSpeed(slider_to_speed(settings.speed_t)));
-    player.send(Command::SetFx(settings.fx.clone()));
+}
+
+/// Shows the equalizer state in the panel: mode, whether it can be edited, the track the curve belongs to
+/// (per-track mode), the small response graph and the highlighted preset.
+fn show_eq_state(ui: &MainWindow, settings: &AppSettings, track: Option<&Path>, gains: &[f32; 12]) {
+    ui.set_eq_mode(settings.eq_mode.to_index());
+    ui.set_eq_editable(settings.eq_editable(track));
+    let name = track.and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    ui.set_eq_track_name(name.into());
+    ui.set_eq_track_saved(settings.has_track_eq(track));
+    let (line, fill) = eq_curve::paths(gains);
+    ui.set_eq_curve_line(line.into());
+    ui.set_eq_curve_fill(fill.into());
+    let preset = EQ_PRESETS.iter().position(|p| &p.gains == gains && settings.eq_mode != EqMode::Off);
+    ui.set_eq_active_preset(preset.map_or(-1, |i| i as i32));
+}
+
+/// Makes the curve of the current mode and track audible and visible (sliders, graph, engine).
+/// Called on start, when the mode changes and when another track starts.
+fn refresh_eq(
+    ui: &MainWindow,
+    player: &Rc<Player>,
+    fx: &Rc<RefCell<AudioFxSettings>>,
+    eq_model: &Rc<VecModel<f32>>,
+    settings: &AppSettings,
+    track: Option<&Path>,
+) {
+    let gains = settings.effective_eq(track);
+    for (i, g) in gains.iter().enumerate() {
+        eq_model.set_row_data(i, *g);
+    }
+    {
+        let mut s = fx.borrow_mut();
+        *s = settings.fx.clone();
+        s.eq_gains_db = gains;
+        player.send(Command::SetFx(s.clone()));
+    }
+    show_eq_state(ui, settings, track, &gains);
+}
+
+/// A slider or preset wants `gains` as the active curve (global, or the one of the current track).
+/// Refused (and the sliders snap back) when the mode does not allow editing.
+fn apply_curve(
+    weak: &slint::Weak<MainWindow>,
+    player: &Rc<Player>,
+    fx: &Rc<RefCell<AudioFxSettings>>,
+    eq_model: &Rc<VecModel<f32>>,
+    settings: &Rc<RefCell<AppSettings>>,
+    track: Option<&Path>,
+    gains: [f32; 12],
+) {
+    let ok = settings.borrow_mut().set_active_eq(track, gains);
+    let shown = if ok { gains } else { settings.borrow().effective_eq(track) };
+    for (i, g) in shown.iter().enumerate() {
+        eq_model.set_row_data(i, *g);
+    }
+    if ok {
+        let mut s = fx.borrow_mut();
+        s.eq_gains_db = gains;
+        player.send(Command::SetFx(s.clone()));
+    }
+    if let Some(ui) = weak.upgrade() {
+        show_eq_state(&ui, &settings.borrow(), track, &shown);
+    }
+    if ok {
+        save_settings(weak, settings);
+    }
 }
 
 /// Decoded cover thumbnail (RGBA8); the bytes are shared, so clones are cheap.
@@ -1114,6 +1179,7 @@ fn main() -> Result<(), slint::PlatformError> {
             .map_or(-1, |i| i as i32);
 
         // A new track started: the big player view needs its details (looked up only on a change).
+        let mut changed_path: Option<PathBuf> = None;
         let changed_track: Option<Track> = match status.current.as_ref() {
             Some(current) => {
                 let changed = LAST_NOW.lock().map_or(false, |mut last| {
@@ -1125,6 +1191,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     }
                 });
                 if changed {
+                    changed_path = Some(current.clone());
                     now_library.lock().ok().and_then(|l| l.iter().find(|t| &t.path == current).cloned())
                 } else {
                     None
@@ -1142,6 +1209,11 @@ fn main() -> Result<(), slint::PlatformError> {
         let _ = weak.upgrade_in_event_loop(move |ui| {
             if let Some(track) = &changed_track {
                 show_now_playing(&ui, track);
+            }
+            // The equalizer follows the track (per-track mode); handled on the UI thread by Rust.
+            if let Some(path) = &changed_path {
+                let path_text: String = path.to_string_lossy().into_owned();
+                ui.invoke_now_track_changed(path_text.into());
             }
             ui.set_lyric_index(lyric_index);
             ui.set_current_index(index);
@@ -1229,6 +1301,8 @@ fn main() -> Result<(), slint::PlatformError> {
     let fx = Rc::new(RefCell::new(AudioFxSettings::default()));
     let eq_model: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0_f32; 12]));
     ui.set_eq_gains(ModelRc::from(eq_model.clone()));
+    // Track whose curve is shown in the per-track mode (the one that started last).
+    let eq_track: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
     apply_settings(&ui, &player, &fx, &eq_model, &settings.borrow());
     if let Ok(mut order) = MANUAL_ORDER.lock() { *order = settings.borrow().manual_order.clone(); }
     if let Ok(mut s) = ALBUM_SORT.lock() { *s = (settings.borrow().album_sort, settings.borrow().album_sort_desc); }
@@ -2091,7 +2165,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.normalize = on;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
+            settings.borrow_mut().set_fx_keep_eq(&s);
             save_settings(&weak, &settings);
         });
     }
@@ -2101,7 +2175,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.mono = on;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
+            settings.borrow_mut().set_fx_keep_eq(&s);
             save_settings(&weak, &settings);
         });
     }
@@ -2111,7 +2185,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.bass_db = (v * 2.0).round() / 2.0; // 0.5 dB steps
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
+            settings.borrow_mut().set_fx_keep_eq(&s);
             save_settings(&weak, &settings);
         });
     }
@@ -2121,7 +2195,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.treble_db = (v * 2.0).round() / 2.0;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
+            settings.borrow_mut().set_fx_keep_eq(&s);
             save_settings(&weak, &settings);
         });
     }
@@ -2131,61 +2205,77 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut s = fx.borrow_mut();
             s.subsonic_percent = v.round(); // whole percent
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
+            settings.borrow_mut().set_fx_keep_eq(&s);
             save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, eq_model, settings, weak) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, eq_model, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_eq_changed(move |i, v| {
             let i = i as usize;
             if i >= 12 {
                 return;
             }
             let v = (v * 2.0).round() / 2.0;
-            eq_model.set_row_data(i, v); // moves the slider
-            let mut s = fx.borrow_mut();
-            s.eq_gains_db[i] = v;
-            player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
-            save_settings(&weak, &settings);
+            let track = eq_track.borrow().clone();
+            let mut gains = settings.borrow().effective_eq(track.as_deref());
+            gains[i] = v;
+            apply_curve(&weak, &player, &fx, &eq_model, &settings, track.as_deref(), gains);
         });
     }
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
     let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
     {
-        let (player, fx, eq_model, settings, weak) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, eq_model, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_eq_preset_selected(move |i| {
             let Some(preset) = EQ_PRESETS.get(i as usize) else { return };
-            for (band, g) in preset.gains.iter().enumerate() {
-                eq_model.set_row_data(band, *g);
+            let track = eq_track.borrow().clone();
+            apply_curve(&weak, &player, &fx, &eq_model, &settings, track.as_deref(), preset.gains);
+        });
+    }
+    // Equalizer mode: off / one curve for all tracks / own curve per track.
+    {
+        let (player, fx, eq_model, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
+        ui.on_eq_mode_changed(move |k| {
+            settings.borrow_mut().eq_mode = EqMode::from_index(k);
+            if let Some(ui) = weak.upgrade() {
+                let track = eq_track.borrow().clone();
+                refresh_eq(&ui, &player, &fx, &eq_model, &settings.borrow(), track.as_deref());
             }
-            let mut s = fx.borrow_mut();
-            s.eq_gains_db = preset.gains;
-            player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
             save_settings(&weak, &settings);
         });
     }
+    // Another track started (reported by the status timer): per-track mode loads its curve.
     {
-        let (player, fx, eq_model, settings) = (player.clone(), fx.clone(), eq_model.clone(), settings.clone());
+        let (player, fx, eq_model, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
+        ui.on_now_track_changed(move |path| {
+            let track = PathBuf::from(path.as_str());
+            *eq_track.borrow_mut() = Some(track.clone());
+            if let Some(ui) = weak.upgrade() {
+                refresh_eq(&ui, &player, &fx, &eq_model, &settings.borrow(), Some(&track));
+            }
+        });
+    }
+    {
+        let (player, fx, eq_model, settings, eq_track) =
+            (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone());
         let weak = ui.as_weak();
         ui.on_fx_reset(move || {
-            let mut s = fx.borrow_mut();
-            *s = AudioFxSettings::default();
-            for i in 0..12 {
-                eq_model.set_row_data(i, 0.0);
-            }
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().reset_sound(track.as_deref());
             if let Some(ui) = weak.upgrade() {
                 ui.set_fx_normalize(false);
                 ui.set_fx_mono(false);
                 ui.set_fx_bass(0.0);
                 ui.set_fx_treble(0.0);
                 ui.set_fx_subsonic(0.0);
+                refresh_eq(&ui, &player, &fx, &eq_model, &settings.borrow(), track.as_deref());
             }
-            player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().fx = s.clone();
             save_settings(&weak, &settings);
         });
     }
