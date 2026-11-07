@@ -377,14 +377,16 @@ fn scan_folder(
     let ticket = scan_gen.fetch_add(1, Ordering::AcqRel) + 1;
     if let Some(ui) = weak.upgrade() {
         ui.set_status("Scanning...".into());
+        ui.set_scanning(true);
     }
     std::thread::spawn(move || {
         let tracks = radiant_core::library::scan(&dir);
         let weak_for_ui = weak.clone();
         let _ = weak.upgrade_in_event_loop(move |ui| {
             if scan_gen.load(Ordering::Acquire) != ticket {
-                return;
+                return; // a newer scan is running and keeps the spinner
             }
+            ui.set_scanning(false);
             // Manual rescan: covers may have changed on disk, so decode them again.
             if fresh {
                 if let Ok(mut c) = COVER_CACHE.lock() { c.clear(); }

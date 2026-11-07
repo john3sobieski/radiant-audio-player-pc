@@ -584,6 +584,8 @@ component PillButton inherits Rectangle {
 
 // Round header button with a "refresh" arrow (manual rescan of the music folder).
 component RescanButton inherits Rectangle {
+    /// True while a scan runs: the arrow spins.
+    in property <bool> spinning: false;
     callback clicked();
 
     width: 34px;
@@ -603,6 +605,8 @@ component RescanButton inherits Rectangle {
         stroke-width: 2.2px;
         stroke-line-cap: round;
         fill: transparent;
+        // One turn per 0.9 s while scanning; at rest the arrow stands still.
+        transform-rotation: root.spinning ? Math.mod(animation-tick() / 900ms, 1.0) * 360deg : 0deg;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -1130,6 +1134,8 @@ export component MainWindow inherits Window {
     in-out property <bool> drag-moved: false;
     in-out property <bool> suppress-click: false;
     in property <string> status;
+    /// A music folder scan is running (the rescan button spins).
+    in property <bool> scanning: false;
     in property <string> now-playing;
 
     // Sections: 0 = Tracks, 1 = Albums, 2 = Playlists, 3 = Queues (four fixed queues).
@@ -1582,6 +1588,7 @@ export component MainWindow inherits Window {
                 HeaderItem {
                     width: 34px;
                     RescanButton {
+                        spinning: root.scanning;
                         clicked => { root.rescan-folder(); }
                     }
                 }
