@@ -1207,11 +1207,36 @@ export component MainWindow inherits Window {
     /// The menu was opened for a track of the open playlist page (`menu-row` = row of `pl-page-tracks`).
     in-out property <bool> menu-in-pl: false;
     private property <length> menu-w: 156px;
-    private property <length> menu-h: 4 * 34px + 12px;
+    private property <length> menu-h: (root.menu-in-queue ? 5 : 4) * 34px + 12px;
     /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
     callback album-index-of-track(int) -> int;
     callback add-to-playlist(int, bool);
     callback add-to-queue(int, bool);
+    /// Queue page (section 3): rows of the open queue, same row type as the playlist page.
+    in property <[PlTrackRow]> queue-page-tracks;
+    in property <string> queue-page-meta;
+    /// Row of the playing track in `queue-page-tracks`, -1 = none.
+    in property <int> queue-current-index: -1;
+    callback queue-play-track(int);
+    callback queue-play-all();
+    callback queue-shuffle-all();
+    callback queue-clear();
+    /// Asks before clearing; the delete window (pl-view 4) is reused, `clear-confirm` switches its button.
+    callback queue-clear-ask();
+    in-out property <bool> clear-confirm: false;
+    callback queue-move-track(int, int);
+    callback queue-remove(int);
+    callback queue-page-add-to-playlist(int);
+    callback queue-page-add-to-queue(int);
+    callback album-index-of-queue-track(int) -> int;
+    /// Rust fills the page again (another queue opened, library rescanned).
+    callback queue-page-refresh();
+    in-out property <bool> q-drag-active: false;
+    in-out property <int> q-drag-from: -1;
+    in-out property <int> q-drag-to: -1;
+    in-out property <bool> q-drag-moved: false;
+    /// The menu was opened for a track of the open queue page (`menu-row` = row of `queue-page-tracks`).
+    in-out property <bool> menu-in-queue: false;
     callback pl-page-add-to-queue(int);
     // Window "Add to queue": opened from the menu or from the button next to the volume.
     in-out property <bool> show-q-popup: false;
@@ -1224,6 +1249,7 @@ export component MainWindow inherits Window {
         root.menu-row = row;
         root.menu-in-album = in-album;
         root.menu-in-pl = false;
+        root.menu-in-queue = false;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
         root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
         root.show-menu = true;
@@ -1232,6 +1258,16 @@ export component MainWindow inherits Window {
         root.menu-row = row;
         root.menu-in-album = false;
         root.menu-in-pl = true;
+        root.menu-in-queue = false;
+        root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
+        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.show-menu = true;
+    }
+    function open-queue-menu(mx: length, my: length, row: int) {
+        root.menu-row = row;
+        root.menu-in-album = false;
+        root.menu-in-pl = false;
+        root.menu-in-queue = true;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
         root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
         root.show-menu = true;
@@ -1343,7 +1379,7 @@ export component MainWindow inherits Window {
         if (root.pl-has-track && root.pl-view == 1) { root.pl-view = 0; } else { root.show-pl-popup = false; }
     }
     changed show-pl-popup => {
-        if (self.show-pl-popup) { pl-fs.focus(); }
+        if (self.show-pl-popup) { pl-fs.focus(); } else { root.clear-confirm = false; }
     }
     changed show-q-popup => {
         if (self.show-q-popup) { q-fs.focus(); }
@@ -2281,49 +2317,213 @@ export component MainWindow inherits Window {
                       }
                     }
 
-                    // Queue (stub until queues exist).
+                    // Queue page: the tracks of the open queue (drag to reorder, click to play).
                     if k == 1 : VerticalLayout {
-                        padding-left: 28px;
-                        padding-right: 28px;
-                        padding-top: 14px;
-                        spacing: 12px;
-                        alignment: start;
-                        Text {
-                            text: "Queue \{root.queue-index + 1}";
-                            color: Theme.text;
-                            font-size: 22px;
-                            font-weight: 700;
-                        }
                         Rectangle {
-                            height: 40px;
-                            HorizontalLayout {
-                                spacing: 10px;
-                                alignment: start;
-                                // Disabled until the queue has tracks.
-                                Rectangle {
-                                    width: 110px;
-                                    height: 36px;
-                                    border-radius: 18px;
-                                    background: Theme.surface;
-                                    Text { text: "Play"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
-                                }
-                                Rectangle {
-                                    width: 110px;
-                                    height: 36px;
-                                    border-radius: 18px;
-                                    background: Theme.surface;
-                                    Text { text: "Shuffle"; color: Theme.muted.with-alpha(0.6); horizontal-alignment: center; vertical-alignment: center; }
+                            height: 124px;
+                            Text {
+                                x: 28px;
+                                y: 16px;
+                                width: parent.width - 56px;
+                                height: 30px;
+                                text: "Queue \{root.queue-index + 1}";
+                                color: Theme.text;
+                                font-size: 22px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                x: 28px;
+                                y: 48px;
+                                width: parent.width - 56px;
+                                height: 18px;
+                                text: root.queue-page-meta;
+                                color: Theme.muted;
+                                font-size: 13px;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                            PillButton {
+                                x: 28px;
+                                y: 78px;
+                                width: 104px;
+                                text: (root.queue-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                active: root.queue-current-index >= 0 && root.is-playing;
+                                clicked => {
+                                    if (root.queue-current-index >= 0) { root.toggle-play(); }
+                                    else { root.queue-play-all(); }
                                 }
                             }
+                            PillButton {
+                                x: 142px;
+                                y: 78px;
+                                width: 104px;
+                                text: "Shuffle";
+                                active: root.shuffle;
+                                clicked => {
+                                    if (root.shuffle) { root.shuffle-changed(false); }
+                                    else if (root.queue-current-index >= 0) { root.shuffle-changed(true); }
+                                    else { root.queue-shuffle-all(); }
+                                }
+                            }
+                            PillButton {
+                                x: 256px;
+                                y: 78px;
+                                width: 104px;
+                                text: "Clear";
+                                clicked => { root.clear-confirm = true; root.queue-clear-ask(); }
+                            }
                         }
-                        Text {
-                            width: 100%;
-                            text: root.queue-counts[root.queue-index] > 0
-                                ? "Queue \{root.queue-index + 1} holds \{root.queue-counts[root.queue-index]} tracks. Its track list is coming next."
-                                : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
-                            color: Theme.muted;
-                            font-size: 15px;
-                            wrap: word-wrap;
+
+                        if root.queue-page-tracks.length == 0 : Rectangle {
+                            vertical-stretch: 1;
+                            Text {
+                                width: parent.width;
+                                height: parent.height;
+                                text: "Queue \{root.queue-index + 1} is empty. Use \"Add to queue\" in the menu of a track.";
+                                color: Theme.muted;
+                                font-size: 15px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        if root.queue-page-tracks.length > 0 : Rectangle {
+                            height: 30px;
+                            Text {
+                                x: root.col-pad;
+                                width: root.num-w;
+                                height: parent.height;
+                                text: "#";
+                                color: Theme.muted;
+                                font-size: 12px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                x: root.title-x;
+                                width: root.album-list-title-w;
+                                height: parent.height;
+                                text: "Title";
+                                color: Theme.muted;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                x: root.dur-x;
+                                width: root.dur-w;
+                                height: parent.height;
+                                text: "Time";
+                                color: Theme.muted;
+                                font-size: 12px;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                            Rectangle {
+                                x: root.col-pad;
+                                y: parent.height - 1px;
+                                width: parent.width - 2 * root.col-pad;
+                                height: 1px;
+                                background: Theme.surface-hover;
+                            }
+                        }
+                        if root.queue-page-tracks.length > 0 : ListView {
+                            vertical-stretch: 1;
+                            for t[i] in root.queue-page-tracks : Rectangle {
+                                height: root.detail-row-h;
+                                background: root.q-drag-active && i == root.q-drag-from ? Theme.accent.with-alpha(0.28)
+                                    : i == root.queue-current-index ? Theme.accent.with-alpha(0.16)
+                                    : qt-ta.has-hover ? Theme.surface : transparent;
+                                animate background { duration: 120ms; }
+
+                                if root.q-drag-active && i == root.q-drag-to : Rectangle {
+                                    x: 12px;
+                                    y: root.q-drag-to > root.q-drag-from ? parent.height - 2px : 0px;
+                                    width: parent.width - 24px;
+                                    height: 2px;
+                                    background: Theme.accent;
+                                }
+
+                                Text {
+                                    x: root.col-pad;
+                                    width: root.num-w;
+                                    height: parent.height;
+                                    text: t.no;
+                                    color: i == root.queue-current-index ? Theme.accent : Theme.muted;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    x: root.title-x;
+                                    y: t.artist == "" ? 0px : 8px;
+                                    width: root.album-list-title-w;
+                                    height: t.artist == "" ? parent.height : 22px;
+                                    text: t.title;
+                                    color: t.missing ? Theme.muted : i == root.queue-current-index ? Theme.accent : Theme.text;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                if t.artist != "" : Text {
+                                    x: root.title-x;
+                                    y: 30px;
+                                    width: root.album-list-title-w;
+                                    height: 18px;
+                                    text: t.artist;
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    x: root.dur-x;
+                                    width: root.dur-w;
+                                    height: parent.height;
+                                    text: t.duration;
+                                    color: Theme.muted;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                qt-ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    pointer-event(event) => {
+                                        if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                            root.open-queue-menu(qt-ta.absolute-position.x + qt-ta.mouse-x, qt-ta.absolute-position.y + qt-ta.mouse-y, i);
+                                        }
+                                        if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                            root.suppress-click = false;
+                                            root.q-drag-from = i;
+                                            root.q-drag-to = i;
+                                            root.q-drag-active = true;
+                                            root.q-drag-moved = false;
+                                        } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.q-drag-active) {
+                                            if (root.q-drag-moved && root.q-drag-from != root.q-drag-to) {
+                                                root.queue-move-track(root.q-drag-from, root.q-drag-to);
+                                                root.suppress-click = true;
+                                            }
+                                            root.q-drag-active = false;
+                                            root.q-drag-moved = false;
+                                        }
+                                    }
+                                    moved => {
+                                        if (self.pressed && root.q-drag-active) {
+                                            let target = max(0, min(root.queue-page-tracks.length - 1,
+                                                i + ((self.mouse-y - self.pressed-y) / root.detail-row-h).round()));
+                                            if (target != root.q-drag-to) {
+                                                root.q-drag-to = target;
+                                                root.q-drag-moved = true;
+                                            }
+                                        }
+                                    }
+                                    clicked => {
+                                        if (root.suppress-click) { root.suppress-click = false; }
+                                        else { root.queue-play-track(i); }
+                                    }
+                                }
+                                MoreButton {
+                                    x: root.dots-x;
+                                    y: (parent.height - self.height) / 2;
+                                    open(mx, my) => { root.open-queue-menu(mx, my, i); }
+                                }
+                            }
                         }
                     }
                 }
@@ -3390,7 +3590,14 @@ export component MainWindow inherits Window {
                 text: "Open album";
                 clicked => {
                     root.show-menu = false;
-                    if (root.menu-in-pl) {
+                    if (root.menu-in-queue) {
+                        let a = root.album-index-of-queue-track(root.menu-row);
+                        if (a >= 0) {
+                            root.go-section(1);
+                            root.album-open = true;
+                            root.open-album(a);
+                        }
+                    } else if (root.menu-in-pl) {
                         let a = root.album-index-of-pl-track(root.menu-row);
                         if (a >= 0) {
                             root.go-section(1);
@@ -3411,7 +3618,8 @@ export component MainWindow inherits Window {
                 text: "Add to playlist";
                 clicked => {
                     root.show-menu = false;
-                    if (root.menu-in-pl) { root.pl-page-add-to-playlist(root.menu-row); }
+                    if (root.menu-in-queue) { root.queue-page-add-to-playlist(root.menu-row); }
+                    else if (root.menu-in-pl) { root.pl-page-add-to-playlist(root.menu-row); }
                     else { root.add-to-playlist(root.menu-row, root.menu-in-album); }
                 }
             }
@@ -3419,15 +3627,23 @@ export component MainWindow inherits Window {
                 text: "Add to queue";
                 clicked => {
                     root.show-menu = false;
-                    if (root.menu-in-pl) { root.pl-page-add-to-queue(root.menu-row); }
+                    if (root.menu-in-queue) { root.queue-page-add-to-queue(root.menu-row); }
+                    else if (root.menu-in-pl) { root.pl-page-add-to-queue(root.menu-row); }
                     else { root.add-to-queue(root.menu-row, root.menu-in-album); }
+                }
+            }
+            if root.menu-in-queue : MenuItem {
+                text: "Remove from queue";
+                clicked => {
+                    root.show-menu = false;
+                    root.queue-remove(root.menu-row);
                 }
             }
             MenuItem {
                 text: "Create stems";
                 clicked => {
                     root.show-menu = false;
-                    if (!root.menu-in-pl) { root.create-stems(root.menu-row, root.menu-in-album); }
+                    if (!root.menu-in-pl && !root.menu-in-queue) { root.create-stems(root.menu-row, root.menu-in-album); }
                 }
             }
         }
@@ -3453,7 +3669,7 @@ export component MainWindow inherits Window {
             x: (root.width - self.width) / 2;
             y: (root.height - self.height) / 2 + (root.show-q-popup ? 0px : 18px);
             width: min(420px, root.width - 32px);
-            height: min(404px, root.height - 32px);
+            height: min(434px, root.height - 32px);
             background: Theme.surface;
             border-radius: 18px;
             border-width: 1px;
@@ -3586,6 +3802,26 @@ export component MainWindow inherits Window {
                     q-row-ta := TouchArea {
                         mouse-cursor: pointer;
                         clicked => { root.queue-toggle(q); }
+                    }
+                }
+                Rectangle {
+                    height: 44px;
+                    Text {
+                        x: 2px;
+                        width: parent.width - 120px;
+                        height: parent.height;
+                        text: "Click a queue to add the track, click again to take it out.";
+                        color: Theme.muted;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    AccentButton {
+                        x: parent.width - self.width;
+                        y: 2px;
+                        width: 100px;
+                        text: "Done";
+                        clicked => { root.show-q-popup = false; }
                     }
                 }
             }
@@ -3922,10 +4158,13 @@ export component MainWindow inherits Window {
                     alignment: end;
                     PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
                     AccentButton {
-                        text: "Delete";
+                        text: root.clear-confirm ? "Clear" : "Delete";
                         tone: #d64550;
                         width: 110px;
-                        clicked => { root.pl-delete(); root.show-pl-popup = false; }
+                        clicked => {
+                            if (root.clear-confirm) { root.queue-clear(); } else { root.pl-delete(); }
+                            root.show-pl-popup = false;
+                        }
                     }
                 }
             }

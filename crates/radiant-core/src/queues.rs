@@ -57,6 +57,28 @@ impl QueueStore {
         q.len() != before
     }
 
+    /// Moves the track at `from` to position `to`. `false` = nothing changed.
+    pub fn move_track(&mut self, queue: usize, from: usize, to: usize) -> bool {
+        let Some(q) = self.queues.get_mut(queue) else { return false };
+        if from == to || from >= q.len() || to >= q.len() {
+            return false;
+        }
+        let track = q.remove(from);
+        q.insert(to, track);
+        true
+    }
+
+    /// Empties one queue. `false` = it was already empty (or unknown).
+    pub fn clear(&mut self, queue: usize) -> bool {
+        match self.queues.get_mut(queue) {
+            Some(q) if !q.is_empty() => {
+                q.clear();
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Track count of every queue.
     pub fn counts(&self) -> Vec<usize> {
         (0..QUEUE_COUNT).map(|i| self.tracks(i).len()).collect()
@@ -146,6 +168,22 @@ mod tests {
         assert!(!s.remove(1, t));
         assert!(!s.remove(7, t));
         assert_eq!(s.counts(), vec![0, 0, 0, 1]);
+    }
+
+    #[test]
+    fn move_and_clear() {
+        let mut s = fresh();
+        for n in ["a.mp3", "b.mp3", "c.mp3"] {
+            s.add(0, Path::new(n));
+        }
+        assert!(s.move_track(0, 0, 2));
+        assert_eq!(s.tracks(0), [PathBuf::from("b.mp3"), PathBuf::from("c.mp3"), PathBuf::from("a.mp3")]);
+        assert!(!s.move_track(0, 1, 1));
+        assert!(!s.move_track(0, 0, 3));
+        assert!(!s.move_track(5, 0, 1));
+        assert!(s.clear(0));
+        assert!(!s.clear(0));
+        assert!(s.tracks(0).is_empty());
     }
 
     #[test]

@@ -378,12 +378,14 @@ fn scan_folder(
     std::thread::spawn(move || {
         let tracks = radiant_core::library::scan(&dir);
         let weak_for_ui = weak.clone();
-        let _ = weak.upgrade_in_event_loop(move |_ui| {
+        let _ = weak.upgrade_in_event_loop(move |ui| {
             if scan_gen.load(Ordering::Acquire) != ticket {
                 return;
             }
             if let Ok(mut l) = library.lock() { *l = tracks; }
             refresh_tracks(&weak_for_ui, &library, &displayed, &query, *sort.lock().unwrap_or_else(|e| e.into_inner()));
+            // The queue page marks files that are not in the library: it needs the new list.
+            ui.invoke_queue_page_refresh();
         });
     });
 }
@@ -692,6 +694,8 @@ enum Edit {
 
 /// Tracks of the open playlist page, same order as its rows (the file of every row).
 static PL_ROWS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// Tracks of the open queue page, same order as its rows.
+static Q_ROWS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 type PlRef = Rc<RefCell<PlState>>;
 
@@ -948,6 +952,56 @@ fn open_queue_window(ui: &MainWindow, q: &QRef, library: &Arc<Mutex<Vec<Track>>>
     ui.set_show_q_popup(true);
 }
 
+/// Fills the queue page with the tracks of the queue that is open (`queue-index`).
+fn fill_queue_page(ui: &MainWindow, st: &QState, library: &Arc<Mutex<Vec<Track>>>) {
+    let q = ui.get_queue_index().clamp(0, 3) as usize;
+    let paths = st.store.tracks(q);
+    let tracks = library.lock().map(|l| l.clone()).unwrap_or_default();
+    let by_path: HashMap<&Path, &Track> = tracks.iter().map(|t| (t.path.as_path(), t)).collect();
+    let mut rows: Vec<PlTrackRow> = Vec::with_capacity(paths.len());
+    let mut total_ms = 0_u64;
+    for (i, path) in paths.iter().enumerate() {
+        let no = (i + 1).to_string().into();
+        match by_path.get(path.as_path()) {
+            Some(t) => {
+                let duration = t.duration_ms.filter(|d| *d > 0);
+                total_ms += duration.unwrap_or(0);
+                rows.push(PlTrackRow {
+                    no,
+                    title: t.title.clone().into(),
+                    artist: t.artist.clone().unwrap_or_default().into(),
+                    duration: duration.map(fmt_time).unwrap_or_default().into(),
+                    missing: false,
+                });
+            }
+            None => rows.push(PlTrackRow {
+                no,
+                title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().into(),
+                artist: "File not found".into(),
+                duration: SharedString::default(),
+                missing: true,
+            }),
+        }
+    }
+    let mut meta = tracks_text(paths.len());
+    if total_ms > 0 {
+        meta.push_str(&format!(" · {}", fmt_total(total_ms)));
+    }
+    let playing = LAST_NOW.lock().ok().and_then(|l| l.clone());
+    let current = playing.and_then(|c| paths.iter().position(|t| *t == c)).map_or(-1, |i| i as i32);
+    if let Ok(mut open) = Q_ROWS.lock() { *open = paths.to_vec(); }
+    ui.set_queue_page_meta(meta.into());
+    ui.set_queue_current_index(current);
+    ui.set_queue_page_tracks(ModelRc::new(VecModel::from(rows)));
+}
+
+/// Tracks of the open queue that are still in the library, in queue order.
+fn queue_playable(st: &QState, ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>) -> Vec<PathBuf> {
+    let q = ui.get_queue_index().clamp(0, 3) as usize;
+    let known: HashSet<PathBuf> = library.lock().map(|l| l.iter().map(|t| t.path.clone()).collect()).unwrap_or_default();
+    st.store.tracks(q).iter().filter(|t| known.contains(*t)).cloned().collect()
+}
+
 /// Shows the playlist window in `view` (0 = pick, 1 = create, 2 = move to folder).
 fn show_pl_popup(ui: &MainWindow, st: &mut PlState, view: i32) {
     refresh_playlists(ui, st);
@@ -982,6 +1036,13 @@ fn main() -> Result<(), slint::PlatformError> {
             .current
             .as_ref()
             .and_then(|c| OPEN_ROWS.lock().ok()?.iter().position(|p| p.as_ref() == Some(c)))
+            .map_or(-1, |i| i as i32);
+
+        // The same for the open queue page.
+        let q_index = status
+            .current
+            .as_ref()
+            .and_then(|c| Q_ROWS.lock().ok()?.iter().position(|p| p == c))
             .map_or(-1, |i| i as i32);
 
         // The same for the open playlist page.
@@ -1025,6 +1086,7 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_current_index(index);
             ui.set_album_current_index(album_index);
             ui.set_pl_current_index(pl_index);
+            ui.set_queue_current_index(q_index);
             ui.set_shuffle(status.shuffle);
             ui.set_repeat_mode(match status.repeat {
                 RepeatMode::Off => 0,
@@ -1094,7 +1156,9 @@ fn main() -> Result<(), slint::PlatformError> {
         };
         Rc::new(RefCell::new(QState { store, target: None }))
     };
+    ui.set_queue_index(settings.borrow().queue_index as i32);
     refresh_queues(&ui, &queues_state.borrow());
+    fill_queue_page(&ui, &queues_state.borrow(), &library);
     let ui_weak = ui.as_weak();
     // Bumped on every folder scan so a late result cannot replace a newer one.
     let scan_gen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
@@ -1259,7 +1323,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     {
         // A queue row was clicked: add the track to that queue, or take it out again.
-        let (weak, qs) = (ui_weak.clone(), queues_state.clone());
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
         ui.on_queue_toggle(move |i| {
             let Some(ui) = weak.upgrade() else { return };
             let mut st = qs.borrow_mut();
@@ -1273,6 +1337,152 @@ fn main() -> Result<(), slint::PlatformError> {
             if !changed { return; }
             save_queues(&ui, &st.store);
             refresh_queues(&ui, &st);
+            fill_queue_page(&ui, &st, &library);
+        });
+    }
+    {
+        // Queue page: menu entries "Add to playlist" / "Add to queue" / "Open album" for its tracks.
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
+        ui.on_queue_page_add_to_playlist(move |row| {
+            let path = Q_ROWS.lock().ok().and_then(|r| r.get(row.max(0) as usize).cloned());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_add_window(&ui, &pl, &library, path);
+        });
+    }
+    {
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_queue_page_add_to_queue(move |row| {
+            let path = Q_ROWS.lock().ok().and_then(|r| r.get(row.max(0) as usize).cloned());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_queue_window(&ui, &qs, &library, path);
+        });
+    }
+    {
+        let weak = ui_weak.clone();
+        ui.on_album_index_of_queue_track(move |i| {
+            let Some(path) = Q_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return -1 };
+            let found = ALBUMS.lock().ok().and_then(|a| a.iter().position(|e| e.paths.contains(&path)));
+            match found {
+                Some(index) => {
+                    album_cover_wanted(weak.clone(), index);
+                    index as i32
+                }
+                None => -1,
+            }
+        });
+    }
+    {
+        // Click on a track of the open queue: it is played from that track on.
+        let (weak, qs, player, library) = (ui_weak.clone(), queues_state.clone(), player.clone(), library.clone());
+        ui.on_queue_play_track(move |i| {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(clicked) = Q_ROWS.lock().ok().and_then(|r| r.get(i.max(0) as usize).cloned()) else { return };
+            let queue = queue_playable(&qs.borrow(), &ui, &library);
+            match queue.iter().position(|p| *p == clicked) {
+                Some(start) => player.send(Command::SetQueue { queue, start }),
+                None => ui.set_status("This file is not in the library".into()),
+            }
+        });
+    }
+    {
+        let (weak, qs, player, library) = (ui_weak.clone(), queues_state.clone(), player.clone(), library.clone());
+        ui.on_queue_play_all(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let queue = queue_playable(&qs.borrow(), &ui, &library);
+            if queue.is_empty() {
+                ui.set_status("This queue has no playable tracks yet".into());
+                return;
+            }
+            player.send(Command::SetQueue { queue, start: 0 });
+        });
+    }
+    {
+        // "Shuffle" on the queue page: shuffle on, start from a random track.
+        let (weak, qs, player, library, settings) = (ui_weak.clone(), queues_state.clone(), player.clone(), library.clone(), settings.clone());
+        ui.on_queue_shuffle_all(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let queue = queue_playable(&qs.borrow(), &ui, &library);
+            if queue.is_empty() {
+                ui.set_status("This queue has no playable tracks yet".into());
+                return;
+            }
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos() as usize)
+                .unwrap_or(0);
+            let start = nanos % queue.len();
+            player.send(Command::SetShuffle(true));
+            settings.borrow_mut().shuffle = true;
+            ui.set_shuffle(true);
+            save_settings(&weak, &settings);
+            player.send(Command::SetQueue { queue, start });
+        });
+    }
+    {
+        // Drag on a row of the open queue: the new order is saved.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_queue_move_track(move |from, to| {
+            let Some(ui) = weak.upgrade() else { return };
+            if from < 0 || to < 0 { return; }
+            let mut st = qs.borrow_mut();
+            let q = ui.get_queue_index().clamp(0, 3) as usize;
+            if st.store.move_track(q, from as usize, to as usize) {
+                save_queues(&ui, &st.store);
+                fill_queue_page(&ui, &st, &library);
+            }
+        });
+    }
+    {
+        // "Remove from queue" in the track menu.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_queue_remove(move |row| {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(path) = Q_ROWS.lock().ok().and_then(|r| r.get(row.max(0) as usize).cloned()) else { return };
+            let mut st = qs.borrow_mut();
+            let q = ui.get_queue_index().clamp(0, 3) as usize;
+            if st.store.remove(q, &path) {
+                save_queues(&ui, &st.store);
+                refresh_queues(&ui, &st);
+                fill_queue_page(&ui, &st, &library);
+            }
+        });
+    }
+    {
+        // "Clear" button of the queue page: asks first (the delete window is reused; its button calls `queue-clear`).
+        let (weak, pl, qs) = (ui_weak.clone(), pl.clone(), queues_state.clone());
+        ui.on_queue_clear_ask(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let q = ui.get_queue_index().clamp(0, 3) as usize;
+            if qs.borrow().store.tracks(q).is_empty() { return; }
+            let mut st = pl.borrow_mut();
+            st.target = None;
+            st.moving = None;
+            st.edit = None;
+            ui.set_pl_dialog_title(format!("Clear queue {}?", q + 1).into());
+            ui.set_pl_dialog_text("All tracks will be removed from this queue. The files stay in your library.".into());
+            show_pl_popup(&ui, &mut st, 4);
+        });
+    }
+    {
+        // Confirmed "Clear" on the queue page.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_queue_clear(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = qs.borrow_mut();
+            let q = ui.get_queue_index().clamp(0, 3) as usize;
+            if st.store.clear(q) {
+                save_queues(&ui, &st.store);
+                refresh_queues(&ui, &st);
+                fill_queue_page(&ui, &st, &library);
+            }
+        });
+    }
+    {
+        // Another queue was opened, or the library was rescanned.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_queue_page_refresh(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            fill_queue_page(&ui, &qs.borrow(), &library);
         });
     }
     {
@@ -1661,7 +1871,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     {
         // Section / queue switch: remembered between launches.
-        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        let (settings, weak, qs, library) = (settings.clone(), ui_weak.clone(), queues_state.clone(), library.clone());
         ui.on_section_changed(move |section, queue| {
             {
                 let mut st = settings.borrow_mut();
@@ -1669,6 +1879,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 st.queue_index = queue.clamp(0, 3) as u8;
             }
             save_settings(&weak, &settings);
+            if section == 3 {
+                if let Some(ui) = weak.upgrade() { fill_queue_page(&ui, &qs.borrow(), &library); }
+            }
         });
     }
     {
