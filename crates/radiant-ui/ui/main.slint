@@ -689,37 +689,6 @@ component SearchField inherits Rectangle {
     }
 }
 
-// Small preset chip in the sound panel.
-component PillPreset inherits Rectangle {
-    in property <string> text;
-    /// The current curve is exactly this preset.
-    in property <bool> active: false;
-    in property <bool> enabled: true;
-    callback clicked();
-
-    height: 26px;
-    border-radius: 13px;
-    background: root.active ? Theme.accent.with-alpha(0.22)
-        : (ta.has-hover && root.enabled) ? Theme.surface-hover : Theme.bg;
-    border-width: 1px;
-    border-color: root.active ? Theme.accent.with-alpha(0.7) : transparent;
-    animate background { duration: 120ms; }
-
-    Text {
-        text: root.text;
-        color: root.active ? Theme.accent : Theme.text;
-        font-size: 11px;
-        font-weight: root.active ? 700 : 400;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    ta := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
-        clicked => { root.clicked(); }
-    }
-}
-
 // A preset card: name on top, a miniature of its curve below.
 component PresetCard inherits Rectangle {
     in property <string> text;
