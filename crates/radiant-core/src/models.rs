@@ -12,7 +12,15 @@ pub const QUEUE_COUNT: usize = 4;
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioInfo {
+    /// File extension in capitals ("FLAC", "M4A", ...).
     pub format: String,
+    /// Codec found in the stream ("FLAC", "ALAC", "AAC", "MP3", "Vorbis", "Opus", "WAV"); empty = unknown.
+    /// Tells apart what the extension cannot (an .m4a can hold AAC or ALAC).
+    pub codec: String,
+    /// Bits per sample of the stream (lossless formats), if known.
+    pub bit_depth: Option<u32>,
+    /// The codec keeps every sample as it was (FLAC, ALAC, WAV, ...).
+    pub lossless: bool,
     pub bitrate_kbps: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,

@@ -9,7 +9,10 @@ use crate::models::{Album, AudioInfo, Track};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
-use symphonia::core::codecs::CODEC_TYPE_NULL;
+use symphonia::core::codecs::{
+    CodecType, CODEC_TYPE_AAC, CODEC_TYPE_ALAC, CODEC_TYPE_FLAC, CODEC_TYPE_MP3, CODEC_TYPE_NULL, CODEC_TYPE_OPUS,
+    CODEC_TYPE_VORBIS,
+};
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{MetadataOptions, StandardTagKey, StandardVisualKey, Tag, Value, Visual};
@@ -74,7 +77,36 @@ fn track_from_path(path: &Path) -> Track {
     track.info.bitrate_kbps = track.duration_ms.filter(|duration| *duration > 0).map(|duration| {
         ((track.info.size_bytes as u128 * 8) / duration as u128).min(u32::MAX as u128) as u32
     });
+    // Uncompressed audio: the bitrate follows from the stream, no need to guess from the file size.
+    if matches!(track.info.codec.as_str(), "WAV" | "AIFF") {
+        if let (Some(rate), Some(bits), Some(channels)) = (track.info.sample_rate, track.info.bit_depth, track.info.channels) {
+            track.info.bitrate_kbps = Some((rate as u64 * bits as u64 * channels as u64 / 1000).min(u32::MAX as u64) as u32);
+        }
+    }
     track
+}
+
+/// Name of the codec and whether it is lossless. The extension covers formats Symphonia reports as plain PCM.
+fn codec_label(codec: CodecType, ext: &str) -> (&'static str, bool) {
+    if codec == CODEC_TYPE_FLAC {
+        ("FLAC", true)
+    } else if codec == CODEC_TYPE_ALAC {
+        ("ALAC", true)
+    } else if codec == CODEC_TYPE_MP3 {
+        ("MP3", false)
+    } else if codec == CODEC_TYPE_AAC {
+        ("AAC", false)
+    } else if codec == CODEC_TYPE_VORBIS {
+        ("Vorbis", false)
+    } else if codec == CODEC_TYPE_OPUS {
+        ("Opus", false)
+    } else {
+        match ext {
+            "WAV" | "WAVE" => ("WAV", true),
+            "AIF" | "AIFF" => ("AIFF", true),
+            _ => ("", false),
+        }
+    }
 }
 
 /// Reads container tags and technical details without decoding audio. Invalid or unsupported files
@@ -108,6 +140,10 @@ fn read_audio_metadata(path: &Path, track: &mut Track) {
     let params = &audio_track.codec_params;
     track.info.sample_rate = params.sample_rate;
     track.info.channels = params.channels.map(|c| c.count().min(u8::MAX as usize) as u8);
+    track.info.bit_depth = params.bits_per_sample.or(params.bits_per_coded_sample).filter(|b| *b > 0);
+    let (codec_name, lossless) = codec_label(params.codec, &track.info.format);
+    track.info.codec = codec_name.to_string();
+    track.info.lossless = lossless;
     track.duration_ms = params
         .n_frames
         .zip(params.sample_rate)
@@ -283,6 +319,16 @@ pub fn group_albums(tracks: &[Track]) -> Vec<Album> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codec_names_and_lossless_flag() {
+        assert_eq!(codec_label(CODEC_TYPE_FLAC, "FLAC"), ("FLAC", true));
+        // An .m4a is told apart by its stream, not by the extension.
+        assert_eq!(codec_label(CODEC_TYPE_ALAC, "M4A"), ("ALAC", true));
+        assert_eq!(codec_label(CODEC_TYPE_AAC, "M4A"), ("AAC", false));
+        assert_eq!(codec_label(CODEC_TYPE_NULL, "WAV"), ("WAV", true));
+        assert_eq!(codec_label(CODEC_TYPE_NULL, "XYZ"), ("", false));
+    }
 
     #[test]
     fn extension_filter() {

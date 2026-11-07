@@ -1214,6 +1214,8 @@ export component MainWindow inherits Window {
     in property <string> np-title;
     in property <string> np-sub;
     in property <string> np-quality;
+    /// 0 = lossy / unknown, 1 = lossless, 2 = Hi-Res: a chip in front of the quality text.
+    in property <int> np-quality-tier: 0;
     in property <string> np-letter;
     in property <image> np-cover;
     in property <bool> np-has-cover: false;
@@ -3334,14 +3336,35 @@ export component MainWindow inherits Window {
                 overflow: elide;
             }
             if root.np-quality != "" : Rectangle {
+                property <length> chip-w: root.np-quality-tier == 2 ? 46px : root.np-quality-tier == 1 ? 60px : 0px;
                 y: parent.height - 22px;
                 height: 18px;
-                width: min(parent.width - 48px, quality-text.preferred-width + 20px);
+                width: min(parent.width - 48px, self.chip-w + (self.chip-w > 0px ? 6px : 0px) + quality-text.preferred-width + 20px);
                 x: (parent.width - self.width) / 2;
                 border-radius: 9px;
                 background: root.glow-color.with-alpha(0.18);
+                // Lossless / Hi-Res chip: gold for Hi-Res, accent for plain lossless.
+                if root.np-quality-tier > 0 : Rectangle {
+                    x: 2px;
+                    y: 2px;
+                    width: parent.chip-w;
+                    height: 14px;
+                    border-radius: 7px;
+                    background: root.np-quality-tier == 2 ? #e9b949 : Theme.accent;
+                    Text {
+                        width: parent.width;
+                        height: parent.height;
+                        text: root.np-quality-tier == 2 ? "Hi-Res" : "Lossless";
+                        color: root.np-quality-tier == 2 ? #1a1405 : #ffffff;
+                        font-size: 9.5px;
+                        font-weight: 800;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
                 quality-text := Text {
-                    width: parent.width;
+                    x: parent.chip-w > 0px ? parent.chip-w + 8px : 0px;
+                    width: parent.width - self.x;
                     height: parent.height;
                     text: root.np-quality;
                     color: Theme.text;
