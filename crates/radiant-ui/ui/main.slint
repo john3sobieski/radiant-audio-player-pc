@@ -582,6 +582,34 @@ component PillButton inherits Rectangle {
     }
 }
 
+// Round header button with a "refresh" arrow (manual rescan of the music folder).
+component RescanButton inherits Rectangle {
+    callback clicked();
+
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    background: ta.has-hover ? Theme.surface-hover : Theme.surface;
+
+    Path {
+        x: 8px;
+        y: 8px;
+        width: 18px;
+        height: 18px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M20 12A8 8 0 1 1 17.5 6.3M17.5 2V6.5H13";
+        stroke: ta.has-hover ? Theme.text : Theme.muted;
+        stroke-width: 2.2;
+        stroke-line-cap: round;
+        fill: transparent;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 // Centers a fixed-height child vertically inside a stretching layout.
 component HeaderItem inherits Rectangle {
     VerticalLayout {
@@ -1377,6 +1405,7 @@ export component MainWindow inherits Window {
     }
 
     callback choose-folder();
+    callback rescan-folder();
     callback search-changed(string);
     callback sort-changed(int, bool);
     callback reorder-tracks(int, int);
@@ -1548,6 +1577,12 @@ export component MainWindow inherits Window {
                     PillButton {
                         text: "Choose folder";
                         clicked => { root.choose-folder(); }
+                    }
+                }
+                HeaderItem {
+                    width: 34px;
+                    RescanButton {
+                        clicked => { root.rescan-folder(); }
                     }
                 }
             }
@@ -3337,7 +3372,9 @@ export component MainWindow inherits Window {
             }
             if root.np-quality != "" : Rectangle {
                 property <length> chip-w: root.np-quality-tier == 2 ? 46px : root.np-quality-tier == 1 ? 60px : 0px;
-                y: parent.height - 22px;
+                // No artist / album line under the title: the badge moves up into its place.
+                y: root.np-sub == "" ? parent.height - 44px : parent.height - 22px;
+                animate y { duration: 160ms; easing: ease-out; }
                 height: 18px;
                 width: min(parent.width - 48px, self.chip-w + (self.chip-w > 0px ? 6px : 0px) + quality-text.preferred-width + 20px);
                 x: (parent.width - self.width) / 2;

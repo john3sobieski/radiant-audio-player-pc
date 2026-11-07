@@ -371,6 +371,7 @@ fn scan_folder(
     sort: Arc<Mutex<SortState>>,
     scan_gen: Arc<AtomicU64>,
     dir: PathBuf,
+    fresh: bool,
 ) {
     // A slower scan must not overwrite the list from a newer one.
     let ticket = scan_gen.fetch_add(1, Ordering::AcqRel) + 1;
@@ -383,6 +384,11 @@ fn scan_folder(
         let _ = weak.upgrade_in_event_loop(move |ui| {
             if scan_gen.load(Ordering::Acquire) != ticket {
                 return;
+            }
+            // Manual rescan: covers may have changed on disk, so decode them again.
+            if fresh {
+                if let Ok(mut c) = COVER_CACHE.lock() { c.clear(); }
+                if let Ok(mut c) = ALBUM_COVERS.lock() { c.clear(); }
             }
             if let Ok(mut l) = library.lock() { *l = tracks; }
             refresh_tracks(&weak_for_ui, &library, &displayed, &query, *sort.lock().unwrap_or_else(|e| e.into_inner()));
@@ -1226,7 +1232,7 @@ fn main() -> Result<(), slint::PlatformError> {
     if let Ok(mut s) = ALBUM_SORT.lock() { *s = (settings.borrow().album_sort, settings.borrow().album_sort_desc); }
     if let Ok(mut order) = ALBUM_ORDER.lock() { *order = settings.borrow().album_order.clone(); }
     if let Some(dir) = settings.borrow().music_folder.clone() {
-        scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
+        scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, false);
     }
 
     {
@@ -2182,12 +2188,27 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
+    // Manual rescan of the remembered folder (the folder is also rescanned on every start).
+    {
+        let (weak, settings, library, displayed, query, sort, scan_gen) =
+            (ui_weak.clone(), settings.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone());
+        ui.on_rescan_folder(move || {
+            let dir = settings.borrow().music_folder.clone();
+            match dir {
+                Some(dir) => scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true),
+                None => {
+                    if let Some(ui) = weak.upgrade() { ui.set_status("Choose a music folder first".into()); }
+                }
+            }
+        });
+    }
+
     let weak = ui_weak.clone();
     ui.on_choose_folder(move || {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
         save_settings(&weak, &settings);
-        scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
+        scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true);
     });
 
     // Spectrum rays: while the big player view is open, poll the analyzer ~40 times a second.
