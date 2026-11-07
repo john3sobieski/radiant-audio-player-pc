@@ -410,6 +410,7 @@ fn show_now_playing(ui: &MainWindow, track: &Track) {
     ui.set_lyrics(ModelRc::new(VecModel::from(Vec::<LyricRow>::new())));
     ui.set_lyrics_synced(false);
     ui.set_lyric_index(-1);
+    ui.set_lyr_user_scroll(false); // a new track starts with the auto-follow on
     if let Ok(mut times) = LYRIC_TIMES.lock() { times.clear(); }
     let weak = ui.as_weak();
     let owned = track.clone();

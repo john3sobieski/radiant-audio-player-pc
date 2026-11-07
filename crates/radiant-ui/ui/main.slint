@@ -1501,6 +1501,31 @@ export component MainWindow inherits Window {
     in property <bool> lyrics-synced: false;
     /// Index of the current line of synchronized lyrics, -1 = before the first line.
     in property <int> lyric-index: -1;
+    // Manual scrolling of synchronized lyrics: the wheel stops the auto-follow; it resumes after
+    // a few idle seconds, on a click on a line, or with the "Back to current line" pill.
+    in-out property <bool> lyr-user-scroll: false;
+    private property <length> lyr-scroll-y: 0px;
+    private property <int> lyr-idle: 0;
+    // `dy` is the wheel delta (positive = up), `area-h` the height of the lyrics area.
+    function lyric-wheel(dy: length, area-h: length) {
+        let top = area-h / 2 - 28px;
+        if (!root.lyr-user-scroll) {
+            root.lyr-scroll-y = top - max(0, root.lyric-index) * 56px;
+            root.lyr-user-scroll = true;
+        }
+        root.lyr-scroll-y = max(top - (root.lyrics.length - 1) * 56px, min(top, root.lyr-scroll-y + dy));
+        root.lyr-idle = 0;
+    }
+    lyr-timer := Timer {
+        interval: 500ms;
+        running: root.lyr-user-scroll;
+        triggered => {
+            root.lyr-idle += 1;
+            if (root.lyr-idle >= 7) {
+                root.lyr-user-scroll = false;
+            }
+        }
+    }
 
     private property <length> header-h: 48px;
     private property <length> bar-h: 112px;
@@ -3727,18 +3752,80 @@ export component MainWindow inherits Window {
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
-            // Synchronized: the current line stays in the middle, sung lines are dimmed, click a line to jump there.
-            if root.eff-tab == 0 && root.lyrics.length > 0 && root.lyrics-synced : Rectangle {
+            // Synchronized: the current line stays in the middle, sung lines are dimmed, click a line to jump
+            // there. The wheel scrolls (auto-follow pauses); a line under the mouse shimmers in the colors of
+            // the emitter glow (they come from the cover, so every track has its own).
+            if root.eff-tab == 0 && root.lyrics.length > 0 && root.lyrics-synced : lyr-area := Rectangle {
                 clip: true;
+                property <length> follow-y: self.height / 2 - 28px - max(0, root.lyric-index) * 56px;
+
+                // Wheel over the gaps and the margins.
+                TouchArea {
+                    scroll-event(e) => {
+                        root.lyric-wheel(e.delta-y, lyr-area.height);
+                        return accept;
+                    }
+                }
                 Rectangle {
-                    y: parent.height / 2 - 28px - max(0, root.lyric-index) * 56px;
+                    y: root.lyr-user-scroll ? root.lyr-scroll-y : lyr-area.follow-y;
                     width: parent.width;
                     height: root.lyrics.length * 56px;
                     animate y { duration: 260ms; easing: ease-in-out; }
-                    for l[i] in root.lyrics : Rectangle {
+                    for l[i] in root.lyrics : row := Rectangle {
                         y: i * 56px;
                         width: parent.width;
                         height: 56px;
+                        // 0..1, glides in and out with the mouse.
+                        property <float> hot: row-ta.has-hover ? 1.0 : 0.0;
+                        animate hot { duration: 180ms; easing: ease-out; }
+
+                        // Hover highlight: a moving gradient of the emitter colors with two lights sweeping over it.
+                        if row.hot > 0.01 : hl := Rectangle {
+                            x: 10px;
+                            y: 4px;
+                            width: parent.width - 20px;
+                            height: parent.height - 8px;
+                            border-radius: 14px;
+                            opacity: row.hot;
+                            drop-shadow-blur: 18px;
+                            drop-shadow-color: root.glow-color.with-alpha(0.45);
+
+                            // Seconds; read only while a line is hovered, so nothing animates otherwise.
+                            property <float> t: animation-tick() / 1s;
+                            // The five lights of the emitter glow (same mixes as behind the rays).
+                            property <color> p0: root.glow-color;
+                            property <color> p1: root.glow-color.mix(#ff4fd8, 0.5);
+                            property <color> p2: root.glow-color.mix(#36d6ff, 0.5);
+                            property <color> p3: root.glow-color.mix(#ffb347, 0.45);
+                            property <color> p4: root.glow-color.brighter(0.7);
+
+                            Rectangle {
+                                border-radius: 14px;
+                                clip: true;
+                                background: @linear-gradient(90deg,
+                                    hl.p0.mix(hl.p1, 0.5 + 0.5 * Math.sin(hl.t * 1.9rad)).with-alpha(0.62) 0%,
+                                    hl.p2.mix(hl.p3, 0.5 + 0.5 * Math.sin(hl.t * 1.4rad + 1.5rad)).with-alpha(0.62) 35%,
+                                    hl.p4.mix(hl.p1, 0.5 + 0.5 * Math.sin(hl.t * 2.3rad + 3rad)).with-alpha(0.62) 68%,
+                                    hl.p3.mix(hl.p2, 0.5 + 0.5 * Math.sin(hl.t * 1.7rad + 4.5rad)).with-alpha(0.62) 100%);
+
+                                // Two lights sweeping from side to side at different speeds.
+                                Rectangle {
+                                    width: 150px;
+                                    height: parent.height * 2.2;
+                                    x: (parent.width - self.width) / 2 + parent.width * 0.5 * Math.sin(hl.t * 1.15rad);
+                                    y: -parent.height * 0.6;
+                                    background: @radial-gradient(circle, #ffffff50 0%, #ffffff00 70%);
+                                }
+                                Rectangle {
+                                    width: 190px;
+                                    height: parent.height * 2.6;
+                                    x: (parent.width - self.width) / 2 + parent.width * 0.55 * Math.cos(hl.t * 0.71rad);
+                                    y: -parent.height * 0.8;
+                                    background: @radial-gradient(circle, hl.p1.brighter(0.5).with-alpha(0.55) 0%, hl.p1.with-alpha(0) 70%);
+                                }
+                            }
+                        }
+
                         Text {
                             // Distance (in lines) from the line that is in the middle.
                             property <int> dist: Math.abs(i - max(0, root.lyric-index));
@@ -3751,9 +3838,9 @@ export component MainWindow inherits Window {
                             font-size: i == root.lyric-index ? 21px : 17px;
                             horizontal-alignment: center;
                             font-weight: 600;
-                            color: i == root.lyric-index ? Theme.text : Theme.muted;
-                            opacity: i == root.lyric-index ? 1.0
-                                : (i < root.lyric-index ? 0.7 : 1.0) * max(0.18, 0.75 - self.dist * 0.14);
+                            color: i == root.lyric-index ? Theme.text : Theme.muted.mix(Theme.text, row.hot);
+                            opacity: max(row.hot, i == root.lyric-index ? 1.0
+                                : (i < root.lyric-index ? 0.7 : 1.0) * max(0.18, 0.75 - self.dist * 0.14));
                             animate font-size { duration: 240ms; easing: ease-out; }
                             animate color { duration: 240ms; easing: ease-out; }
                             animate opacity { duration: 240ms; easing: ease-out; }
@@ -3762,14 +3849,43 @@ export component MainWindow inherits Window {
                             wrap: word-wrap;
                             overflow: elide;
                         }
-                        TouchArea {
+                        row-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
                                 if (root.duration-secs > 0) {
                                     root.seek(max(0.0, min(1.0, (l.time-ms / 1000.0) / root.duration-secs)));
                                 }
+                                root.lyr-user-scroll = false;
+                            }
+                            scroll-event(e) => {
+                                root.lyric-wheel(e.delta-y, lyr-area.height);
+                                return accept;
                             }
                         }
+                    }
+                }
+                // After manual scrolling: jump back to the line that is playing.
+                if root.lyr-user-scroll : Rectangle {
+                    x: (parent.width - self.width) / 2;
+                    y: parent.height - 46px;
+                    width: 168px;
+                    height: 32px;
+                    border-radius: 16px;
+                    background: back-ta.has-hover ? Theme.accent : Theme.accent.with-alpha(0.85);
+                    animate background { duration: 120ms; }
+                    drop-shadow-blur: 12px;
+                    drop-shadow-color: #00000080;
+                    Text {
+                        text: "Back to current line";
+                        color: #ffffff;
+                        font-size: 12px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    back-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.lyr-user-scroll = false; }
                     }
                 }
             }
