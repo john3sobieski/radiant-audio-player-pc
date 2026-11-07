@@ -3305,15 +3305,26 @@ export component MainWindow inherits Window {
                     letter: root.np-letter;
                     letter-size: 22px;
                 }
-                Text {
+                // Two lines: title (tag, file name as fallback) and "artist · album · year".
+                VerticalLayout {
                     x: root.now-playing != "" ? 88px : 24px;
+                    y: 0px;
                     width: max(0px, (parent.width - 348px) / 2 - (root.now-playing != "" ? 88px : 24px) - 16px);
                     height: parent.height;
-                    text: root.now-playing;
-                    color: root.show-player ? Theme.accent : Theme.text;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                    overflow: elide;
+                    alignment: center;
+                    spacing: 2px;
+                    Text {
+                        text: root.np-title != "" ? root.np-title : root.now-playing;
+                        color: root.show-player ? Theme.accent : Theme.text;
+                        font-weight: 600;
+                        overflow: elide;
+                    }
+                    if root.np-sub != "" && root.now-playing != "" : Text {
+                        text: root.np-sub;
+                        color: Theme.muted;
+                        font-size: 12px;
+                        overflow: elide;
+                    }
                 }
                 // Click the title to open / close the big player view.
                 TouchArea {
