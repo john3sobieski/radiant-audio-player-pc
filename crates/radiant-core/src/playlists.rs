@@ -38,15 +38,18 @@ pub enum PlaylistSortKey {
     /// Last time tracks were added, removed or moved.
     Updated,
     TrackCount,
+    /// The order of the playlists in the store itself (set by dragging); `descending` is ignored.
+    Manual,
 }
 
 impl PlaylistSortKey {
-    /// Index used by the UI and `settings.json` (0 = Created, 1 = Name, 2 = Updated, 3 = TrackCount).
+    /// Index used by the UI and `settings.json` (0 = Created, 1 = Name, 2 = Updated, 3 = TrackCount, 4 = Manual).
     pub fn from_index(i: u8) -> Self {
         match i {
             1 => Self::Name,
             2 => Self::Updated,
             3 => Self::TrackCount,
+            4 => Self::Manual,
             _ => Self::Created,
         }
     }
@@ -57,6 +60,7 @@ impl PlaylistSortKey {
             Self::Name => 1,
             Self::Updated => 2,
             Self::TrackCount => 3,
+            Self::Manual => 4,
         }
     }
 }
@@ -181,6 +185,32 @@ impl PlaylistStore {
         true
     }
 
+    /// Manual order: the playlists in `ids` (a group as shown on the page: same folder, no Liked tracks)
+    /// are put in the given order, taking over the slots they occupy now; everything else stays where it is.
+    /// `false` = unknown / repeated id, Liked tracks in the list, or nothing changed.
+    pub fn set_playlist_order(&mut self, ids: &[String]) -> bool {
+        let mut slots: Vec<usize> = Vec::with_capacity(ids.len());
+        for id in ids {
+            if id == FAVORITES_ID {
+                return false;
+            }
+            match self.playlists.iter().position(|p| &p.id == id) {
+                Some(i) if !slots.contains(&i) => slots.push(i),
+                _ => return false,
+            }
+        }
+        let picked: Vec<Playlist> = slots.iter().map(|&i| self.playlists[i].clone()).collect();
+        slots.sort_unstable();
+        let before: Vec<String> = slots.iter().map(|&i| self.playlists[i].id.clone()).collect();
+        if before == ids {
+            return false;
+        }
+        for (slot, playlist) in slots.into_iter().zip(picked) {
+            self.playlists[slot] = playlist;
+        }
+        true
+    }
+
     /// Moves a playlist into a folder (`None` = out of any folder). Liked tracks cannot be moved.
     pub fn set_playlist_folder(&mut self, id: &str, folder_id: Option<&str>) -> bool {
         if id == FAVORITES_ID || folder_id.map_or(false, |f| self.folder(f).is_none()) {
@@ -301,8 +331,9 @@ impl PlaylistStore {
                 PlaylistSortKey::TrackCount => {
                     pa.track_paths.len().cmp(&pb.track_paths.len()).then_with(name).then_with(|| a.cmp(&b))
                 }
+                PlaylistSortKey::Manual => a.cmp(&b),
             };
-            if sort.descending { o.reverse() } else { o }
+            if sort.descending && sort.key != PlaylistSortKey::Manual { o.reverse() } else { o }
         });
         idx
     }
@@ -381,6 +412,30 @@ mod tests {
         let mut s = PlaylistStore::default();
         s.normalize();
         s
+    }
+
+    #[test]
+    fn manual_order_moves_only_the_given_group() {
+        let mut s = fresh();
+        let f = s.create_folder("F").unwrap();
+        let a = s.create_playlist("a", None).unwrap();
+        let in_f = s.create_playlist("in folder", Some(&f)).unwrap();
+        let b = s.create_playlist("b", None).unwrap();
+        let c = s.create_playlist("c", None).unwrap();
+        assert!(s.set_playlist_order(&[c.clone(), a.clone(), b.clone()]));
+        let ids: Vec<&str> = s.playlists.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, [FAVORITES_ID, c.as_str(), in_f.as_str(), a.as_str(), b.as_str()]);
+        let manual = PlaylistSort { key: PlaylistSortKey::Manual, descending: true };
+        let loose: Vec<usize> = s
+            .list_entries_sorted(manual)
+            .into_iter()
+            .filter_map(|e| match e { ListEntry::Playlist(i) if s.playlists[i].folder_id.is_none() => Some(i), _ => None })
+            .collect();
+        assert_eq!(loose, [0, 1, 3, 4]);
+        // Same order again, Liked tracks and unknown ids are refused.
+        assert!(!s.set_playlist_order(&[c.clone(), a.clone(), b.clone()]));
+        assert!(!s.set_playlist_order(&[FAVORITES_ID.to_string(), a.clone()]));
+        assert!(!s.set_playlist_order(&["nope".to_string()]));
     }
 
     #[test]

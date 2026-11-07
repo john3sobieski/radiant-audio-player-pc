@@ -78,6 +78,8 @@ fn apply_settings(
     ui.set_queue_index(settings.queue_index as i32);
     ui.set_pl_sort_mode(settings.playlist_sort as i32);
     ui.set_pl_sort_descending(settings.playlist_sort_desc);
+    ui.set_album_sort_mode(settings.album_sort as i32);
+    ui.set_album_sort_descending(settings.album_sort_desc);
     ui.set_shuffle(settings.shuffle);
     ui.set_repeat_mode(repeat_mode_to_ui(settings.repeat_mode));
     ui.set_speed_t(settings.speed_t);
@@ -492,11 +494,63 @@ struct AlbumEntry {
 }
 
 static ALBUMS: Mutex<Vec<AlbumEntry>> = Mutex::new(Vec::new());
+/// Sort of the album grid: (0 = manual, 1 = name, 2 = artist, 3 = duration; descending).
+static ALBUM_SORT: Mutex<(u8, bool)> = Mutex::new((1, false));
+/// Album keys in the order set by hand (used by the manual sort mode).
+static ALBUM_ORDER: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Rows of the open album page (same order as the model): the file of a track, `None` for a "Disc N" caption.
 static OPEN_ROWS: Mutex<Vec<Option<PathBuf>>> = Mutex::new(Vec::new());
 static ALBUM_COVERS: Mutex<BTreeMap<String, Option<CoverPixels>>> = Mutex::new(BTreeMap::new());
 /// Albums whose cover is being decoded right now (no duplicate work while a tile scrolls in and out).
 static ALBUM_PENDING: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Text that is missing (or blank) goes last in both directions; the rest compares without case.
+fn cmp_text_last(a: &Option<String>, b: &Option<String>, descending: bool) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let clean = |t: &Option<String>| t.as_deref().filter(|v| !v.trim().is_empty()).map(str::to_lowercase);
+    match (clean(a), clean(b)) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(x), Some(y)) => if descending { y.cmp(&x) } else { x.cmp(&y) },
+    }
+}
+
+/// Orders the album grid by the saved mode: manual (dragged order, new albums last), name, artist or total duration.
+fn sort_albums(albums: &mut [radiant_core::models::Album], by_path: &HashMap<&Path, &Track>) {
+    let (mode, descending) = ALBUM_SORT.lock().map(|s| *s).unwrap_or((1, false));
+    let by_name = |a: &radiant_core::models::Album, b: &radiant_core::models::Album| {
+        cmp_text_last(&a.name, &b.name, false).then_with(|| cmp_text_last(&a.artist, &b.artist, false))
+    };
+    match mode {
+        0 => {
+            let order = ALBUM_ORDER.lock().map(|o| o.clone()).unwrap_or_default();
+            let pos: HashMap<&str, usize> = order.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
+            albums.sort_by(|a, b| {
+                let ia = pos.get(a.key.as_str()).copied().unwrap_or(usize::MAX);
+                let ib = pos.get(b.key.as_str()).copied().unwrap_or(usize::MAX);
+                ia.cmp(&ib).then_with(|| by_name(a, b))
+            });
+        }
+        2 => albums.sort_by(|a, b| {
+            cmp_text_last(&a.artist, &b.artist, descending)
+                .then_with(|| cmp_text_last(&a.name, &b.name, false))
+        }),
+        3 => {
+            let total = |a: &radiant_core::models::Album| -> u64 {
+                a.tracks.iter().filter_map(|p| by_path.get(p.as_path()).and_then(|t| t.duration_ms)).sum()
+            };
+            albums.sort_by(|a, b| {
+                let o = total(a).cmp(&total(b));
+                let o = if descending { o.reverse() } else { o };
+                o.then_with(|| by_name(a, b))
+            });
+        }
+        _ => albums.sort_by(|a, b| {
+            cmp_text_last(&a.name, &b.name, descending).then_with(|| cmp_text_last(&a.artist, &b.artist, false))
+        }),
+    }
+}
 
 /// Rebuilds the album grid from the library. The search box filters albums by name and artist.
 fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>>>, query: &Arc<Mutex<String>>) {
@@ -511,8 +565,7 @@ fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>
                 || a.artist.as_deref().unwrap_or("").to_lowercase().contains(&needle)
         });
     }
-    // By name; albums without a name go last. Equal names: by artist.
-    albums.sort_by_key(|a| (a.name.is_none(), a.name.clone().unwrap_or_default().to_lowercase(), a.artist.clone().unwrap_or_default().to_lowercase()));
+    sort_albums(&mut albums, &by_path);
 
     let cache = ALBUM_COVERS.lock().map(|c| c.clone()).unwrap_or_default();
     let mut entries: Vec<AlbumEntry> = Vec::with_capacity(albums.len());
@@ -1170,6 +1223,8 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_eq_gains(ModelRc::from(eq_model.clone()));
     apply_settings(&ui, &player, &fx, &eq_model, &settings.borrow());
     if let Ok(mut order) = MANUAL_ORDER.lock() { *order = settings.borrow().manual_order.clone(); }
+    if let Ok(mut s) = ALBUM_SORT.lock() { *s = (settings.borrow().album_sort, settings.borrow().album_sort_desc); }
+    if let Ok(mut order) = ALBUM_ORDER.lock() { *order = settings.borrow().album_order.clone(); }
     if let Some(dir) = settings.borrow().music_folder.clone() {
         scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir);
     }
@@ -1262,11 +1317,107 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_create_stems(|_row, _in_album| { /* TODO: stems */ });
     }
     {
+        // Sort panel of the Albums grid: applied at once and remembered.
+        let (weak, library, query, settings) = (ui_weak.clone(), library.clone(), query.clone(), settings.clone());
+        ui.on_album_sort_changed(move |mode, descending| {
+            let mode = mode.clamp(0, 3) as u8;
+            let descending = descending && mode != 0;
+            if let Ok(mut s) = ALBUM_SORT.lock() { *s = (mode, descending); }
+            {
+                let mut cfg = settings.borrow_mut();
+                cfg.album_sort = mode;
+                cfg.album_sort_desc = descending;
+            }
+            save_settings(&weak, &settings);
+            refresh_albums(&weak, &library, &query);
+        });
+    }
+    {
+        // Drag of an album tile: the grid on screen becomes the manual order, with the tile moved.
+        let (weak, library, query, settings) = (ui_weak.clone(), library.clone(), query.clone(), settings.clone());
+        ui.on_album_move(move |from, to| {
+            if from < 0 || to < 0 || query.lock().map(|q| !q.trim().is_empty()).unwrap_or(true) {
+                return;
+            }
+            let mut order: Vec<String> = ALBUMS.lock().map(|a| a.iter().map(|e| e.key.clone()).collect()).unwrap_or_default();
+            let (from, to) = (from as usize, to as usize);
+            if from >= order.len() || to >= order.len() || from == to {
+                return;
+            }
+            let moved = order.remove(from);
+            order.insert(to, moved);
+            if let Ok(mut o) = ALBUM_ORDER.lock() { *o = order.clone(); }
+            if let Ok(mut s) = ALBUM_SORT.lock() { *s = (0, false); }
+            {
+                let mut cfg = settings.borrow_mut();
+                cfg.album_order = order;
+                cfg.album_sort = 0;
+                cfg.album_sort_desc = false;
+            }
+            save_settings(&weak, &settings);
+            if let Some(ui) = weak.upgrade() {
+                ui.set_album_sort_mode(0);
+                ui.set_album_sort_descending(false);
+            }
+            refresh_albums(&weak, &library, &query);
+        });
+    }
+    {
+        // Drag of a playlist on the Playlists page: the order on screen (inside its group) becomes the manual order.
+        let (weak, pl, settings) = (ui_weak.clone(), pl.clone(), settings.clone());
+        ui.on_pl_move_playlist(move |from, to| {
+            let Some(ui) = weak.upgrade() else { return };
+            if from < 0 || to < 0 || from == to {
+                return;
+            }
+            let mut st = pl.borrow_mut();
+            let (Some(ListEntry::Playlist(a)), Some(ListEntry::Playlist(b))) =
+                (st.rows.get(from as usize).copied(), st.rows.get(to as usize).copied())
+            else { return };
+            let (from_id, to_id, folder) = {
+                let (pa, pb) = (&st.store.playlists[a], &st.store.playlists[b]);
+                if pa.id == FAVORITES_ID || pb.id == FAVORITES_ID || pa.folder_id != pb.folder_id {
+                    return;
+                }
+                (pa.id.clone(), pb.id.clone(), pa.folder_id.clone())
+            };
+            // The group as shown now (same folder, Liked tracks left out).
+            let mut ids: Vec<String> = st
+                .rows
+                .iter()
+                .filter_map(|e| match *e {
+                    ListEntry::Playlist(i) => {
+                        let p = &st.store.playlists[i];
+                        (p.id != FAVORITES_ID && p.folder_id == folder).then(|| p.id.clone())
+                    }
+                    ListEntry::Folder(_) => None,
+                })
+                .collect();
+            let (Some(fp), Some(tp)) = (ids.iter().position(|i| *i == from_id), ids.iter().position(|i| *i == to_id)) else { return };
+            let moved = ids.remove(fp);
+            ids.insert(tp, moved);
+            if !st.store.set_playlist_order(&ids) && st.sort.key == PlaylistSortKey::Manual {
+                return;
+            }
+            st.sort = PlaylistSort { key: PlaylistSortKey::Manual, descending: false };
+            save_playlists(&ui, &st.store);
+            refresh_playlist_rows(&ui, &mut st);
+            ui.set_pl_sort_mode(4);
+            ui.set_pl_sort_descending(false);
+            {
+                let mut cfg = settings.borrow_mut();
+                cfg.playlist_sort = 4;
+                cfg.playlist_sort_desc = false;
+            }
+            save_settings(&weak, &settings);
+        });
+    }
+    {
         // Sort panel of the Playlists page: the order is applied at once and remembered.
         let (weak, pl, settings) = (ui_weak.clone(), pl.clone(), settings.clone());
         ui.on_pl_sort_changed(move |mode, descending| {
             let Some(ui) = weak.upgrade() else { return };
-            let mode = mode.clamp(0, 3) as u8;
+            let mode = mode.clamp(0, 4) as u8;
             {
                 let mut st = pl.borrow_mut();
                 st.sort = PlaylistSort { key: PlaylistSortKey::from_index(mode), descending };

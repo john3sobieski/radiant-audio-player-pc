@@ -150,10 +150,20 @@ component AlbumTile inherits Rectangle {
     in property <string> letter;
     in property <string> title;
     in property <string> artist;
+    /// The tile is being dragged (manual order): dimmed. `drop-target`: the tile the dragged one will take the place of.
+    in property <bool> dragging: false;
+    in property <bool> drop-target: false;
     callback clicked();
     callback shown();
+    callback drag-start();
+    /// Pointer offset from the press point.
+    callback drag-move(length, length);
+    callback drag-end();
+    private property <bool> was-dragged: false;
 
     init => { root.shown(); }
+    opacity: root.dragging ? 0.45 : 1;
+    animate opacity { duration: 120ms; }
 
     // Cover (square, as wide as the tile).
     Rectangle {
@@ -162,6 +172,8 @@ component AlbumTile inherits Rectangle {
         height: parent.width;
         border-radius: 12px;
         background: Theme.surface-hover;
+        border-width: root.drop-target ? 3px : 0px;
+        border-color: Theme.accent;
         drop-shadow-blur: ta.has-hover ? 22px : 14px;
         drop-shadow-color: #000000a0;
         drop-shadow-offset-y: ta.has-hover ? 10px : 5px;
@@ -212,7 +224,28 @@ component AlbumTile inherits Rectangle {
     }
     ta := TouchArea {
         mouse-cursor: pointer;
-        clicked => { root.clicked(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                root.was-dragged = false;
+                root.drag-start();
+            } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up) {
+                root.drag-end();
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                if (abs(self.mouse-x - self.pressed-x) > 8px || abs(self.mouse-y - self.pressed-y) > 8px) {
+                    root.was-dragged = true;
+                }
+                if (root.was-dragged) {
+                    root.drag-move(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+                }
+            }
+        }
+        clicked => {
+            if (!root.was-dragged) { root.clicked(); }
+            root.was-dragged = false;
+        }
     }
 }
 
@@ -1008,12 +1041,59 @@ export component MainWindow inherits Window {
     in-out property <int> pl-sort-mode: 0;
     in-out property <bool> pl-sort-descending: false;
     callback pl-sort-changed(int, bool);
-    /// Sort panel shows the modes of the open section (Tracks or Playlists).
-    private property <int> cur-sort-mode: root.section == 2 ? root.pl-sort-mode : root.sort-mode;
-    private property <bool> cur-sort-desc: root.section == 2 ? root.pl-sort-descending : root.sort-descending;
+    /// Albums grid sort: 0 = manual order, 1 = name, 2 = artist, 3 = duration.
+    in-out property <int> album-sort-mode: 1;
+    in-out property <bool> album-sort-descending: false;
+    callback album-sort-changed(int, bool);
+    /// Sort panel shows the modes of the open section (Tracks, Albums or Playlists).
+    private property <int> cur-sort-mode: root.section == 2 ? root.pl-sort-mode
+        : root.section == 1 ? root.album-sort-mode : root.sort-mode;
+    private property <bool> cur-sort-desc: root.section == 2 ? root.pl-sort-descending
+        : root.section == 1 ? root.album-sort-descending : root.sort-descending;
+    /// The manual order is selected (it has no direction).
+    private property <bool> cur-sort-manual: root.section == 2 ? root.pl-sort-mode == 4
+        : root.section == 1 ? root.album-sort-mode == 0 : root.sort-mode == 0;
+    /// The Sort button exists in Tracks, Albums (grid only) and Playlists, not in Queues.
+    private property <bool> sort-available: root.section == 0 || root.section == 2 || (root.section == 1 && !root.album-open);
     private property <[string]> sort-labels: root.section == 2
-        ? ["Date created", "Name", "Date changed", "Tracks"]
+        ? ["Date created", "Name", "Date changed", "Tracks", "Manual order"]
+        : root.section == 1 ? ["Manual order", "Name", "Artist", "Duration"]
         : ["Manual order", "Name", "Artist", "Album", "Duration", "File date"];
+    function apply-sort(mode: int, desc: bool) {
+        if (root.section == 2) {
+            let d = mode == 4 ? false : desc;
+            root.pl-sort-mode = mode;
+            root.pl-sort-descending = d;
+            root.pl-sort-changed(mode, d);
+        } else if (root.section == 1) {
+            let d = mode == 0 ? false : desc;
+            root.album-sort-mode = mode;
+            root.album-sort-descending = d;
+            root.album-sort-changed(mode, d);
+        } else {
+            let d = mode == 0 ? false : desc;
+            root.sort-mode = mode;
+            root.sort-descending = d;
+            root.sort-changed(mode, d);
+        }
+    }
+    // Drag of album tiles (manual order) and of playlist rows.
+    in-out property <bool> album-drag-active: false;
+    in-out property <int> album-drag-from: -1;
+    in-out property <int> album-drag-to: -1;
+    callback album-move(int, int);
+    in-out property <bool> plr-drag-active: false;
+    in-out property <int> plr-drag-from: -1;
+    in-out property <int> plr-drag-to: -1;
+    in-out property <bool> plr-drag-moved: false;
+    callback pl-move-playlist(int, int);
+    /// A playlist row can be dropped here: another playlist of the same group (same folder state), not Liked tracks.
+    pure function plr-valid(from: int, to: int) -> bool {
+        return from != to && from >= 0 && to >= 0
+            && !root.pl-rows[from].is-folder && !root.pl-rows[to].is-folder
+            && !root.pl-rows[from].liked && !root.pl-rows[to].liked
+            && root.pl-rows[from].indent == root.pl-rows[to].indent;
+    }
     /// "Add to playlist" button of the player view (the track that is playing now).
     callback add-current-to-playlist();
     in-out property <int> drag-from: -1;
@@ -1436,7 +1516,7 @@ export component MainWindow inherits Window {
                 }
                 // Sort lives only in Tracks / Playlists: in Queues it folds away and the search field grows into its place.
                 Rectangle {
-                    width: (root.section == 0 || root.section == 2) ? 60px : 0px;
+                    width: root.sort-available ? 60px : 0px;
                     clip: true;
                     animate width { duration: 280ms; easing: ease-in-out; }
                     PillButton {
@@ -1445,10 +1525,10 @@ export component MainWindow inherits Window {
                         width: 60px;
                         text: "Sort";
                         active: root.show-sort;
-                        opacity: (root.section == 0 || root.section == 2) ? 1 : 0;
+                        opacity: root.sort-available ? 1 : 0;
                         animate opacity { duration: 200ms; }
                         clicked => {
-                            if (root.section == 0 || root.section == 2) {
+                            if (root.sort-available) {
                                 root.show-sort = !root.show-sort;
                                 root.show-sound = false;
                             }
@@ -1638,8 +1718,31 @@ export component MainWindow inherits Window {
                                     letter: root.albums[r * root.album-cols + c].letter;
                                     title: root.albums[r * root.album-cols + c].title;
                                     artist: root.albums[r * root.album-cols + c].artist;
+                                    dragging: root.album-drag-active && root.album-drag-from == r * root.album-cols + c;
+                                    drop-target: root.album-drag-active && root.album-drag-to == r * root.album-cols + c
+                                        && root.album-drag-to != root.album-drag-from;
                                     clicked => { root.album-open = true; root.open-album(r * root.album-cols + c); }
                                     shown => { root.album-shown(r * root.album-cols + c); }
+                                    drag-start => {
+                                        if (root.search-text == "") {
+                                            root.album-drag-from = r * root.album-cols + c;
+                                            root.album-drag-to = r * root.album-cols + c;
+                                            root.album-drag-active = true;
+                                        }
+                                    }
+                                    drag-move(dx, dy) => {
+                                        if (root.album-drag-active) {
+                                            let col = max(0, min(root.album-cols - 1, c + (dx / (root.tile-w + root.grid-gap)).round()));
+                                            let row = max(0, min(root.album-rows - 1, r + (dy / root.album-row-h).round()));
+                                            root.album-drag-to = min(root.albums.length - 1, row * root.album-cols + col);
+                                        }
+                                    }
+                                    drag-end => {
+                                        if (root.album-drag-active && root.album-drag-from != root.album-drag-to) {
+                                            root.album-move(root.album-drag-from, root.album-drag-to);
+                                        }
+                                        root.album-drag-active = false;
+                                    }
                                 }
                             }
                         }
@@ -1916,8 +2019,18 @@ export component MainWindow inherits Window {
                             vertical-stretch: 1;
                             for r[i] in root.pl-rows : Rectangle {
                                 height: r.is-folder ? 50px : 64px;
-                                background: plrow-ta.has-hover ? Theme.surface : transparent;
+                                background: root.plr-drag-active && i == root.plr-drag-from ? Theme.accent.with-alpha(0.28)
+                                    : plrow-ta.has-hover ? Theme.surface : transparent;
                                 animate background { duration: 120ms; }
+
+                                // Drop marker: the dragged playlist takes the place of this row.
+                                if root.plr-drag-active && i == root.plr-drag-to && root.plr-valid(root.plr-drag-from, i) : Rectangle {
+                                    x: 12px;
+                                    y: root.plr-drag-to > root.plr-drag-from ? parent.height - 2px : 0px;
+                                    width: parent.width - 24px;
+                                    height: 2px;
+                                    background: Theme.accent;
+                                }
 
                                 // Folder header.
                                 if r.is-folder : Path {
@@ -2039,7 +2152,34 @@ export component MainWindow inherits Window {
                                 }
                                 plrow-ta := TouchArea {
                                     mouse-cursor: pointer;
-                                    clicked => { root.pl-row-clicked(i); }
+                                    pointer-event(event) => {
+                                        if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                            root.suppress-click = false;
+                                            root.plr-drag-from = i;
+                                            root.plr-drag-to = i;
+                                            root.plr-drag-moved = false;
+                                            root.plr-drag-active = !r.is-folder && !r.liked;
+                                        } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.plr-drag-active) {
+                                            if (root.plr-drag-moved && root.plr-valid(root.plr-drag-from, root.plr-drag-to)) {
+                                                root.pl-move-playlist(root.plr-drag-from, root.plr-drag-to);
+                                                root.suppress-click = true;
+                                            }
+                                            root.plr-drag-active = false;
+                                            root.plr-drag-moved = false;
+                                        }
+                                    }
+                                    moved => {
+                                        if (self.pressed && root.plr-drag-active && abs(self.mouse-y - self.pressed-y) > 8px) {
+                                            let target = max(0, min(root.pl-rows.length - 1,
+                                                i + ((self.mouse-y - self.pressed-y) / 64px).round()));
+                                            if (target != root.plr-drag-to) { root.plr-drag-to = target; }
+                                            root.plr-drag-moved = true;
+                                        }
+                                    }
+                                    clicked => {
+                                        if (root.suppress-click) { root.suppress-click = false; }
+                                        else { root.pl-row-clicked(i); }
+                                    }
                                 }
                                 // Folder header: rename / delete.
                                 if r.is-folder : IconButton {
@@ -3384,7 +3524,7 @@ export component MainWindow inherits Window {
         x: root.width - self.width - 20px;
         y: 68px;
         width: 260px;
-        height: min(root.height - 78px, root.section == 2 ? 226px : 290px);
+        height: min(root.height - 78px, root.section == 1 ? 226px : root.section == 2 ? 256px : 290px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -3396,7 +3536,7 @@ export component MainWindow inherits Window {
             padding: 16px;
             spacing: 2px;
             Text {
-                text: root.section == 2 ? "Sort playlists" : "Sort tracks";
+                text: root.section == 2 ? "Sort playlists" : root.section == 1 ? "Sort albums" : "Sort tracks";
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 700;
@@ -3417,45 +3557,20 @@ export component MainWindow inherits Window {
                 }
                 sort-row := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => {
-                        if (root.section == 2) {
-                            root.pl-sort-mode = i;
-                            root.pl-sort-changed(i, root.pl-sort-descending);
-                        } else {
-                            root.sort-mode = i;
-                            if (i == 0) { root.sort-descending = false; }
-                            root.sort-changed(i, root.sort-descending);
-                        }
-                    }
+                    clicked => { root.apply-sort(i, root.cur-sort-desc); }
                 }
             }
             HorizontalLayout {
                 spacing: 8px;
                 PillButton {
                     text: "Ascending";
-                    active: (root.section == 2 || root.sort-mode != 0) && !root.cur-sort-desc;
-                    clicked => {
-                        if (root.section == 2) {
-                            root.pl-sort-descending = false;
-                            root.pl-sort-changed(root.pl-sort-mode, false);
-                        } else {
-                            root.sort-descending = false;
-                            root.sort-changed(root.sort-mode, false);
-                        }
-                    }
+                    active: !root.cur-sort-manual && !root.cur-sort-desc;
+                    clicked => { root.apply-sort(root.cur-sort-mode, false); }
                 }
                 PillButton {
                     text: "Descending";
-                    active: (root.section == 2 || root.sort-mode != 0) && root.cur-sort-desc;
-                    clicked => {
-                        if (root.section == 2) {
-                            root.pl-sort-descending = true;
-                            root.pl-sort-changed(root.pl-sort-mode, true);
-                        } else {
-                            root.sort-descending = true;
-                            root.sort-changed(root.sort-mode, true);
-                        }
-                    }
+                    active: !root.cur-sort-manual && root.cur-sort-desc;
+                    clicked => { root.apply-sort(root.cur-sort-mode, true); }
                 }
             }
         }
