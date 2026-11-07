@@ -1099,7 +1099,28 @@ export component MainWindow inherits Window {
         root.show-sort = false;
         root.section-changed(s, root.queue-index);
     }
+    // Queue switch animation: the page content jumps to a side offset (no animation), then eases back in.
+    private property <bool> q-anim-reset: false;
+    private property <float> q-fade: 1;
+    private property <length> q-shift: 0px;
+    q-anim-timer := Timer {
+        interval: 30ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.q-anim-reset = false;
+            root.q-fade = 1;
+            root.q-shift = 0px;
+        }
+    }
     function go-queue(q: int) {
+        if (q != root.queue-index && root.section == 3) {
+            q-anim-timer.running = false;
+            root.q-anim-reset = true;
+            root.q-fade = 0;
+            root.q-shift = q > root.queue-index ? 40px : -40px;
+            q-anim-timer.running = true;
+        }
         root.section = 3;
         root.queue-index = q;
         root.show-sort = false;
@@ -1206,7 +1227,7 @@ export component MainWindow inherits Window {
     in-out property <bool> menu-in-album: false;
     /// The menu was opened for a track of the open playlist page (`menu-row` = row of `pl-page-tracks`).
     in-out property <bool> menu-in-pl: false;
-    private property <length> menu-w: 156px;
+    private property <length> menu-w: 196px;
     private property <length> menu-h: (root.menu-in-queue ? 5 : 4) * 34px + 12px;
     /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
     callback album-index-of-track(int) -> int;
@@ -1413,11 +1434,25 @@ export component MainWindow inherits Window {
                     vertical-alignment: center;
                     overflow: elide;
                 }
-                if root.section == 0 || root.section == 2 : HeaderItem {
+                // Sort lives only in Tracks / Playlists: in Queues it folds away and the search field grows into its place.
+                Rectangle {
+                    width: (root.section == 0 || root.section == 2) ? 60px : 0px;
+                    clip: true;
+                    animate width { duration: 280ms; easing: ease-in-out; }
                     PillButton {
+                        x: 0px;
+                        y: (parent.height - self.height) / 2;
+                        width: 60px;
                         text: "Sort";
                         active: root.show-sort;
-                        clicked => { root.show-sort = !root.show-sort; root.show-sound = false; }
+                        opacity: (root.section == 0 || root.section == 2) ? 1 : 0;
+                        animate opacity { duration: 200ms; }
+                        clicked => {
+                            if (root.section == 0 || root.section == 2) {
+                                root.show-sort = !root.show-sort;
+                                root.show-sound = false;
+                            }
+                        }
                     }
                 }
                 HeaderItem {
@@ -2318,7 +2353,14 @@ export component MainWindow inherits Window {
                     }
 
                     // Queue page: the tracks of the open queue (drag to reorder, click to play).
-                    if k == 1 : VerticalLayout {
+                    if k == 1 : Rectangle {
+                      x: root.q-shift;
+                      width: parent.width;
+                      height: parent.height;
+                      opacity: root.q-fade;
+                      animate x { duration: root.q-anim-reset ? 0ms : 260ms; easing: ease-out; }
+                      animate opacity { duration: root.q-anim-reset ? 0ms : 260ms; easing: ease-out; }
+                      VerticalLayout {
                         Rectangle {
                             height: 124px;
                             Text {
@@ -2525,6 +2567,7 @@ export component MainWindow inherits Window {
                                 }
                             }
                         }
+                      }
                     }
                 }
 
