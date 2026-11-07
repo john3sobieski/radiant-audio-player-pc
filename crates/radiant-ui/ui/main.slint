@@ -1470,7 +1470,7 @@ component SettingsPage inherits Rectangle {
         width: 34px;
         height: 34px;
         border-radius: 17px;
-        background: back-ta.has-hover ? Theme.surface-hover : Theme.surface;
+        background: sback-ta.has-hover ? Theme.surface-hover : Theme.surface;
         Path {
             x: 8px;
             y: 8px;
@@ -1479,13 +1479,13 @@ component SettingsPage inherits Rectangle {
             viewbox-width: 24;
             viewbox-height: 24;
             commands: "M15 5L8 12L15 19";
-            stroke: back-ta.has-hover ? Theme.text : Theme.muted;
+            stroke: sback-ta.has-hover ? Theme.text : Theme.muted;
             stroke-width: 2.4px;
             stroke-line-cap: round;
             stroke-line-join: round;
             fill: transparent;
         }
-        back-ta := TouchArea {
+        sback-ta := TouchArea {
             mouse-cursor: pointer;
             clicked => { root.close(); }
         }
@@ -1555,7 +1555,7 @@ component SettingsPage inherits Rectangle {
         y: 146px;
         width: root.content-w;
         height: max(0px, root.height - 146px);
-        viewport-height: root.pages[root.section].length * 104px + 16px;
+        content-height: root.pages[root.section].length * 104px + 16px;
 
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
@@ -4148,7 +4148,7 @@ export component MainWindow inherits Window {
                         width: parent.width;
                         height: 56px;
                         // 0..1, glides in and out with the mouse.
-                        property <float> hot: row-ta.has-hover ? 1.0 : 0.0;
+                        property <float> hot: lyr-ta.has-hover ? 1.0 : 0.0;
                         animate hot { duration: 180ms; easing: ease-out; }
 
                         // Hover highlight: a moving gradient of the emitter colors with two lights sweeping over it.
@@ -4221,7 +4221,7 @@ export component MainWindow inherits Window {
                             wrap: word-wrap;
                             overflow: elide;
                         }
-                        row-ta := TouchArea {
+                        lyr-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
                                 if (root.duration-secs > 0) {
@@ -4243,7 +4243,7 @@ export component MainWindow inherits Window {
                     width: 168px;
                     height: 32px;
                     border-radius: 16px;
-                    background: back-ta.has-hover ? Theme.accent : Theme.accent.with-alpha(0.85);
+                    background: pback-ta.has-hover ? Theme.accent : Theme.accent.with-alpha(0.85);
                     animate background { duration: 120ms; }
                     drop-shadow-blur: 12px;
                     drop-shadow-color: #00000080;
@@ -4255,7 +4255,7 @@ export component MainWindow inherits Window {
                         horizontal-alignment: center;
                         vertical-alignment: center;
                     }
-                    back-ta := TouchArea {
+                    pback-ta := TouchArea {
                         mouse-cursor: pointer;
                         clicked => { root.lyr-user-scroll = false; }
                     }
