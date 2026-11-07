@@ -35,6 +35,9 @@ pub struct AppSettings {
     pub section: u8,
     /// Open queue inside the Queues section, 0..=3.
     pub queue_index: u8,
+    /// Sort of the Playlists page: 0 = date created, 1 = name, 2 = date changed, 3 = track count.
+    pub playlist_sort: u8,
+    pub playlist_sort_desc: bool,
 }
 
 impl Default for AppSettings {
@@ -49,6 +52,8 @@ impl Default for AppSettings {
             manual_order: Vec::new(),
             section: 0,
             queue_index: 0,
+            playlist_sort: 0,
+            playlist_sort_desc: false,
         }
     }
 }
@@ -83,6 +88,7 @@ fn parse(text: &str) -> Result<AppSettings, serde_json::Error> {
 fn sanitize(settings: &mut AppSettings) {
     settings.section = settings.section.min(3);
     settings.queue_index = settings.queue_index.min(3);
+    settings.playlist_sort = settings.playlist_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.speed_t = snap(finite(settings.speed_t, 0.0).clamp(-2.0, 2.0), 10.0);
     let fx = &mut settings.fx;
@@ -175,6 +181,8 @@ mod tests {
         s.fx.eq_gains_db[0] = -3.5;
         s.fx.eq_gains_db[11] = 6.0;
         s.manual_order = vec![PathBuf::from("D:/Музыка/б.mp3"), PathBuf::from("D:/Музыка/а.mp3")];
+        s.playlist_sort = 2;
+        s.playlist_sort_desc = true;
         s
     }
 

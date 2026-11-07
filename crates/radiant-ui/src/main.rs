@@ -17,7 +17,7 @@ use radiant_core::settings::{self, AppSettings, RepeatModeSetting};
 mod rays;
 
 use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
-use radiant_core::playlists::{self, ListEntry, PlaylistStore};
+use radiant_core::playlists::{self, ListEntry, PlaylistSort, PlaylistSortKey, PlaylistStore};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -75,6 +75,8 @@ fn apply_settings(
     ui.set_volume(settings.volume);
     ui.set_section(settings.section as i32);
     ui.set_queue_index(settings.queue_index as i32);
+    ui.set_pl_sort_mode(settings.playlist_sort as i32);
+    ui.set_pl_sort_descending(settings.playlist_sort_desc);
     ui.set_shuffle(settings.shuffle);
     ui.set_repeat_mode(repeat_mode_to_ui(settings.repeat_mode));
     ui.set_speed_t(settings.speed_t);
@@ -677,6 +679,8 @@ struct PlState {
     open: Option<String>,
     /// What the rename / delete window is about.
     edit: Option<Edit>,
+    /// Sort of the Playlists page (saved in `settings.json`).
+    sort: PlaylistSort,
 }
 
 /// Target of the rename / delete windows (an id in the store).
@@ -768,7 +772,7 @@ fn refresh_playlists(ui: &MainWindow, st: &mut PlState) {
 }
 
 fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
-    st.rows = st.store.list_entries();
+    st.rows = st.store.list_entries_sorted(st.sort);
     let rows: Vec<PlaylistListRow> = st
         .rows
         .iter()
@@ -1030,7 +1034,11 @@ fn main() -> Result<(), slint::PlatformError> {
                 store
             }
         };
-        Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None, open: None, edit: None }))
+        let sort = PlaylistSort {
+            key: PlaylistSortKey::from_index(settings.borrow().playlist_sort),
+            descending: settings.borrow().playlist_sort_desc,
+        };
+        Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None, open: None, edit: None, sort }))
     };
     refresh_playlists(&ui, &mut pl.borrow_mut());
     let ui_weak = ui.as_weak();
@@ -1134,6 +1142,34 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         // Context menu stub: "Create stems" is not implemented yet.
         ui.on_create_stems(|_row, _in_album| { /* TODO: stems */ });
+    }
+    {
+        // Sort panel of the Playlists page: the order is applied at once and remembered.
+        let (weak, pl, settings) = (ui_weak.clone(), pl.clone(), settings.clone());
+        ui.on_pl_sort_changed(move |mode, descending| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mode = mode.clamp(0, 3) as u8;
+            {
+                let mut st = pl.borrow_mut();
+                st.sort = PlaylistSort { key: PlaylistSortKey::from_index(mode), descending };
+                refresh_playlist_rows(&ui, &mut st);
+            }
+            {
+                let mut cfg = settings.borrow_mut();
+                cfg.playlist_sort = mode;
+                cfg.playlist_sort_desc = descending;
+            }
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // "Add to playlist" button of the player view: works on the track that is playing now.
+        let (weak, pl, library) = (ui_weak.clone(), pl.clone(), library.clone());
+        ui.on_add_current_to_playlist(move || {
+            let path = LAST_NOW.lock().ok().and_then(|l| l.clone());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_add_window(&ui, &pl, &library, path);
+        });
     }
     {
         // Context menu "Add to playlist": opens the window for the track of this row.

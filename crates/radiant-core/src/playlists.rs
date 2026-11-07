@@ -28,6 +28,45 @@ pub enum ListEntry {
     Playlist(usize),
 }
 
+/// What the Playlists page sorts by (Liked tracks always stays first).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlaylistSortKey {
+    /// Creation order (the order before sorting existed).
+    #[default]
+    Created,
+    Name,
+    /// Last time tracks were added, removed or moved.
+    Updated,
+    TrackCount,
+}
+
+impl PlaylistSortKey {
+    /// Index used by the UI and `settings.json` (0 = Created, 1 = Name, 2 = Updated, 3 = TrackCount).
+    pub fn from_index(i: u8) -> Self {
+        match i {
+            1 => Self::Name,
+            2 => Self::Updated,
+            3 => Self::TrackCount,
+            _ => Self::Created,
+        }
+    }
+
+    pub fn index(self) -> u8 {
+        match self {
+            Self::Created => 0,
+            Self::Name => 1,
+            Self::Updated => 2,
+            Self::TrackCount => 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PlaylistSort {
+    pub key: PlaylistSortKey,
+    pub descending: bool,
+}
+
 /// Trims, joins runs of whitespace, cuts to `NAME_MAX_CHARS`. `None` = nothing left.
 pub fn clean_name(raw: &str) -> Option<String> {
     let joined = raw.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -138,6 +177,7 @@ impl PlaylistStore {
         }
         let track = p.track_paths.remove(from);
         p.track_paths.insert(to, track);
+        p.updated_at = now_secs();
         true
     }
 
@@ -213,33 +253,58 @@ impl PlaylistStore {
         }
     }
 
-    /// Order of the Playlists page: Liked tracks, playlists without a folder (oldest first),
-    /// then every folder (by name) followed by its playlists unless it is folded.
+    /// Order of the Playlists page in the default sort (creation order).
     pub fn list_entries(&self) -> Vec<ListEntry> {
+        self.list_entries_sorted(PlaylistSort::default())
+    }
+
+    /// Order of the Playlists page: Liked tracks, playlists without a folder, then every folder
+    /// followed by its playlists unless it is folded. Playlists are sorted by `sort` inside each
+    /// group; folders go by name (reversed only when sorting by name, descending).
+    pub fn list_entries_sorted(&self, sort: PlaylistSort) -> Vec<ListEntry> {
         let mut out = Vec::new();
-        for (i, p) in self.playlists.iter().enumerate() {
-            if p.id == FAVORITES_ID {
-                out.push(ListEntry::Playlist(i));
-            }
+        if let Some(i) = self.playlists.iter().position(|p| p.id == FAVORITES_ID) {
+            out.push(ListEntry::Playlist(i));
         }
-        for (i, p) in self.playlists.iter().enumerate() {
-            if p.id != FAVORITES_ID && p.folder_id.is_none() {
-                out.push(ListEntry::Playlist(i));
-            }
+        let loose: Vec<usize> = (0..self.playlists.len())
+            .filter(|&i| self.playlists[i].id != FAVORITES_ID && self.playlists[i].folder_id.is_none())
+            .collect();
+        out.extend(self.sort_indexes(loose, sort).into_iter().map(ListEntry::Playlist));
+        let mut folders = self.folder_order();
+        if sort.key == PlaylistSortKey::Name && sort.descending {
+            folders.reverse();
         }
-        for fi in self.folder_order() {
+        for fi in folders {
             out.push(ListEntry::Folder(fi));
             let folder = &self.folders[fi];
             if folder.collapsed {
                 continue;
             }
-            for (i, p) in self.playlists.iter().enumerate() {
-                if p.folder_id.as_deref() == Some(folder.id.as_str()) {
-                    out.push(ListEntry::Playlist(i));
-                }
-            }
+            let inside: Vec<usize> = (0..self.playlists.len())
+                .filter(|&i| self.playlists[i].folder_id.as_deref() == Some(folder.id.as_str()))
+                .collect();
+            out.extend(self.sort_indexes(inside, sort).into_iter().map(ListEntry::Playlist));
         }
         out
+    }
+
+    /// Sorts playlist indexes. Equal keys fall back to the name, then to the creation order,
+    /// so the result never jumps around.
+    fn sort_indexes(&self, mut idx: Vec<usize>, sort: PlaylistSort) -> Vec<usize> {
+        idx.sort_by(|&a, &b| {
+            let (pa, pb) = (&self.playlists[a], &self.playlists[b]);
+            let name = || pa.name.to_lowercase().cmp(&pb.name.to_lowercase());
+            let o = match sort.key {
+                PlaylistSortKey::Created => pa.created_at.cmp(&pb.created_at).then_with(|| a.cmp(&b)),
+                PlaylistSortKey::Name => name().then_with(|| a.cmp(&b)),
+                PlaylistSortKey::Updated => pa.updated_at.cmp(&pb.updated_at).then_with(name).then_with(|| a.cmp(&b)),
+                PlaylistSortKey::TrackCount => {
+                    pa.track_paths.len().cmp(&pb.track_paths.len()).then_with(name).then_with(|| a.cmp(&b))
+                }
+            };
+            if sort.descending { o.reverse() } else { o }
+        });
+        idx
     }
 
     /// Folder indexes by name.
@@ -438,6 +503,44 @@ mod tests {
         assert_eq!(s.list_entries(), expect);
         assert!(s.toggle_folder_collapsed(&a));
         assert_eq!(s.list_entries().len(), expect.len() - 1);
+    }
+
+    #[test]
+    fn playlist_sorting() {
+        let mut s = fresh();
+        let f = s.create_folder("Gym").unwrap();
+        let b = s.create_playlist("beta", None).unwrap();
+        let a = s.create_playlist("Alpha", None).unwrap();
+        let c = s.create_playlist("charlie", None).unwrap();
+        let in_f1 = s.create_playlist("zeta", Some(&f)).unwrap();
+        let in_f2 = s.create_playlist("eta", Some(&f)).unwrap();
+        for (id, created, updated, n) in [(&b, 1, 30, 1), (&a, 2, 10, 3), (&c, 3, 20, 2), (&in_f1, 4, 1, 0), (&in_f2, 5, 2, 0)] {
+            let p = s.playlists.iter_mut().find(|p| &p.id == id).unwrap();
+            p.created_at = created;
+            p.updated_at = updated;
+            p.track_paths = (0..n).map(|i| PathBuf::from(format!("{i}.mp3"))).collect();
+        }
+        let ids = |s: &PlaylistStore, sort: PlaylistSort| -> Vec<String> {
+            s.list_entries_sorted(sort)
+                .into_iter()
+                .filter_map(|e| match e {
+                    ListEntry::Playlist(i) => Some(s.playlists[i].id.clone()),
+                    ListEntry::Folder(_) => None,
+                })
+                .collect()
+        };
+        let sort = |key, descending| PlaylistSort { key, descending };
+        let want = |list: &[&String]| -> Vec<String> { std::iter::once(FAVORITES_ID.to_string()).chain(list.iter().map(|x| x.to_string())).collect() };
+        // Liked tracks stays first in every mode; folder playlists come after the folder.
+        assert_eq!(ids(&s, sort(PlaylistSortKey::Created, false)), want(&[&b, &a, &c, &in_f1, &in_f2]));
+        assert_eq!(ids(&s, sort(PlaylistSortKey::Created, true)), want(&[&c, &a, &b, &in_f2, &in_f1]));
+        assert_eq!(ids(&s, sort(PlaylistSortKey::Name, false)), want(&[&a, &b, &c, &in_f2, &in_f1]));
+        assert_eq!(ids(&s, sort(PlaylistSortKey::Name, true)), want(&[&c, &b, &a, &in_f1, &in_f2]));
+        assert_eq!(ids(&s, sort(PlaylistSortKey::Updated, true)), want(&[&b, &c, &a, &in_f2, &in_f1]));
+        assert_eq!(ids(&s, sort(PlaylistSortKey::TrackCount, true)), want(&[&a, &c, &b, &in_f1, &in_f2]));
+        assert_eq!(s.list_entries(), s.list_entries_sorted(PlaylistSort::default()));
+        assert_eq!(PlaylistSortKey::from_index(PlaylistSortKey::Updated.index()), PlaylistSortKey::Updated);
+        assert_eq!(PlaylistSortKey::from_index(99), PlaylistSortKey::Created);
     }
 
     #[test]

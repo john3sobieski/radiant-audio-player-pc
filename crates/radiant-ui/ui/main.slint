@@ -1004,6 +1004,18 @@ export component MainWindow inherits Window {
     in-out property <string> search-text: "";
     in-out property <int> sort-mode: 1;
     in-out property <bool> sort-descending: false;
+    /// Playlists page sort: 0 = date created, 1 = name, 2 = date changed, 3 = track count.
+    in-out property <int> pl-sort-mode: 0;
+    in-out property <bool> pl-sort-descending: false;
+    callback pl-sort-changed(int, bool);
+    /// Sort panel shows the modes of the open section (Tracks or Playlists).
+    private property <int> cur-sort-mode: root.section == 2 ? root.pl-sort-mode : root.sort-mode;
+    private property <bool> cur-sort-desc: root.section == 2 ? root.pl-sort-descending : root.sort-descending;
+    private property <[string]> sort-labels: root.section == 2
+        ? ["Date created", "Name", "Date changed", "Tracks"]
+        : ["Manual order", "Name", "Artist", "Album", "Duration", "File date"];
+    /// "Add to playlist" button of the player view (the track that is playing now).
+    callback add-current-to-playlist();
     in-out property <int> drag-from: -1;
     in-out property <int> drag-to: -1;
     in-out property <bool> drag-active: false;
@@ -1354,7 +1366,7 @@ export component MainWindow inherits Window {
                     vertical-alignment: center;
                     overflow: elide;
                 }
-                if root.section == 0 : HeaderItem {
+                if root.section == 0 || root.section == 2 : HeaderItem {
                     PillButton {
                         text: "Sort";
                         active: root.show-sort;
@@ -3062,6 +3074,12 @@ export component MainWindow inherits Window {
                 }
                 HeaderItem {
                     PillButton {
+                        text: "Add to playlist";
+                        clicked => { root.add-current-to-playlist(); }
+                    }
+                }
+                HeaderItem {
+                    PillButton {
                         text: "Lyrics";
                         active: root.side-open && root.eff-tab == 0;
                         clicked => { root.pick-tab(0); }
@@ -3095,7 +3113,7 @@ export component MainWindow inherits Window {
         x: root.width - self.width - 20px;
         y: 68px;
         width: 260px;
-        height: min(root.height - 78px, 290px);
+        height: min(root.height - 78px, root.section == 2 ? 226px : 290px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -3107,31 +3125,36 @@ export component MainWindow inherits Window {
             padding: 16px;
             spacing: 2px;
             Text {
-                text: "Sort tracks";
+                text: root.section == 2 ? "Sort playlists" : "Sort tracks";
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 700;
                 height: 26px;
             }
-            for label[i] in ["Manual order", "Name", "Artist", "Album", "Duration", "File date"] : Rectangle {
+            for label[i] in root.sort-labels : Rectangle {
                 height: 28px;
                 border-radius: 7px;
-                background: root.sort-mode == i ? Theme.accent.with-alpha(0.2)
+                background: root.cur-sort-mode == i ? Theme.accent.with-alpha(0.2)
                     : sort-row.has-hover ? Theme.surface-hover : transparent;
                 Text {
                     x: 10px;
                     width: parent.width - 20px;
                     height: parent.height;
                     text: label;
-                    color: root.sort-mode == i ? Theme.accent : Theme.text;
+                    color: root.cur-sort-mode == i ? Theme.accent : Theme.text;
                     vertical-alignment: center;
                 }
                 sort-row := TouchArea {
                     mouse-cursor: pointer;
                     clicked => {
-                        root.sort-mode = i;
-                        if (i == 0) { root.sort-descending = false; }
-                        root.sort-changed(i, root.sort-descending);
+                        if (root.section == 2) {
+                            root.pl-sort-mode = i;
+                            root.pl-sort-changed(i, root.pl-sort-descending);
+                        } else {
+                            root.sort-mode = i;
+                            if (i == 0) { root.sort-descending = false; }
+                            root.sort-changed(i, root.sort-descending);
+                        }
                     }
                 }
             }
@@ -3139,18 +3162,28 @@ export component MainWindow inherits Window {
                 spacing: 8px;
                 PillButton {
                     text: "Ascending";
-                    active: root.sort-mode != 0 && !root.sort-descending;
+                    active: (root.section == 2 || root.sort-mode != 0) && !root.cur-sort-desc;
                     clicked => {
-                        root.sort-descending = false;
-                        root.sort-changed(root.sort-mode, false);
+                        if (root.section == 2) {
+                            root.pl-sort-descending = false;
+                            root.pl-sort-changed(root.pl-sort-mode, false);
+                        } else {
+                            root.sort-descending = false;
+                            root.sort-changed(root.sort-mode, false);
+                        }
                     }
                 }
                 PillButton {
                     text: "Descending";
-                    active: root.sort-mode != 0 && root.sort-descending;
+                    active: (root.section == 2 || root.sort-mode != 0) && root.cur-sort-desc;
                     clicked => {
-                        root.sort-descending = true;
-                        root.sort-changed(root.sort-mode, true);
+                        if (root.section == 2) {
+                            root.pl-sort-descending = true;
+                            root.pl-sort-changed(root.pl-sort-mode, true);
+                        } else {
+                            root.sort-descending = true;
+                            root.sort-changed(root.sort-mode, true);
+                        }
                     }
                 }
             }
