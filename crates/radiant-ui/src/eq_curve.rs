@@ -39,6 +39,40 @@ pub fn paths(gains: &[f32; 12]) -> (String, String) {
     (line, fill)
 }
 
+/// dB that reach the top / bottom edge of a miniature (the presets stay within +-8 dB, so they use the full height).
+const MINI_RANGE_DB: f32 = 9.0;
+const MINI_PAD: f32 = 6.0;
+
+/// (line, fill) for the preset cards: the same curve, but drawn over the whole 328 x 46 box with
+/// +-`MINI_RANGE_DB` at the edges, so the differences between presets are easy to see. The fill is closed
+/// along the zero line (the middle of the box), so a boost is a hill and a cut is a valley.
+pub fn mini_paths(gains: &[f32; 12]) -> (String, String) {
+    use std::fmt::Write;
+    let mid = H / 2.0;
+    let amp = mid - 2.0;
+    let pts: Vec<(f32, f32)> = gains
+        .iter()
+        .enumerate()
+        .map(|(i, g)| {
+            let x = MINI_PAD + (W - 2.0 * MINI_PAD) * i as f32 / 11.0;
+            let y = mid - g.clamp(-MINI_RANGE_DB, MINI_RANGE_DB) / MINI_RANGE_DB * amp;
+            (x, y)
+        })
+        .collect();
+    let at = |i: isize| pts[i.clamp(0, 11) as usize];
+    let mut line = String::new();
+    let _ = write!(line, "M {:.1} {:.1}", pts[0].0, pts[0].1);
+    for i in 0..11isize {
+        let (p0, p1, p2, p3) = (at(i - 1), at(i), at(i + 1), at(i + 2));
+        let c1 = (p1.0 + (p2.0 - p0.0) / 6.0, (p1.1 + (p2.1 - p0.1) / 6.0).clamp(1.0, H - 1.0));
+        let c2 = (p2.0 - (p3.0 - p1.0) / 6.0, (p2.1 - (p3.1 - p1.1) / 6.0).clamp(1.0, H - 1.0));
+        let _ = write!(line, " C {:.1} {:.1} {:.1} {:.1} {:.1} {:.1}", c1.0, c1.1, c2.0, c2.1, p2.0, p2.1);
+    }
+    let mut fill = line.clone();
+    let _ = write!(fill, " L {:.1} {:.1} L {:.1} {:.1} Z", pts[11].0, mid, pts[0].0, mid);
+    (line, fill)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

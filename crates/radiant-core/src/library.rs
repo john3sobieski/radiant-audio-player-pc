@@ -74,6 +74,10 @@ fn track_from_path(path: &Path) -> Track {
         ..Default::default()
     };
     read_audio_metadata(path, &mut track);
+    // Synchronized lyrics of an MP3 (SYLT) are invisible to Symphonia's tag keys.
+    if !track.tag_lyrics && crate::id3::is_mp3(path) {
+        track.tag_lyrics = crate::id3::read_sylt(path).is_some();
+    }
     track.info.bitrate_kbps = track.duration_ms.filter(|duration| *duration > 0).map(|duration| {
         ((track.info.size_bytes as u128 * 8) / duration as u128).min(u32::MAX as u128) as u32
     });

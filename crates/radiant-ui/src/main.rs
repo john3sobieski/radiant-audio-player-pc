@@ -269,8 +269,6 @@ static NOW_KEY: Mutex<String> = Mutex::new(String::new());
 static LAST_NOW: Mutex<Option<PathBuf>> = Mutex::new(None);
 /// Start times (ms) of the synchronized lyrics of the current track; empty = no synced lyrics.
 static LYRIC_TIMES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
-/// The current lyric line starts a little early so the eye can follow it.
-const LEAD_MS: u64 = 250;
 
 const ACCENT_RGB: (u8, u8, u8) = (0x8b, 0x6c, 0xff);
 
@@ -1213,11 +1211,15 @@ fn main() -> Result<(), slint::PlatformError> {
             None => None,
         };
         // Current line of the synchronized lyrics (binary search over the start times).
-        let lyric_index = LYRIC_TIMES
-            .lock()
-            .ok()
-            .filter(|times| !times.is_empty())
-            .map_or(-1, |times| times.partition_point(|t| *t <= status.position_ms + LEAD_MS) as i32 - 1);
+        // A track that just changed starts without a highlighted line (the old times are about to be cleared).
+        let lyric_index = if changed_path.is_some() {
+            -1
+        } else {
+            LYRIC_TIMES
+                .lock()
+                .ok()
+                .map_or(-1, |times| radiant_core::lyrics::current_line(&times, status.position_ms))
+        };
 
         let _ = weak.upgrade_in_event_loop(move |ui| {
             if let Some(track) = &changed_track {
@@ -2253,8 +2255,15 @@ fn main() -> Result<(), slint::PlatformError> {
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
     let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
-    let preset_lines: Vec<SharedString> = EQ_PRESETS.iter().map(|p| eq_curve::paths(&p.gains).0.into()).collect();
+    let (preset_lines, preset_fills): (Vec<SharedString>, Vec<SharedString>) = EQ_PRESETS
+        .iter()
+        .map(|p| {
+            let (line, fill) = eq_curve::mini_paths(&p.gains);
+            (SharedString::from(line), SharedString::from(fill))
+        })
+        .unzip();
     ui.set_eq_preset_lines(ModelRc::new(VecModel::from(preset_lines)));
+    ui.set_eq_preset_fills(ModelRc::new(VecModel::from(preset_fills)));
     {
         let (player, fx, eq_model, settings, eq_track, weak) =
             (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());

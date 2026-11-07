@@ -5,6 +5,7 @@
 //!       playlists + playlist folders (`playlists.json`), the four queues (`queues.json`).
 //! TODO: app-lock logic. See PROGRESS.md.
 
+pub mod id3;
 pub mod library;
 pub mod lyrics;
 pub mod models;

@@ -713,8 +713,9 @@ component PillPreset inherits Rectangle {
 // A preset card: name on top, a miniature of its curve below.
 component PresetCard inherits Rectangle {
     in property <string> text;
-    /// SVG path of the curve (328 x 46 box from `eq_curve.rs`).
+    /// SVG paths of the curve and of its fill down to the zero line (328 x 46 box, `eq_curve::mini_paths`).
     in property <string> line;
+    in property <string> fill;
     in property <bool> active: false;
     in property <bool> enabled: true;
     callback clicked();
@@ -741,23 +742,31 @@ component PresetCard inherits Rectangle {
     // Zero line of the miniature.
     Rectangle {
         x: 12px;
-        y: 28px + (parent.height - 36px) * 13.0 / 30.0;
+        y: 26px + (parent.height - 34px) / 2;
         width: parent.width - 24px;
         height: 1px;
-        background: Theme.surface-hover;
+        background: root.active ? Theme.accent.with-alpha(0.35) : Theme.muted.with-alpha(0.35);
     }
     Path {
         x: 12px;
-        y: 28px;
+        y: 26px;
         width: parent.width - 24px;
-        height: parent.height - 36px;
-        viewbox-x: 0;
-        viewbox-y: 16;
+        height: parent.height - 34px;
         viewbox-width: 328;
-        viewbox-height: 30;
+        viewbox-height: 46;
+        commands: root.fill;
+        fill: root.active ? Theme.accent.with-alpha(0.40) : Theme.muted.with-alpha(0.28);
+    }
+    Path {
+        x: 12px;
+        y: 26px;
+        width: parent.width - 24px;
+        height: parent.height - 34px;
+        viewbox-width: 328;
+        viewbox-height: 46;
         commands: root.line;
-        stroke: root.active ? Theme.accent : Theme.muted;
-        stroke-width: 2px;
+        stroke: root.active ? Theme.accent : Theme.text;
+        stroke-width: 2.5px;
         stroke-line-join: round;
         stroke-line-cap: round;
         fill: transparent;
@@ -1676,6 +1685,7 @@ export component MainWindow inherits Window {
     in property <[string]> eq-preset-names;
     /// Curve path of every preset (miniatures on the preset cards).
     in property <[string]> eq-preset-lines;
+    in property <[string]> eq-preset-fills;
     /// Presets can be picked (always, except in per-track mode before any track has played).
     in property <bool> eq-presets-enabled: true;
     /// The preset sheet over the sound panel is open.
@@ -3717,29 +3727,39 @@ export component MainWindow inherits Window {
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
-            // Synchronized: the current line stays in the middle, click a line to jump there.
+            // Synchronized: the current line stays in the middle, sung lines are dimmed, click a line to jump there.
             if root.eff-tab == 0 && root.lyrics.length > 0 && root.lyrics-synced : Rectangle {
                 clip: true;
                 Rectangle {
-                    y: parent.height / 2 - 20px - max(0, root.lyric-index) * 40px;
+                    y: parent.height / 2 - 28px - max(0, root.lyric-index) * 56px;
                     width: parent.width;
-                    height: root.lyrics.length * 40px;
+                    height: root.lyrics.length * 56px;
                     animate y { duration: 260ms; easing: ease-in-out; }
                     for l[i] in root.lyrics : Rectangle {
-                        y: i * 40px;
+                        y: i * 56px;
                         width: parent.width;
-                        height: 40px;
+                        height: 56px;
                         Text {
+                            // Distance (in lines) from the line that is in the middle.
+                            property <int> dist: Math.abs(i - max(0, root.lyric-index));
                             x: 20px;
                             width: parent.width - 40px;
                             height: parent.height;
                             text: l.text;
-                            font-size: 18px;
+                            // The current line is bigger and brighter; the farther a line, the fainter it is,
+                            // and sung lines are fainter than the ones to come. Size, color and fade glide.
+                            font-size: i == root.lyric-index ? 21px : 17px;
                             horizontal-alignment: center;
-                            font-weight: i == root.lyric-index ? 700 : 400;
-                            color: i == root.lyric-index ? Theme.text
-                                : i < root.lyric-index ? Theme.muted.with-alpha(0.45) : Theme.muted;
+                            font-weight: 600;
+                            color: i == root.lyric-index ? Theme.text : Theme.muted;
+                            opacity: i == root.lyric-index ? 1.0
+                                : (i < root.lyric-index ? 0.7 : 1.0) * max(0.18, 0.75 - self.dist * 0.14);
+                            animate font-size { duration: 240ms; easing: ease-out; }
+                            animate color { duration: 240ms; easing: ease-out; }
+                            animate opacity { duration: 240ms; easing: ease-out; }
                             vertical-alignment: center;
+                            // Long lines wrap (two lines fit a row); anything longer is cut with "...".
+                            wrap: word-wrap;
                             overflow: elide;
                         }
                         TouchArea {
@@ -4188,6 +4208,7 @@ export component MainWindow inherits Window {
                 height: parent.card-h;
                 text: name;
                 line: root.eq-preset-lines[k];
+                fill: root.eq-preset-fills[k];
                 active: k == root.eq-active-preset;
                 enabled: root.eq-presets-enabled;
                 opacity: root.eq-presets-enabled ? 1.0 : 0.4;
