@@ -18,6 +18,7 @@ mod rays;
 
 use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
 use radiant_core::playlists::{self, ListEntry, PlaylistSort, PlaylistSortKey, PlaylistStore};
+use radiant_core::queues::{self, QueueStore};
 use slint::{Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -876,9 +877,8 @@ fn playable_queue(st: &PlState, library: &Arc<Mutex<Vec<Track>>>) -> Vec<PathBuf
     p.track_paths.iter().filter(|t| known.contains(*t)).cloned().collect()
 }
 
-/// Opens the "Add to playlist" window for one track (menu of the Tracks list, of an album or of a playlist page).
-/// The playlists that already hold the track are ticked; clicking a ticked one takes the track out again.
-fn open_add_window(ui: &MainWindow, pl: &PlRef, library: &Arc<Mutex<Vec<Track>>>, path: PathBuf) {
+/// Fills the track header (cover, title, artist) shared by the "Add to playlist" and "Add to queue" windows.
+fn set_popup_track(ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>, path: &Path) {
     let track = library.lock().ok().and_then(|l| l.iter().find(|t| t.path == path).cloned());
     let title = track
         .as_ref()
@@ -901,10 +901,51 @@ fn open_add_window(ui: &MainWindow, pl: &PlRef, library: &Arc<Mutex<Vec<Track>>>
             ui.set_pl_track_has_cover(false);
         }
     }
+}
+
+/// Opens the "Add to playlist" window for one track (menu of the Tracks list, of an album or of a playlist page).
+/// The playlists that already hold the track are ticked; clicking a ticked one takes the track out again.
+fn open_add_window(ui: &MainWindow, pl: &PlRef, library: &Arc<Mutex<Vec<Track>>>, path: PathBuf) {
+    set_popup_track(ui, library, &path);
     let mut st = pl.borrow_mut();
     st.target = Some(path);
     st.moving = None;
     show_pl_popup(ui, &mut st, 0);
+}
+
+// ---- Queues ----
+
+/// The four queues and the track the "Add to queue" window works on (UI thread only).
+struct QState {
+    store: QueueStore,
+    target: Option<PathBuf>,
+}
+
+type QRef = Rc<RefCell<QState>>;
+
+/// Pushes the queue state to the UI: track counts (window + section dots) and which queues hold the target.
+fn refresh_queues(ui: &MainWindow, st: &QState) {
+    let counts: Vec<i32> = st.store.counts().into_iter().map(|n| n as i32).collect();
+    ui.set_queue_counts(ModelRc::new(VecModel::from(counts)));
+    let added: Vec<bool> = (0..radiant_core::models::QUEUE_COUNT)
+        .map(|i| st.target.as_deref().map_or(false, |t| st.store.contains(i, t)))
+        .collect();
+    ui.set_q_added(ModelRc::new(VecModel::from(added)));
+}
+
+fn save_queues(ui: &MainWindow, store: &QueueStore) {
+    if let Err(e) = queues::save(store) {
+        ui.set_status(format!("Could not save queues: {e}").into());
+    }
+}
+
+/// Opens the "Add to queue" window for one track. Queues that hold it are ticked; a click on a ticked one removes it.
+fn open_queue_window(ui: &MainWindow, q: &QRef, library: &Arc<Mutex<Vec<Track>>>, path: PathBuf) {
+    set_popup_track(ui, library, &path);
+    let mut st = q.borrow_mut();
+    st.target = Some(path);
+    refresh_queues(ui, &st);
+    ui.set_show_q_popup(true);
 }
 
 /// Shows the playlist window in `view` (0 = pick, 1 = create, 2 = move to folder).
@@ -1041,6 +1082,19 @@ fn main() -> Result<(), slint::PlatformError> {
         Rc::new(RefCell::new(PlState { store, card_ids: Vec::new(), rows: Vec::new(), target: None, moving: None, open: None, edit: None, sort }))
     };
     refresh_playlists(&ui, &mut pl.borrow_mut());
+    let queues_state: QRef = {
+        let store = match queues::load() {
+            Ok(store) => store,
+            Err(e) => {
+                ui.set_status(format!("Could not read queues: {e}").into());
+                let mut store = QueueStore::default();
+                store.normalize();
+                store
+            }
+        };
+        Rc::new(RefCell::new(QState { store, target: None }))
+    };
+    refresh_queues(&ui, &queues_state.borrow());
     let ui_weak = ui.as_weak();
     // Bumped on every folder scan so a late result cannot replace a newer one.
     let scan_gen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
@@ -1169,6 +1223,56 @@ fn main() -> Result<(), slint::PlatformError> {
             let path = LAST_NOW.lock().ok().and_then(|l| l.clone());
             let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
             open_add_window(&ui, &pl, &library, path);
+        });
+    }
+    {
+        // Context menu "Add to queue" (right click or three dots): window with the four queues.
+        let (weak, qs, library, displayed) = (ui_weak.clone(), queues_state.clone(), library.clone(), displayed.clone());
+        ui.on_add_to_queue(move |row, in_album| {
+            let row = row.max(0) as usize;
+            let path = if in_album {
+                OPEN_ROWS.lock().ok().and_then(|r| r.get(row).cloned()).flatten()
+            } else {
+                displayed.lock().ok().and_then(|l| l.get(row).cloned())
+            };
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_queue_window(&ui, &qs, &library, path);
+        });
+    }
+    {
+        // The same menu entry on a track of the open playlist page.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_pl_page_add_to_queue(move |row| {
+            let path = PL_ROWS.lock().ok().and_then(|r| r.get(row.max(0) as usize).cloned());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_queue_window(&ui, &qs, &library, path);
+        });
+    }
+    {
+        // Button next to the volume: the track that is playing now.
+        let (weak, qs, library) = (ui_weak.clone(), queues_state.clone(), library.clone());
+        ui.on_add_current_to_queue(move || {
+            let path = LAST_NOW.lock().ok().and_then(|l| l.clone());
+            let (Some(path), Some(ui)) = (path, weak.upgrade()) else { return };
+            open_queue_window(&ui, &qs, &library, path);
+        });
+    }
+    {
+        // A queue row was clicked: add the track to that queue, or take it out again.
+        let (weak, qs) = (ui_weak.clone(), queues_state.clone());
+        ui.on_queue_toggle(move |i| {
+            let Some(ui) = weak.upgrade() else { return };
+            let mut st = qs.borrow_mut();
+            let i = i.max(0) as usize;
+            let Some(target) = st.target.clone() else { return };
+            let changed = if st.store.contains(i, &target) {
+                st.store.remove(i, &target)
+            } else {
+                st.store.add(i, &target)
+            };
+            if !changed { return; }
+            save_queues(&ui, &st.store);
+            refresh_queues(&ui, &st);
         });
     }
     {

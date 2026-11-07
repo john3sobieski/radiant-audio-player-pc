@@ -1207,10 +1207,18 @@ export component MainWindow inherits Window {
     /// The menu was opened for a track of the open playlist page (`menu-row` = row of `pl-page-tracks`).
     in-out property <bool> menu-in-pl: false;
     private property <length> menu-w: 156px;
-    private property <length> menu-h: 3 * 34px + 12px;
+    private property <length> menu-h: 4 * 34px + 12px;
     /// Album (index in `albums`) the track at this row of the Tracks list belongs to, -1 = not found.
     callback album-index-of-track(int) -> int;
     callback add-to-playlist(int, bool);
+    callback add-to-queue(int, bool);
+    callback pl-page-add-to-queue(int);
+    // Window "Add to queue": opened from the menu or from the button next to the volume.
+    in-out property <bool> show-q-popup: false;
+    /// Which queues already hold the track the window works on.
+    in property <[bool]> q-added: [false, false, false, false];
+    callback queue-toggle(int);
+    callback add-current-to-queue();
     callback create-stems(int, bool);
     function open-menu(mx: length, my: length, row: int, in-album: bool) {
         root.menu-row = row;
@@ -1336,6 +1344,9 @@ export component MainWindow inherits Window {
     }
     changed show-pl-popup => {
         if (self.show-pl-popup) { pl-fs.focus(); }
+    }
+    changed show-q-popup => {
+        if (self.show-q-popup) { q-fs.focus(); }
     }
 
     VerticalLayout {
@@ -2307,7 +2318,9 @@ export component MainWindow inherits Window {
                         }
                         Text {
                             width: 100%;
-                            text: "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
+                            text: root.queue-counts[root.queue-index] > 0
+                                ? "Queue \{root.queue-index + 1} holds \{root.queue-counts[root.queue-index]} tracks. Its track list is coming next."
+                                : "Queue \{root.queue-index + 1} is empty. Tracks you add to it will appear here.";
                             color: Theme.muted;
                             font-size: 15px;
                             wrap: word-wrap;
@@ -2663,6 +2676,16 @@ export component MainWindow inherits Window {
                     }
                 }
 
+                // Add the playing track to a queue (small button left of the playlist button).
+                if root.now-playing != "" : IconButton {
+                    x: parent.width - 24px - 150px - 8px - 28px - 6px - self.width;
+                    y: (parent.height - self.height) / 2;
+                    width: 28px;
+                    height: 28px;
+                    icon-size: 16px;
+                    commands: "M 1 3 H 11 V 5 H 1 Z M 1 8 H 11 V 10 H 1 Z M 1 13 H 7 V 15 H 1 Z M 12 11 L 19 15 L 12 19 Z";
+                    clicked => { root.add-current-to-queue(); }
+                }
                 // Add the playing track to a playlist (small button left of the volume block).
                 if root.now-playing != "" : IconButton {
                     x: parent.width - 24px - 150px - 8px - self.width;
@@ -3393,10 +3416,177 @@ export component MainWindow inherits Window {
                 }
             }
             MenuItem {
+                text: "Add to queue";
+                clicked => {
+                    root.show-menu = false;
+                    if (root.menu-in-pl) { root.pl-page-add-to-queue(root.menu-row); }
+                    else { root.add-to-queue(root.menu-row, root.menu-in-album); }
+                }
+            }
+            MenuItem {
                 text: "Create stems";
                 clicked => {
                     root.show-menu = false;
                     if (!root.menu-in-pl) { root.create-stems(root.menu-row, root.menu-in-album); }
+                }
+            }
+        }
+    }
+
+    // ---- "Add to queue" window: the four queues, centered over a dimmed backdrop ----
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #000000b0;
+        opacity: root.show-q-popup ? 1 : 0;
+        visible: self.opacity > 0.01;
+        animate opacity { duration: 180ms; }
+
+        TouchArea {
+            clicked => { root.show-q-popup = false; }
+            scroll-event(e) => { return accept; }
+        }
+
+        Rectangle {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2 + (root.show-q-popup ? 0px : 18px);
+            width: min(420px, root.width - 32px);
+            height: min(404px, root.height - 32px);
+            background: Theme.surface;
+            border-radius: 18px;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: #000000a0;
+            drop-shadow-offset-y: 8px;
+            animate y { duration: 220ms; easing: ease-out; }
+
+            q-fs := FocusScope {
+                key-pressed(e) => {
+                    if (e.text == Key.Escape) { root.show-q-popup = false; return accept; }
+                    return reject;
+                }
+            }
+            // Keeps clicks inside the window from closing it.
+            TouchArea { scroll-event(e) => { return accept; } }
+
+            VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 56px;
+                    CoverArt {
+                        x: 0px;
+                        y: 4px;
+                        width: 48px;
+                        height: 48px;
+                        art: root.pl-track-cover;
+                        has-image: root.pl-track-has-cover;
+                        letter: root.pl-track-letter;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 4px;
+                        width: parent.width - 60px - 44px;
+                        height: 14px;
+                        text: "ADD TO QUEUE";
+                        color: Theme.accent.brighter(0.5);
+                        font-size: 11px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 18px;
+                        width: parent.width - 60px - 44px;
+                        height: 24px;
+                        text: root.pl-track-title;
+                        color: Theme.text;
+                        font-size: 17px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        x: 60px;
+                        y: 42px;
+                        width: parent.width - 60px - 44px;
+                        height: 18px;
+                        text: root.pl-track-artist;
+                        color: Theme.muted;
+                        font-size: 13px;
+                        overflow: elide;
+                    }
+                    IconButton {
+                        x: parent.width - self.width;
+                        y: 8px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        icon-color: Theme.muted;
+                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                        clicked => { root.show-q-popup = false; }
+                    }
+                }
+                for q in 4 : Rectangle {
+                    height: 60px;
+                    border-radius: 12px;
+                    background: root.q-added[q] ? Theme.accent.with-alpha(0.2)
+                        : q-row-ta.has-hover ? Theme.surface-hover : Theme.bg.with-alpha(0.5);
+                    animate background { duration: 120ms; }
+
+                    Rectangle {
+                        x: 14px;
+                        y: (parent.height - self.height) / 2;
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 18px;
+                        background: root.q-added[q] ? Theme.accent : Theme.surface-hover;
+                        Text {
+                            text: q + 1;
+                            color: root.q-added[q] ? #ffffff : Theme.text;
+                            font-size: 16px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Text {
+                        x: 62px;
+                        y: 10px;
+                        width: parent.width - 62px - 56px;
+                        height: 22px;
+                        text: "Queue \{q + 1}";
+                        color: root.q-added[q] ? Theme.accent : Theme.text;
+                        font-size: 15px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        x: 62px;
+                        y: 32px;
+                        width: parent.width - 62px - 56px;
+                        height: 18px;
+                        text: root.queue-counts[q] == 1 ? "1 track" : "\{root.queue-counts[q]} tracks";
+                        color: Theme.muted;
+                        font-size: 13px;
+                    }
+                    // Tick: the track is already in this queue (click again to take it out).
+                    if root.q-added[q] : Path {
+                        x: parent.width - 14px - 20px;
+                        y: (parent.height - 20px) / 2;
+                        width: 20px;
+                        height: 20px;
+                        viewbox-width: 20;
+                        viewbox-height: 20;
+                        commands: "M 3 10.5 L 4.6 8.9 L 8 12.3 L 15.4 4.9 L 17 6.5 L 8 15.5 Z";
+                        fill: Theme.accent;
+                    }
+                    q-row-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.queue-toggle(q); }
+                    }
                 }
             }
         }
