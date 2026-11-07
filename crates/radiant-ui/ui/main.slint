@@ -710,6 +710,65 @@ component PillPreset inherits Rectangle {
     }
 }
 
+// A preset card: name on top, a miniature of its curve below.
+component PresetCard inherits Rectangle {
+    in property <string> text;
+    /// SVG path of the curve (328 x 46 box from `eq_curve.rs`).
+    in property <string> line;
+    in property <bool> active: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    border-radius: 12px;
+    background: root.active ? Theme.accent.with-alpha(0.18)
+        : (ta.has-hover && root.enabled) ? Theme.surface-hover : Theme.bg;
+    border-width: 1px;
+    border-color: root.active ? Theme.accent.with-alpha(0.7) : transparent;
+    animate background { duration: 120ms; }
+
+    Text {
+        x: 12px;
+        y: 8px;
+        width: parent.width - 24px;
+        height: 16px;
+        text: root.text;
+        color: root.active ? Theme.accent : Theme.text;
+        font-size: 13px;
+        font-weight: root.active ? 700 : 500;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+    // Zero line of the miniature.
+    Rectangle {
+        x: 12px;
+        y: 28px + (parent.height - 36px) * 13.0 / 30.0;
+        width: parent.width - 24px;
+        height: 1px;
+        background: Theme.surface-hover;
+    }
+    Path {
+        x: 12px;
+        y: 28px;
+        width: parent.width - 24px;
+        height: parent.height - 36px;
+        viewbox-x: 0;
+        viewbox-y: 16;
+        viewbox-width: 328;
+        viewbox-height: 30;
+        commands: root.line;
+        stroke: root.active ? Theme.accent : Theme.muted;
+        stroke-width: 2px;
+        stroke-line-join: round;
+        stroke-line-cap: round;
+        fill: transparent;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
 // Segmented switch: a colored pill slides under the chosen label.
 component SegmentedControl inherits Rectangle {
     in property <[string]> labels;
@@ -1615,6 +1674,12 @@ export component MainWindow inherits Window {
     callback now-track-changed(string);
     /// Names of the EQ presets (set by Rust from radiant-dsp).
     in property <[string]> eq-preset-names;
+    /// Curve path of every preset (miniatures on the preset cards).
+    in property <[string]> eq-preset-lines;
+    /// Presets can be picked (always, except in per-track mode before any track has played).
+    in property <bool> eq-presets-enabled: true;
+    /// The preset sheet over the sound panel is open.
+    in-out property <bool> show-presets: false;
     callback eq-preset-selected(int);
     callback fx-reset();
 
@@ -3861,7 +3926,7 @@ export component MainWindow inherits Window {
     if root.show-sound && !root.show-player : TouchArea {
         y: 64px;
         height: root.height - 64px;
-        clicked => { root.show-sound = false; }
+        clicked => { root.show-sound = false; root.show-presets = false; }
     }
     if root.sound-visible : Rectangle {
         // In the player view the panel IS the side card (same position and size, no frame of its own).
@@ -3989,21 +4054,53 @@ export component MainWindow inherits Window {
                 track-name: root.eq-track-name;
                 saved: root.eq-track-saved;
             }
-            // Presets: two rows of five buttons.
-            for row in [0, 1] : Rectangle {
-                height: 30px;
-                opacity: root.eq-editable ? 1.0 : 0.4;
+            // Preset picker: one button that shows the current preset and opens the preset sheet.
+            Rectangle {
+                height: 40px;
+                opacity: root.eq-presets-enabled ? 1.0 : 0.4;
                 animate opacity { duration: 160ms; }
-                // Explicit positions (no layout): 5 chips of 62 px with 4 px gaps = 326 px.
-                for name[k] in root.eq-preset-names : PillPreset {
-                    x: (k - row * 5) * 66px;
+                Rectangle {
                     y: 2px;
-                    width: 62px;
-                    visible: k >= row * 5 && k < row * 5 + 5;
-                    text: name;
-                    active: k == root.eq-active-preset;
-                    enabled: root.eq-editable;
-                    clicked => { root.eq-preset-selected(k); }
+                    height: 36px;
+                    border-radius: 10px;
+                    background: pick-ta.has-hover && root.eq-presets-enabled ? Theme.surface-hover : Theme.bg;
+                    animate background { duration: 120ms; }
+                    Text {
+                        x: 12px;
+                        width: 56px;
+                        height: parent.height;
+                        text: "Preset";
+                        color: Theme.muted;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        x: 68px;
+                        width: parent.width - 68px - 36px;
+                        height: parent.height;
+                        text: (root.eq-active-preset >= 0 && root.eq-mode != 0)
+                            ? root.eq-preset-names[root.eq-active-preset] : "Custom";
+                        color: (root.eq-active-preset >= 0 && root.eq-mode != 0) ? Theme.accent : Theme.text;
+                        font-size: 13px;
+                        font-weight: 700;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        x: parent.width - 30px;
+                        width: 20px;
+                        height: parent.height;
+                        text: "\u{203A}";
+                        color: Theme.muted;
+                        font-size: 20px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    pick-ta := TouchArea {
+                        enabled: root.eq-presets-enabled;
+                        mouse-cursor: root.eq-presets-enabled ? MouseCursor.pointer : MouseCursor.default;
+                        clicked => { root.show-presets = true; }
+                    }
                 }
             }
             // 12 bands (compact: no gaps between the rows); dimmed while the curve cannot be edited.
@@ -4024,6 +4121,77 @@ export component MainWindow inherits Window {
                         edited(v) => { root.eq-changed(i, v); }
                     }
                 }
+            }
+        }
+        // ---- preset sheet: covers the panel, 10 cards in two columns ----
+        if root.show-presets : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            background: Theme.surface;
+            TouchArea { }
+
+            property <length> card-w: (self.width - 32px - 8px) / 2;
+            property <length> card-h: min(84px, (self.height - 76px - 16px - 4 * 8px) / 5);
+
+            // Back button + title.
+            Rectangle {
+                x: 12px;
+                y: 14px;
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: back-ta.has-hover ? Theme.surface-hover : transparent;
+                animate background { duration: 120ms; }
+                Text {
+                    text: "\u{2039}";
+                    color: Theme.text;
+                    font-size: 24px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                back-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.show-presets = false; }
+                }
+            }
+            Text {
+                x: 52px;
+                y: 14px;
+                width: parent.width - 52px - 16px;
+                height: 32px;
+                text: "Equalizer presets";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+            Text {
+                x: 16px;
+                y: 48px;
+                width: parent.width - 32px;
+                height: 18px;
+                font-size: 11px;
+                color: Theme.muted;
+                overflow: elide;
+                vertical-alignment: center;
+                text: root.eq-mode == 0 ? "The equalizer is off \u{2014} picking a preset turns it on"
+                    : root.eq-mode == 2 ? (root.eq-track-name == "" ? "Play a track to give it a preset"
+                        : "Applies to \u{266A} " + root.eq-track-name)
+                    : "Applies to every track";
+            }
+            for name[k] in root.eq-preset-names : PresetCard {
+                x: 16px + Math.mod(k, 2) * (parent.card-w + 8px);
+                y: 76px + Math.floor(k / 2) * (parent.card-h + 8px);
+                width: parent.card-w;
+                height: parent.card-h;
+                text: name;
+                line: root.eq-preset-lines[k];
+                active: k == root.eq-active-preset;
+                enabled: root.eq-presets-enabled;
+                opacity: root.eq-presets-enabled ? 1.0 : 0.4;
+                clicked => { root.eq-preset-selected(k); }
             }
         }
     }

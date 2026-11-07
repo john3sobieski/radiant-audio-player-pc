@@ -102,6 +102,8 @@ fn apply_settings(
 fn show_eq_state(ui: &MainWindow, settings: &AppSettings, track: Option<&Path>, gains: &[f32; 12]) {
     ui.set_eq_mode(settings.eq_mode.to_index());
     ui.set_eq_editable(settings.eq_editable(track));
+    // Presets work in every mode (Off switches the equalizer on); per-track mode needs a track to give it to.
+    ui.set_eq_presets_enabled(settings.eq_mode != EqMode::PerTrack || track.is_some());
     let name = track.and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     ui.set_eq_track_name(name.into());
     ui.set_eq_track_saved(settings.has_track_eq(track));
@@ -2251,12 +2253,25 @@ fn main() -> Result<(), slint::PlatformError> {
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
     let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
+    let preset_lines: Vec<SharedString> = EQ_PRESETS.iter().map(|p| eq_curve::paths(&p.gains).0.into()).collect();
+    ui.set_eq_preset_lines(ModelRc::new(VecModel::from(preset_lines)));
     {
         let (player, fx, eq_model, settings, eq_track, weak) =
             (player.clone(), fx.clone(), eq_model.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_eq_preset_selected(move |i| {
             let Some(preset) = EQ_PRESETS.get(i as usize) else { return };
             let track = eq_track.borrow().clone();
+            {
+                // A preset works in every mode: with the equalizer off it turns it on (one curve for all tracks).
+                let mut s = settings.borrow_mut();
+                if s.eq_mode == EqMode::Off {
+                    s.eq_mode = EqMode::Global;
+                }
+                // Per-track mode needs a track to give the curve to.
+                if s.eq_mode == EqMode::PerTrack && track.is_none() {
+                    return;
+                }
+            }
             apply_curve(&weak, &player, &fx, &eq_model, &settings, track.as_deref(), preset.gains);
         });
     }
