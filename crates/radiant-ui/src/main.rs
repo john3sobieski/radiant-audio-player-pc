@@ -2222,6 +2222,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let last = std::cell::Cell::new(std::time::Instant::now());
         let was_quiet = std::cell::Cell::new(false);
         let phase = std::cell::Cell::new(0.0_f32);
+        let clock = std::cell::Cell::new(0.0_f32);
         rays_timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(25), move || {
             let Some(ui) = weak.upgrade() else { return };
             let now = std::time::Instant::now();
@@ -2239,12 +2240,16 @@ fn main() -> Result<(), slint::PlatformError> {
             was_quiet.set(quiet);
             // The picture turns slowly, a bit faster when the music is loud.
             phase.set((phase.get() + dt * (0.008 + 0.03 * f.level)).rem_euclid(1.0));
-            let r = rays::build(&f.bands, &f.peaks, phase.get());
+            // Seconds for the sway / flicker of the rays (wrapped, so f32 stays precise).
+            clock.set((clock.get() + dt).rem_euclid(3600.0));
+            let energy = (f.level * 1.5).min(1.0);
+            let r = rays::build(&f.bands, &f.peaks, phase.get(), clock.get(), f.bass, energy);
             ui.set_rays_halo(r.halo.into());
             ui.set_rays_body(r.body.into());
             ui.set_rays_tips(r.tips.into());
             ui.set_rays_peaks(r.peaks.into());
             ui.set_pulse(f.bass);
+            ui.set_energy(energy);
         });
     }
 

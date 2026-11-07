@@ -6,10 +6,12 @@
 //! of the spectrum, but angle, length range and band assignment differ ray by ray (fixed pseudo-random
 //! numbers), the left and right half map the spectrum differently and `phase` slowly turns the whole
 //! picture. So it looks like glowing sun rays, not like an equalizer.
+//! `time`, `bass` and `level` make it lively: every ray sways sideways and flickers at its own speed
+//! (stronger with the music) and each bass hit sends a wave of extra length around the ring.
 
 use std::f32::consts::TAU;
 
-pub const RAY_COUNT: usize = 168;
+pub const RAY_COUNT: usize = 264;
 /// Ring radius in box units; the Slint file sizes the box to `ring-d * 1.4` to match.
 pub const RING_R: f32 = 357.0;
 const R_INNER: f32 = RING_R + 14.0;
@@ -17,6 +19,8 @@ const R_INNER: f32 = RING_R + 14.0;
 const R_SPAN: f32 = 122.0;
 /// Idle length: a quiet ring keeps a fine fringe.
 const MIN_LEN: f32 = 4.0;
+/// Rays and sparks never go past this radius, so the halo (+4) stays inside the 1000 x 1000 box.
+const R_MAX: f32 = 494.0;
 
 #[derive(Default, Clone, PartialEq)]
 pub struct RayPaths {
@@ -82,25 +86,34 @@ fn tri(out: &mut String, sin: f32, cos: f32, r0: f32, r1: f32, half_w: f32) {
     );
 }
 
-/// `bands` and `peaks` are 0..1, low frequencies first. `phase` is the slow rotation in turns.
-pub fn build(bands: &[f32], peaks: &[f32], phase: f32) -> RayPaths {
+/// `bands` and `peaks` are 0..1, low frequencies first. `phase` is the slow rotation in turns,
+/// `time` is seconds since the player view opened, `bass` and `level` are 0..1 (see `SpectrumFrame`).
+pub fn build(bands: &[f32], peaks: &[f32], phase: f32, time: f32, bass: f32, level: f32) -> RayPaths {
     let n = bands.len().max(1);
+    let (bass, level) = (bass.clamp(0.0, 1.0), level.clamp(0.0, 1.0));
     let mut p = RayPaths::default();
+    let pitch = TAU / RAY_COUNT as f32;
     for j in 0..RAY_COUNT {
-        let pitch = TAU / RAY_COUNT as f32;
         // Angle with a random shift of up to +-45 % of the pitch (clumps and gaps, like real light).
-        let theta = pitch * (j as f32 + 0.5 + (rnd(j, 1) - 0.5) * 0.9);
+        let base = pitch * (j as f32 + 0.5 + (rnd(j, 1) - 0.5) * 0.9);
+        // Sway: every ray swings a little around its place, at its own speed; louder = wider.
+        let sway = (time * (0.6 + 1.8 * rnd(j, 7)) + rnd(j, 8) * TAU).sin() * pitch * (0.2 + 0.8 * level) * 0.7;
+        let theta = base + sway;
         let (sin, cos) = theta.sin_cos();
 
-        let pos = band_pos(j, theta, phase, n);
-        // Every ray has its own sensitivity; a few are "long" rays that reach much further.
+        let pos = band_pos(j, base, phase, n);
+        // Every ray has its own sensitivity; about one in four is a "long" ray that reaches much further.
         let gain = 0.55 + 0.45 * rnd(j, 2);
-        let long = if rnd(j, 4) > 0.82 { 1.0 } else { 0.62 + 0.3 * rnd(j, 5) };
-        let v = (sample(bands, pos) * gain).clamp(0.0, 1.0);
+        let long = if rnd(j, 4) > 0.76 { 1.0 } else { 0.62 + 0.3 * rnd(j, 5) };
+        // Flicker: fast, individual, only as strong as the music is loud (silence = no flicker).
+        let flick = 1.0 + level * 0.38 * (time * (2.5 + 8.0 * rnd(j, 9)) + rnd(j, 10) * TAU).sin();
+        // Bass wave: three lobes running around the ring, extra length on the crest.
+        let wave = bass * 0.34 * (0.5 + 0.5 * (base * 3.0 - time * 5.0).sin());
+        let v = (sample(bands, pos) * gain * flick + wave * gain).clamp(0.0, 1.0);
         let len = MIN_LEN + v.powf(1.25) * R_SPAN * long;
-        let end = R_INNER + len;
+        let end = (R_INNER + len).min(R_MAX);
         // Thin: width follows the length a little (long rays are a bit broader at the root).
-        let w = 0.9 + 1.5 * (len / R_SPAN).min(1.0) + 0.5 * rnd(j, 6);
+        let w = 0.75 + 1.3 * (len / R_SPAN).min(1.0) + 0.4 * rnd(j, 6);
 
         tri(&mut p.halo, sin, cos, R_INNER - 2.0, end + 4.0, w * 3.2);
         tri(&mut p.body, sin, cos, R_INNER, end, w);
@@ -110,8 +123,10 @@ pub fn build(bands: &[f32], peaks: &[f32], phase: f32) -> RayPaths {
         let pk = (sample(peaks, pos) * gain).clamp(0.0, 1.0);
         let peak_len = MIN_LEN + pk.powf(1.25) * R_SPAN * long;
         if peak_len > len + 6.0 {
-            let r = R_INNER + peak_len + 5.0;
-            tri(&mut p.peaks, sin, cos, r, r + 4.0, 0.9);
+            let r = (R_INNER + peak_len + 5.0).min(R_MAX);
+            if r > end + 2.0 {
+                tri(&mut p.peaks, sin, cos, r, r + 4.0, 0.9);
+            }
         }
     }
     p
@@ -128,7 +143,7 @@ mod tests {
     #[test]
     fn quiet_draws_a_fine_fringe_only() {
         let z = [0.0_f32; 60];
-        let p = build(&z, &z, 0.0);
+        let p = build(&z, &z, 0.0, 0.0, 0.0, 0.0);
         assert_eq!(triangles(&p.body), RAY_COUNT);
         assert_eq!(triangles(&p.halo), RAY_COUNT);
         assert!(p.tips.is_empty() && p.peaks.is_empty());
@@ -138,7 +153,7 @@ mod tests {
     fn loud_adds_cores_and_sparks() {
         let b = [0.6_f32; 60];
         let pk = [1.0_f32; 60];
-        let p = build(&b, &pk, 0.0);
+        let p = build(&b, &pk, 0.0, 0.0, 0.0, 0.0);
         assert!(triangles(&p.tips) > RAY_COUNT / 2);
         assert!(triangles(&p.peaks) > RAY_COUNT / 4);
     }
@@ -149,8 +164,8 @@ mod tests {
         for (i, v) in b.iter_mut().enumerate() {
             *v = i as f32 / 59.0;
         }
-        let a = build(&b, &b, 0.0).body;
-        assert_ne!(a, build(&b, &b, 0.25).body, "phase must change the picture");
+        let a = build(&b, &b, 0.0, 0.0, 0.0, 0.0).body;
+        assert_ne!(a, build(&b, &b, 0.25, 0.0, 0.0, 0.0).body, "phase must change the picture");
         // Left and right half must not be copies of each other: compare total lengths.
         let len_of = |from: usize, to: usize| -> f32 {
             (from..to)
@@ -167,8 +182,8 @@ mod tests {
     #[test]
     fn follows_the_spectrum() {
         // Louder spectrum -> more ink in the body layer (longer rays).
-        let quiet = build(&[0.1; 60], &[0.1; 60], 0.0);
-        let loud = build(&[0.9; 60], &[0.9; 60], 0.0);
+        let quiet = build(&[0.1; 60], &[0.1; 60], 0.0, 0.0, 0.0, 0.0);
+        let loud = build(&[0.9; 60], &[0.9; 60], 0.0, 0.0, 0.0, 0.0);
         let reach = |s: &str| {
             s.split_whitespace()
                 .filter_map(|t| t.parse::<f32>().ok())
@@ -181,14 +196,38 @@ mod tests {
     #[test]
     fn stays_inside_the_box() {
         let o = [1.0_f32; 60];
-        for phase in [0.0, 0.3, 0.77] {
-            let p = build(&o, &o, phase);
+        for (phase, time) in [(0.0, 0.0), (0.3, 1.7), (0.77, 42.0)] {
+            let p = build(&o, &o, phase, time, 1.0, 1.0);
             for layer in [&p.halo, &p.body, &p.tips, &p.peaks] {
                 for n in layer.split_whitespace().filter_map(|t| t.parse::<f32>().ok()) {
                     assert!((0.0..=1000.0).contains(&n), "{n} is outside the box");
                 }
             }
         }
+    }
+
+    #[test]
+    fn time_moves_the_rays_only_when_there_is_sound() {
+        let b = [0.5_f32; 60];
+        let a = build(&b, &b, 0.0, 0.0, 0.4, 0.6);
+        assert_ne!(a.body, build(&b, &b, 0.0, 0.7, 0.4, 0.6).body, "time must change the picture");
+        // Silence: same lengths at any time (only the idle sway of the base moves, lengths stay the fringe).
+        let z = [0.0_f32; 60];
+        assert!(build(&z, &z, 0.0, 3.0, 0.0, 0.0).tips.is_empty());
+    }
+
+    #[test]
+    fn bass_adds_length() {
+        let z = [0.0_f32; 60];
+        let reach = |s: &str| {
+            s.split_whitespace()
+                .filter_map(|t| t.parse::<f32>().ok())
+                .map(|v| (v - 500.0).abs())
+                .fold(0.0_f32, f32::max)
+        };
+        let calm = build(&z, &z, 0.0, 0.0, 0.0, 0.0);
+        let kick = build(&z, &z, 0.0, 0.0, 1.0, 0.5);
+        assert!(reach(&kick.body) > reach(&calm.body) + 10.0);
     }
 
     #[test]
