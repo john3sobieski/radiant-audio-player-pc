@@ -1260,6 +1260,351 @@ component FolderPicker inherits Rectangle {
     }
 }
 
+// ---- Settings page: "orbit" style ----------------------------------------------------------
+// Faint concentric rings in the corner, a satellite drifting along one of them, a rail of dots
+// on the left (one per section; the lit segment grows down to the open one) and cards on the right.
+
+// Round header button with "sliders" icon (opens the settings page).
+component SettingsButton inherits Rectangle {
+    in property <bool> active: false;
+    callback clicked();
+
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    background: root.active ? Theme.accent.with-alpha(0.2)
+        : ta.has-hover ? Theme.surface-hover : Theme.surface;
+
+    Path {
+        x: 8px;
+        y: 8px;
+        width: 18px;
+        height: 18px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M3 7H21M3 12H21M3 17H21";
+        stroke: root.active ? Theme.accent : ta.has-hover ? Theme.text : Theme.muted;
+        stroke-width: 2.2px;
+        stroke-line-cap: round;
+        fill: transparent;
+    }
+    // Knobs of the three sliders.
+    Rectangle { x: 18px; y: 10px; width: 6px; height: 6px; border-radius: 3px; background: root.active ? Theme.accent : ta.has-hover ? Theme.text : Theme.muted; }
+    Rectangle { x: 10px; y: 14px; width: 6px; height: 6px; border-radius: 3px; background: root.active ? Theme.accent : ta.has-hover ? Theme.text : Theme.muted; }
+    Rectangle { x: 19px; y: 18px; width: 6px; height: 6px; border-radius: 3px; background: root.active ? Theme.accent : ta.has-hover ? Theme.text : Theme.muted; }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// One thin circle of the orbit background.
+component OrbitRing inherits Rectangle {
+    in property <length> radius;
+    in property <length> cx;
+    in property <length> cy;
+    in property <float> strength: 0.1;
+    x: root.cx - root.radius;
+    y: root.cy - root.radius;
+    width: root.radius * 2;
+    height: root.radius * 2;
+    border-radius: root.radius;
+    border-width: 1px;
+    border-color: Theme.accent.with-alpha(root.strength);
+}
+
+// One dot + label of the settings rail.
+component SettingsNode inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> active: false;
+    in property <bool> show-hint: true;
+    callback clicked();
+
+    // Glow behind the dot of the open section.
+    Rectangle {
+        x: 3px;
+        y: (root.height - self.height) / 2;
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        background: @radial-gradient(circle, Theme.accent.with-alpha(0.45) 0%, Theme.accent.with-alpha(0) 70%);
+        opacity: root.active ? 1 : 0;
+        animate opacity { duration: 250ms; }
+    }
+    Rectangle {
+        x: 13px;
+        y: (root.height - self.height) / 2;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: root.active ? Theme.accent : Theme.bg;
+        border-width: 2px;
+        border-color: root.active || ta.has-hover ? Theme.accent : Theme.muted.with-alpha(0.6);
+        animate background { duration: 200ms; }
+    }
+    VerticalLayout {
+        x: 52px;
+        y: 0px;
+        width: max(0px, root.width - 52px);
+        height: root.height;
+        alignment: center;
+        spacing: 1px;
+        Text {
+            text: root.label;
+            color: root.active || ta.has-hover ? Theme.text : Theme.muted;
+            font-size: 16px;
+            font-weight: root.active ? 700 : 500;
+            overflow: elide;
+        }
+        if root.show-hint : Text {
+            text: root.hint;
+            color: Theme.muted;
+            font-size: 12px;
+            overflow: elide;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// One card of a settings section (placeholder until the real control exists).
+export struct SettingsCardInfo {
+    title: string,
+    text: string,
+}
+
+component SettingsPage inherits Rectangle {
+    in-out property <int> section: 0;
+    callback close();
+
+    // To add a section: extend the four lists below (same order), nothing else.
+    private property <[string]> names: ["Appearance", "Language", "Security", "AI & stems", "Library"];
+    private property <[string]> hints: ["Themes and colors", "Interface language", "App lock", "Stem separation", "Music folder"];
+    private property <[string]> leads: [
+        "How Radiant looks.",
+        "The language of the interface.",
+        "Keep your music private.",
+        "Splitting tracks into vocals, drums, bass and the rest.",
+        "Where the music lives.",
+    ];
+    private property <[[SettingsCardInfo]]> pages: [
+        [
+            { title: "Theme", text: "Dark, light, OLED black, or follow Windows." },
+            { title: "Accent color", text: "Pick the color of highlights and the player glow." },
+        ],
+        [
+            { title: "Interface language", text: "10 languages plus System; switches on the fly without stopping the music." },
+        ],
+        [
+            { title: "App lock", text: "4 digits, 6 digits or your own code, asked at start and when returning to the app." },
+            { title: "Recovery file", text: "A file of 12 words to get back in if the code is forgotten." },
+        ],
+        [
+            { title: "Models", text: "Download the separation models or import them from files." },
+            { title: "Stems", text: "Choose which parts to keep and where they are saved." },
+        ],
+        [
+            { title: "Music folder", text: "Choose and rescan the folder (for now these two buttons stay in the header)." },
+        ],
+    ];
+
+    // Rail geometry: the rows shrink a little in short windows.
+    private property <length> nh: Math.max(30px, Math.min(60px, (root.height - 130px) / 5));
+    private property <length> y0: 104px;
+    private property <length> rail-x: 40px;
+    private property <length> content-x: 320px;
+    private property <length> content-w: max(0px, root.width - root.content-x - 40px);
+
+    background: Theme.bg;
+    clip: true;
+
+    // Soft lights drifting behind everything.
+    GlowBlob {
+        tint: Theme.accent;
+        strength: 0.22;
+        cx: root.width * 0.75 + Math.sin(animation-tick() / 11s * 360deg) * 90px;
+        cy: root.height * 0.3 + Math.cos(animation-tick() / 13s * 360deg) * 60px;
+        size: 520px;
+    }
+    GlowBlob {
+        tint: #3aa6ff;
+        strength: 0.12;
+        cx: root.width * 0.15 + Math.cos(animation-tick() / 17s * 360deg) * 80px;
+        cy: root.height * 0.85 + Math.sin(animation-tick() / 9s * 360deg) * 50px;
+        size: 460px;
+    }
+
+    // Orbit rings around the bottom-left corner, and a satellite swinging along one of them.
+    OrbitRing { cx: 0px; cy: root.height; radius: 200px; strength: 0.16; }
+    OrbitRing { cx: 0px; cy: root.height; radius: 340px; strength: 0.11; }
+    OrbitRing { cx: 0px; cy: root.height; radius: 500px; strength: 0.08; }
+    OrbitRing { cx: 0px; cy: root.height; radius: 700px; strength: 0.05; }
+    Rectangle {
+        private property <angle> a: (0.5 + 0.5 * Math.sin(animation-tick() / 8s * 360deg)) * 90deg;
+        x: 340px * Math.cos(self.a) - 5px;
+        y: root.height - 340px * Math.sin(self.a) - 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: Theme.accent;
+        Rectangle {
+            x: -9px;
+            y: -9px;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: @radial-gradient(circle, Theme.accent.with-alpha(0.5) 0%, Theme.accent.with-alpha(0) 70%);
+        }
+    }
+
+    // Swallows clicks so nothing below the page reacts.
+    TouchArea { }
+
+    // ---- top bar ----
+    Rectangle {
+        x: 24px;
+        y: 20px;
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        background: back-ta.has-hover ? Theme.surface-hover : Theme.surface;
+        Path {
+            x: 8px;
+            y: 8px;
+            width: 18px;
+            height: 18px;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            commands: "M15 5L8 12L15 19";
+            stroke: back-ta.has-hover ? Theme.text : Theme.muted;
+            stroke-width: 2.4px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+        }
+        back-ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.close(); }
+        }
+    }
+    Text {
+        x: 70px;
+        y: 20px;
+        height: 34px;
+        text: "SETTINGS";
+        color: Theme.muted;
+        font-size: 12px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    // ---- rail: a line with one dot per section ----
+    Rectangle {
+        x: root.rail-x + 19px;
+        y: root.y0 + root.nh / 2;
+        width: 2px;
+        height: 4 * root.nh;
+        background: Theme.muted.with-alpha(0.25);
+    }
+    // The lit part of the line, from the first dot down to the open one.
+    Rectangle {
+        x: root.rail-x + 19px;
+        y: root.y0 + root.nh / 2;
+        width: 2px;
+        height: root.section * root.nh;
+        background: Theme.accent;
+        animate height { duration: 280ms; easing: ease-in-out; }
+    }
+    for name[i] in root.names : SettingsNode {
+        x: root.rail-x;
+        y: root.y0 + i * root.nh;
+        width: 240px;
+        height: root.nh;
+        label: name;
+        hint: root.hints[i];
+        show-hint: root.nh >= 48px;
+        active: root.section == i;
+        clicked => { root.section = i; }
+    }
+
+    // ---- content of the open section ----
+    Text {
+        x: root.content-x;
+        y: 62px;
+        width: root.content-w;
+        text: root.names[root.section];
+        color: Theme.text;
+        font-size: 30px;
+        font-weight: 700;
+        overflow: elide;
+    }
+    Text {
+        x: root.content-x;
+        y: 102px;
+        width: root.content-w;
+        text: root.leads[root.section];
+        color: Theme.muted;
+        font-size: 14px;
+        wrap: word-wrap;
+    }
+    Flickable {
+        x: root.content-x;
+        y: 146px;
+        width: root.content-w;
+        height: max(0px, root.height - 146px);
+        viewport-height: root.pages[root.section].length * 104px + 16px;
+
+        for card[k] in root.pages[root.section] : Rectangle {
+            x: 0px;
+            y: k * 104px;
+            width: parent.width;
+            height: 92px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 4px;
+                alignment: start;
+                Text {
+                    text: card.title;
+                    color: Theme.text;
+                    font-size: 16px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+                Text {
+                    text: card.text;
+                    color: Theme.muted;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+            }
+            Rectangle {
+                x: parent.width - 66px;
+                y: 14px;
+                width: 52px;
+                height: 22px;
+                border-radius: 11px;
+                background: Theme.accent.with-alpha(0.15);
+                Text {
+                    text: "Soon";
+                    color: Theme.accent;
+                    font-size: 11px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Radiant";
     preferred-width: 900px;
@@ -1578,6 +1923,10 @@ export component MainWindow inherits Window {
 
     // Sound settings panel (values are owned here; Rust keeps the same numbers for the engine).
     in-out property <bool> show-sound: false;
+    /// The settings page is open (it slides/fades in over the library, the player bar stays visible).
+    in-out property <bool> show-settings: false;
+    private property <float> settings-t: root.show-settings ? 1 : 0;
+    animate settings-t { duration: 260ms; easing: ease-out; }
     in-out property <bool> show-sort: false;
     in-out property <bool> fx-normalize: false;
     in-out property <bool> fx-mono: false;
@@ -1873,6 +2222,18 @@ export component MainWindow inherits Window {
                     RescanButton {
                         spinning: root.scanning;
                         clicked => { root.rescan-folder(); }
+                    }
+                }
+                HeaderItem {
+                    width: 34px;
+                    SettingsButton {
+                        active: root.show-settings;
+                        clicked => {
+                            root.show-settings = !root.show-settings;
+                            root.show-sort = false;
+                            root.show-sound = false;
+                            root.show-presets = false;
+                        }
                     }
                 }
             }
@@ -4949,5 +5310,15 @@ export component MainWindow inherits Window {
                 }
             }
         }
+    }
+
+    // ---- settings page (topmost; the player bar below stays usable) ----
+    if root.settings-t > 0.001 : SettingsPage {
+        x: (1 - root.settings-t) * 40px;
+        y: 0px;
+        width: root.width;
+        height: root.player-h;
+        opacity: root.settings-t;
+        close => { root.show-settings = false; }
     }
 }
