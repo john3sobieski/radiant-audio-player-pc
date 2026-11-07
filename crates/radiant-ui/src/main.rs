@@ -74,6 +74,11 @@ fn apply_settings(
     eq_model: &Rc<VecModel<f32>>,
     settings: &AppSettings,
 ) {
+    {
+        let theme = ui.global::<Theme>();
+        theme.set_mode(settings.theme as i32);
+        theme.set_palette(settings.palette as i32);
+    }
     ui.set_volume(settings.volume);
     ui.set_section(settings.section as i32);
     ui.set_queue_index(settings.queue_index as i32);
@@ -2115,6 +2120,14 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_volume_changed(move |v| {
             player.send(Command::SetVolume(v));
             settings.borrow_mut().volume = v;
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Theme (System / Light / Dark / Black): the UI already switched itself, here it is only remembered.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_theme_changed(move |mode| {
+            settings.borrow_mut().theme = mode.clamp(0, 3) as u8;
             save_settings(&weak, &settings);
         });
     }

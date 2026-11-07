@@ -99,6 +99,10 @@ pub struct AppSettings {
     pub album_sort_desc: bool,
     /// Album keys in the order set by hand (dragging tiles) in the manual sort mode.
     pub album_order: Vec<String>,
+    /// Color theme: 0 = System (follows Windows), 1 = Light, 2 = Dark, 3 = Black (OLED).
+    pub theme: u8,
+    /// Color sub-theme inside a theme (reserved: 0 = default violet; red, blue, orange... come later).
+    pub palette: u8,
 }
 
 impl Default for AppSettings {
@@ -121,6 +125,8 @@ impl Default for AppSettings {
             album_sort: 1,
             album_sort_desc: false,
             album_order: Vec::new(),
+            theme: 2,
+            palette: 0,
         }
     }
 }
@@ -294,6 +300,8 @@ fn sanitize(settings: &mut AppSettings) {
     settings.playlist_sort = settings.playlist_sort.min(4);
     settings.album_sort = settings.album_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
+    settings.theme = settings.theme.min(3);
+    settings.palette = 0; // only the default palette exists for now
     settings.speed_t = snap(finite(settings.speed_t, 0.0).clamp(-2.0, 2.0), 10.0);
     let fx = &mut settings.fx;
     fx.bass_db = snap(finite(fx.bass_db, 0.0).clamp(0.0, 15.0), 2.0);

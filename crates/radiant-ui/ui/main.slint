@@ -2,18 +2,30 @@
 // DONE: volume slider (+ mute), shuffle / repeat toggles, seek bar with times; header (folder button, status), track list (left-aligned, hover/current highlight, click = play),
 //       bottom player bar (prev / play-pause / next, now playing), empty state. Custom widgets, no std-widgets.
 // TODO: tabs (Playlists / Albums / Tracks / Queues), search, sorting, volume, cover,
-//       quality badge, themes (light / true-black / system), translations via @tr().
-//       Colors live in `Theme`: when themes are added, turn it into a switchable set.
+//       quality badge, translations via @tr().
+//       Colors live in `Theme` (System / Light / Dark / Black switch; color sub-themes later).
 
-import { ListView } from "std-widgets.slint";
+import { ListView, Palette } from "std-widgets.slint";
 
-global Theme {
-    out property <color> bg: #131316;
-    out property <color> surface: #1b1b20;
-    out property <color> surface-hover: #24242b;
-    out property <color> accent: #8b6cff;
-    out property <color> text: #ececf2;
-    out property <color> muted: #8d8d9b;
+// Colors of the whole app. `mode` is the user's choice; everything else follows from it.
+// Color sub-themes (red, blue, orange ...) will be added through `palette`: change `accent`
+// (and, if wanted, a tint of `bg` / `surface`) below depending on it.
+export global Theme {
+    /// 0 = System (follows Windows), 1 = Light, 2 = Dark, 3 = Black (OLED). Set from Rust at start.
+    in-out property <int> mode: 2;
+    /// Color sub-theme. Reserved: 0 = default violet.
+    in-out property <int> palette: 0;
+    out property <bool> light: mode == 1 || (mode == 0 && Palette.color-scheme == ColorScheme.light);
+    out property <bool> black: mode == 3;
+
+    out property <color> bg: light ? #f3f3f7 : black ? #000000 : #131316;
+    out property <color> surface: light ? #ffffff : black ? #0c0c0e : #1b1b20;
+    out property <color> surface-hover: light ? #e6e6ee : black ? #19191d : #24242b;
+    out property <color> accent: light ? #6b4de6 : #8b6cff;
+    out property <color> text: light ? #1b1b22 : #ececf2;
+    out property <color> muted: light ? #6a6a7a : #8d8d9b;
+
+    animate bg, surface, surface-hover, accent, text, muted { duration: 220ms; }
 }
 
 // One row of the track list (filled by Rust).
@@ -1379,6 +1391,7 @@ export struct SettingsCardInfo {
 component SettingsPage inherits Rectangle {
     in-out property <int> section: 0;
     callback close();
+    callback theme-changed(int);
 
     // To add a section: extend the four lists below (same order), nothing else.
     private property <[string]> names: ["Appearance", "Language", "Security", "AI & stems", "Library"];
@@ -1392,8 +1405,8 @@ component SettingsPage inherits Rectangle {
     ];
     private property <[[SettingsCardInfo]]> pages: [
         [
-            { title: "Theme", text: "Dark, light, OLED black, or follow Windows." },
-            { title: "Accent color", text: "Pick the color of highlights and the player glow." },
+            // The Theme card itself is drawn separately (it has a control); see `theme-card`.
+            { title: "Color palettes", text: "Color variants of every theme (red, blue, orange ...) will appear here." },
         ],
         [
             { title: "Interface language", text: "10 languages plus System; switches on the fly without stopping the music." },
@@ -1417,6 +1430,8 @@ component SettingsPage inherits Rectangle {
     private property <length> rail-x: 40px;
     private property <length> content-x: 320px;
     private property <length> content-w: max(0px, root.width - root.content-x - 40px);
+    // Room taken by the hand-made card at the top of a section (Appearance: the theme switch).
+    private property <length> extra-h: root.section == 0 ? 136px : 0px;
 
     background: Theme.bg;
     clip: true;
@@ -1555,11 +1570,52 @@ component SettingsPage inherits Rectangle {
         y: 146px;
         width: root.content-w;
         height: max(0px, root.height - 146px);
-        content-height: root.pages[root.section].length * 104px + 16px;
+        content-height: root.extra-h + root.pages[root.section].length * 104px + 16px;
 
+        if root.section == 0 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: 124px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: "Theme";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 38px;
+                width: parent.width - 32px;
+                text: "System follows the Windows light / dark setting. Black is pure black for OLED screens.";
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            SegmentedControl {
+                x: 16px;
+                y: 80px;
+                width: min(parent.width - 32px, 380px);
+                labels: ["System", "Light", "Dark", "Black"];
+                current: Theme.mode;
+                selected(k) => {
+                    Theme.mode = k;
+                    root.theme-changed(k);
+                }
+            }
+        }
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
-            y: k * 104px;
+            y: root.extra-h + k * 104px;
             width: parent.width;
             height: 92px;
             border-radius: 14px;
@@ -2021,6 +2077,8 @@ export component MainWindow inherits Window {
 
     callback choose-folder();
     callback rescan-folder();
+    /// The theme was changed in the settings (0 System, 1 Light, 2 Dark, 3 Black); Rust remembers it.
+    callback theme-changed(int);
     callback search-changed(string);
     callback sort-changed(int, bool);
     callback reorder-tracks(int, int);
@@ -3935,7 +3993,7 @@ export component MainWindow inherits Window {
                 viewbox-width: 1000;
                 viewbox-height: 1000;
                 commands: root.rays-peaks;
-                fill: #ffffffd0;
+                fill: Theme.text.with-alpha(0.82);
             }
             // Ring track.
             Rectangle {
@@ -5320,5 +5378,6 @@ export component MainWindow inherits Window {
         height: root.player-h;
         opacity: root.settings-t;
         close => { root.show-settings = false; }
+        theme-changed(k) => { root.theme-changed(k); }
     }
 }
