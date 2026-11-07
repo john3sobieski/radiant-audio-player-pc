@@ -20,7 +20,8 @@ pub enum RepeatModeSetting {
     One,
 }
 
-/// How the 12-band equalizer curve is chosen. The other sound effects (bass, treble, ...) do not depend on it.
+/// How the 12-band equalizer curve is chosen. In `PerTrack` mode the speed, bass, treble and subsonic
+/// settings are stored per track too; normalize and mono always stay global.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EqMode {
@@ -29,7 +30,8 @@ pub enum EqMode {
     /// One curve (`fx.eq_gains_db`) for every track.
     #[default]
     Global,
-    /// Every track has its own curve, stored by file path; a track without one plays flat.
+    /// Every track has its own curve, speed, bass, treble and subsonic, stored by file path;
+    /// a track without an entry plays flat, at normal speed and without bass / treble / subsonic.
     PerTrack,
 }
 
@@ -56,6 +58,17 @@ pub fn eq_key(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+/// The settings that follow a track in `EqMode::PerTrack` (besides its equalizer curve).
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TrackSound {
+    /// Speed slider position, -2 ..= +2 in steps of 0.1.
+    pub speed_t: f32,
+    pub bass_db: f32,
+    pub treble_db: f32,
+    pub subsonic_percent: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -70,6 +83,8 @@ pub struct AppSettings {
     pub eq_mode: EqMode,
     /// Own equalizer curves by track path (used in `EqMode::PerTrack`); flat curves are not stored.
     pub track_eq: BTreeMap<String, [f32; 12]>,
+    /// Own speed / bass / treble / subsonic by track path (used in `EqMode::PerTrack`); default values are not stored.
+    pub track_sound: BTreeMap<String, TrackSound>,
     /// Track order set by hand (dragging) in the "Manual order" sort mode.
     pub manual_order: Vec<PathBuf>,
     /// Open section: 0 = Tracks, 1 = Albums, 2 = Playlists, 3 = Queues.
@@ -97,6 +112,7 @@ impl Default for AppSettings {
             fx: AudioFxSettings::default(),
             eq_mode: EqMode::Global,
             track_eq: BTreeMap::new(),
+            track_sound: BTreeMap::new(),
             manual_order: Vec::new(),
             section: 0,
             queue_index: 0,
@@ -157,24 +173,86 @@ impl AppSettings {
         }
     }
 
-    /// Takes the effects that do not belong to the equalizer curve from `fx` (the engine copy of the
-    /// settings may carry another curve than the one to store here).
-    pub fn set_fx_keep_eq(&mut self, fx: &AudioFxSettings) {
-        let curve = self.fx.eq_gains_db;
-        self.fx = fx.clone();
-        self.fx.eq_gains_db = curve;
+    /// True when speed / bass / treble / subsonic belong to `track` (per-track mode with a known track)
+    /// instead of being global.
+    pub fn uses_track_sound(&self, track: Option<&Path>) -> bool {
+        self.eq_mode == EqMode::PerTrack && track.is_some()
     }
 
-    /// "Reset" of the sound panel: effects back to defaults and the ACTIVE curve flat; curves that are
-    /// not active (other tracks, or all curves while the equalizer is off) are kept.
+    /// The speed / bass / treble / subsonic that are audible for `track` in the current mode.
+    pub fn effective_sound(&self, track: Option<&Path>) -> TrackSound {
+        match track {
+            Some(t) if self.eq_mode == EqMode::PerTrack => {
+                self.track_sound.get(&eq_key(t)).copied().unwrap_or_default()
+            }
+            _ => TrackSound {
+                speed_t: self.speed_t,
+                bass_db: self.fx.bass_db,
+                treble_db: self.fx.treble_db,
+                subsonic_percent: self.fx.subsonic_percent,
+            },
+        }
+    }
+
+    /// Stores `sound` for `track` (per-track mode) or as the global values. A default entry is dropped.
+    pub fn set_sound(&mut self, track: Option<&Path>, sound: TrackSound) {
+        match track {
+            Some(t) if self.eq_mode == EqMode::PerTrack => {
+                if sound == TrackSound::default() {
+                    self.track_sound.remove(&eq_key(t));
+                } else {
+                    self.track_sound.insert(eq_key(t), sound);
+                }
+            }
+            _ => {
+                self.speed_t = sound.speed_t;
+                self.fx.bass_db = sound.bass_db;
+                self.fx.treble_db = sound.treble_db;
+                self.fx.subsonic_percent = sound.subsonic_percent;
+            }
+        }
+    }
+
+    /// Stores the speed slider position for `track` (per-track mode) or globally.
+    pub fn set_speed_for_track(&mut self, track: Option<&Path>, speed_t: f32) {
+        let mut sound = self.effective_sound(track);
+        sound.speed_t = speed_t;
+        self.set_sound(track, sound);
+    }
+
+    /// Takes the effects that do not belong to the equalizer curve from `fx` (the engine copy of the
+    /// settings may carry another curve than the one to store here). Bass, treble and subsonic go to
+    /// `track` in per-track mode; normalize and mono are always global.
+    pub fn set_fx_for_track(&mut self, track: Option<&Path>, fx: &AudioFxSettings) {
+        self.fx.normalize = fx.normalize;
+        self.fx.mono = fx.mono;
+        let mut sound = self.effective_sound(track);
+        sound.bass_db = fx.bass_db;
+        sound.treble_db = fx.treble_db;
+        sound.subsonic_percent = fx.subsonic_percent;
+        self.set_sound(track, sound);
+    }
+
+    /// Same as `set_fx_for_track` without a track: everything is stored globally.
+    pub fn set_fx_keep_eq(&mut self, fx: &AudioFxSettings) {
+        self.set_fx_for_track(None, fx);
+    }
+
+    /// "Reset" of the sound panel: effects back to defaults (the speed stays) and the ACTIVE curve flat;
+    /// curves that are not active (other tracks, or all curves while the equalizer is off) are kept.
+    /// In per-track mode only the bass / treble / subsonic of `track` are reset, the global ones stay.
     pub fn reset_sound(&mut self, track: Option<&Path>) {
-        let curve = self.fx.eq_gains_db;
-        self.fx = AudioFxSettings::default();
+        let mut sound = self.effective_sound(track);
+        sound.bass_db = 0.0;
+        sound.treble_db = 0.0;
+        sound.subsonic_percent = 0.0;
+        self.set_sound(track, sound);
+        self.fx.normalize = false;
+        self.fx.mono = false;
         match self.eq_mode {
-            EqMode::Global => {}
-            EqMode::Off => self.fx.eq_gains_db = curve,
+            EqMode::Global => self.fx.eq_gains_db = [0.0; 12],
+            EqMode::Off => {}
             EqMode::PerTrack => {
-                self.fx.eq_gains_db = curve;
                 if let Some(t) = track {
                     self.track_eq.remove(&eq_key(t));
                 }
@@ -230,6 +308,13 @@ fn sanitize(settings: &mut AppSettings) {
         }
     }
     settings.track_eq.retain(|_, curve| *curve != [0.0; 12]);
+    for sound in settings.track_sound.values_mut() {
+        sound.speed_t = snap(finite(sound.speed_t, 0.0).clamp(-2.0, 2.0), 10.0);
+        sound.bass_db = snap(finite(sound.bass_db, 0.0).clamp(0.0, 15.0), 2.0);
+        sound.treble_db = snap(finite(sound.treble_db, 0.0).clamp(0.0, 15.0), 2.0);
+        sound.subsonic_percent = finite(sound.subsonic_percent, 0.0).clamp(0.0, 100.0).round();
+    }
+    settings.track_sound.retain(|_, sound| *sound != TrackSound::default());
 }
 
 fn finite(v: f32, default: f32) -> f32 {
@@ -469,7 +554,7 @@ mod tests {
         s.track_eq.insert(eq_key(a), [1.0; 12]);
         s.track_eq.insert(eq_key(b), [2.0; 12]);
         s.reset_sound(Some(a));
-        assert_eq!(s.fx.bass_db, 0.0);
+        assert_eq!(s.fx.bass_db, 6.0, "per-track mode leaves the global bass alone");
         assert!(!s.has_track_eq(Some(a)));
         assert!(s.has_track_eq(Some(b)));
         assert_eq!(s.fx.eq_gains_db[1], 3.0, "global curve is not the active one");
@@ -477,7 +562,66 @@ mod tests {
         s.eq_mode = EqMode::Global;
         s.reset_sound(Some(b));
         assert_eq!(s.fx.eq_gains_db, [0.0; 12]);
+        assert_eq!(s.fx.bass_db, 0.0);
         assert!(s.has_track_eq(Some(b)));
+    }
+
+    #[test]
+    fn per_track_sound_is_independent_per_track() {
+        let a = Path::new("a.mp3");
+        let b = Path::new("b.mp3");
+        let mut s = AppSettings::default();
+        s.speed_t = 1.0;
+        s.fx.bass_db = 4.0;
+        s.eq_mode = EqMode::PerTrack;
+
+        // A track without an entry is neutral; the global values stay untouched.
+        assert_eq!(s.effective_sound(Some(a)), TrackSound::default());
+        s.set_speed_for_track(Some(a), -0.5);
+        let mut fx = s.fx.clone();
+        fx.treble_db = 3.0;
+        fx.subsonic_percent = 20.0;
+        fx.mono = true;
+        s.set_fx_for_track(Some(a), &fx);
+        let sound = s.effective_sound(Some(a));
+        assert_eq!(sound.speed_t, -0.5);
+        assert_eq!(sound.treble_db, 3.0);
+        assert_eq!(sound.subsonic_percent, 20.0);
+        assert_eq!(sound.bass_db, 4.0, "the engine copy carried the global bass");
+        assert_eq!(s.effective_sound(Some(b)), TrackSound::default());
+        assert_eq!(s.speed_t, 1.0);
+        assert_eq!(s.fx.treble_db, 0.0);
+        assert!(s.fx.mono, "mono is always global");
+
+        // Without a track, or in another mode, the global values are used.
+        assert_eq!(s.effective_sound(None).speed_t, 1.0);
+        s.eq_mode = EqMode::Global;
+        assert_eq!(s.effective_sound(Some(a)).speed_t, 1.0);
+
+        // Back to defaults frees the entry.
+        s.eq_mode = EqMode::PerTrack;
+        s.set_sound(Some(a), TrackSound::default());
+        assert!(s.track_sound.is_empty());
+    }
+
+    #[test]
+    fn track_sound_is_saved_and_clamped() {
+        let mut s = AppSettings::default();
+        s.eq_mode = EqMode::PerTrack;
+        s.track_sound.insert(
+            "a.mp3".to_string(),
+            TrackSound { speed_t: 1.5, bass_db: 4.5, treble_db: 1.0, subsonic_percent: 30.0 },
+        );
+        let text = serde_json::to_string(&s).unwrap();
+        assert_eq!(parse(&text).unwrap(), s);
+
+        let s = parse(
+            r#"{"track_sound": {"a.mp3": {"speed_t": 9.0, "bass_db": -4.0}, "b.mp3": {"speed_t": 0.0}}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.track_sound.len(), 1);
+        assert_eq!(s.track_sound["a.mp3"].speed_t, 2.0);
+        assert_eq!(s.track_sound["a.mp3"].bass_db, 0.0);
     }
 
     #[test]

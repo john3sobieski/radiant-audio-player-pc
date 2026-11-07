@@ -112,7 +112,8 @@ fn show_eq_state(ui: &MainWindow, settings: &AppSettings, track: Option<&Path>, 
     ui.set_eq_active_preset(preset.map_or(-1, |i| i as i32));
 }
 
-/// Makes the curve of the current mode and track audible and visible (sliders, graph, engine).
+/// Makes the curve of the current mode and track audible and visible (sliders, graph, engine). In per-track
+/// mode this also loads the speed, bass, treble and subsonic of the track.
 /// Called on start, when the mode changes and when another track starts.
 fn refresh_eq(
     ui: &MainWindow,
@@ -123,6 +124,7 @@ fn refresh_eq(
     track: Option<&Path>,
 ) {
     let gains = settings.effective_eq(track);
+    let sound = settings.effective_sound(track);
     for (i, g) in gains.iter().enumerate() {
         eq_model.set_row_data(i, *g);
     }
@@ -130,8 +132,17 @@ fn refresh_eq(
         let mut s = fx.borrow_mut();
         *s = settings.fx.clone();
         s.eq_gains_db = gains;
+        s.bass_db = sound.bass_db;
+        s.treble_db = sound.treble_db;
+        s.subsonic_percent = sound.subsonic_percent;
         player.send(Command::SetFx(s.clone()));
     }
+    ui.set_fx_bass(sound.bass_db);
+    ui.set_fx_treble(sound.treble_db);
+    ui.set_fx_subsonic(sound.subsonic_percent);
+    ui.set_speed_t(sound.speed_t);
+    // The engine ignores a speed it already has.
+    player.send(Command::SetSpeed(slider_to_speed(sound.speed_t)));
     show_eq_state(ui, settings, track, &gains);
 }
 
@@ -2149,63 +2160,76 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ---- playback speed (phase vocoder in the engine, pitch preserved) ----
     {
-        let (player, settings, weak) = (player.clone(), settings.clone(), ui_weak.clone());
+        let (player, settings, eq_track, weak) =
+            (player.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_speed_changed(move |t| {
             let t = (t * 10.0).round() / 10.0;
             // Slider position -2..=2 -> speed 1/3..3 (same mapping as Android).
             player.send(Command::SetSpeed(slider_to_speed(t)));
-            settings.borrow_mut().speed_t = t;
+            // Per-track mode stores it for the current track, otherwise it is global.
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_speed_for_track(track.as_deref(), t);
             save_settings(&weak, &settings);
         });
     }
 
     {
-        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_normalize_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.normalize = on;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().set_fx_keep_eq(&s);
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_fx_for_track(track.as_deref(), &s);
             save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_mono_changed(move |on| {
             let mut s = fx.borrow_mut();
             s.mono = on;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().set_fx_keep_eq(&s);
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_fx_for_track(track.as_deref(), &s);
             save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_bass_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.bass_db = (v * 2.0).round() / 2.0; // 0.5 dB steps
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().set_fx_keep_eq(&s);
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_fx_for_track(track.as_deref(), &s);
             save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_treble_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.treble_db = (v * 2.0).round() / 2.0;
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().set_fx_keep_eq(&s);
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_fx_for_track(track.as_deref(), &s);
             save_settings(&weak, &settings);
         });
     }
     {
-        let (player, fx, settings, weak) = (player.clone(), fx.clone(), settings.clone(), ui_weak.clone());
+        let (player, fx, settings, eq_track, weak) =
+            (player.clone(), fx.clone(), settings.clone(), eq_track.clone(), ui_weak.clone());
         ui.on_subsonic_changed(move |v| {
             let mut s = fx.borrow_mut();
             s.subsonic_percent = v.round(); // whole percent
             player.send(Command::SetFx(s.clone()));
-            settings.borrow_mut().set_fx_keep_eq(&s);
+            let track = eq_track.borrow().clone();
+            settings.borrow_mut().set_fx_for_track(track.as_deref(), &s);
             save_settings(&weak, &settings);
         });
     }
@@ -2271,9 +2295,7 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(ui) = weak.upgrade() {
                 ui.set_fx_normalize(false);
                 ui.set_fx_mono(false);
-                ui.set_fx_bass(0.0);
-                ui.set_fx_treble(0.0);
-                ui.set_fx_subsonic(0.0);
+                // Bass, treble and subsonic are shown by refresh_eq (the speed is not reset).
                 refresh_eq(&ui, &player, &fx, &eq_model, &settings.borrow(), track.as_deref());
             }
             save_settings(&weak, &settings);
