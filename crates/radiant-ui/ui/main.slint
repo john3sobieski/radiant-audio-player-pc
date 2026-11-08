@@ -492,6 +492,38 @@ component FxSlider inherits Rectangle {
     }
 }
 
+// Text that never leaves its box, whatever the language: it shrinks (down to 60 %) when the translation is
+// longer than the room it has, and elides only as the last resort. The box is the size of this element.
+component FitText inherits Rectangle {
+    in property <string> text;
+    in property <length> font-size: 14px;
+    in property <int> font-weight: 400;
+    in property <color> ink: Theme.text;
+    in property <TextHorizontalAlignment> h-align: TextHorizontalAlignment.center;
+    private property <float> scale: root.width <= 0px ? 1.0
+        : Math.min(1.0, Math.max(0.6, root.width / Math.max(1px, probe.preferred-width)));
+
+    // Invisible copy at full size: its natural width decides how much to shrink.
+    probe := Text {
+        visible: false;
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+    }
+    Text {
+        width: root.width;
+        height: root.height;
+        text: root.text;
+        color: root.ink;
+        font-size: root.font-size * root.scale;
+        font-weight: root.font-weight;
+        horizontal-alignment: root.h-align;
+        vertical-alignment: center;
+        overflow: elide;
+        animate color { duration: Theme.low-power ? 0ms : 160ms; }
+    }
+}
+
 // One row of the sound panel: label, slider, value text.
 component FxRow inherits Rectangle {
     in property <string> label;
@@ -529,38 +561,6 @@ component FxRow inherits Rectangle {
             horizontal-alignment: right;
             vertical-alignment: center;
         }
-    }
-}
-
-// Text that never leaves its box, whatever the language: it shrinks (down to 60 %) when the translation is
-// longer than the room it has, and elides only as the last resort. The box is the size of this element.
-component FitText inherits Rectangle {
-    in property <string> text;
-    in property <length> font-size: 14px;
-    in property <int> font-weight: 400;
-    in property <color> ink: Theme.text;
-    in property <TextHorizontalAlignment> h-align: TextHorizontalAlignment.center;
-    private property <float> scale: root.width <= 0px ? 1.0
-        : Math.min(1.0, Math.max(0.6, root.width / Math.max(1px, probe.preferred-width)));
-
-    // Invisible copy at full size: its natural width decides how much to shrink.
-    probe := Text {
-        visible: false;
-        text: root.text;
-        font-size: root.font-size;
-        font-weight: root.font-weight;
-    }
-    Text {
-        width: root.width;
-        height: root.height;
-        text: root.text;
-        color: root.ink;
-        font-size: root.font-size * root.scale;
-        font-weight: root.font-weight;
-        horizontal-alignment: root.h-align;
-        vertical-alignment: center;
-        overflow: elide;
-        animate color { duration: Theme.low-power ? 0ms : 160ms; }
     }
 }
 
