@@ -1,285 +1,288 @@
-# Radiant interface translation: en. Keys are the English texts of the interface.
+# Radiant interface translation: cs. Keys are the English texts of the interface.
 msgid ""
 msgstr ""
 "Project-Id-Version: radiant-ui\n"
-"Language: en\n"
+"Language: cs\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
 msgid "{n} track"
 msgid_plural "{n} tracks"
-msgstr[0] "{n} track"
-msgstr[1] "{n} tracks"
+msgstr[0] "{n} skladba"
+msgstr[1] "{n} skladby"
+msgstr[2] "{n} skladeb"
 
 msgid "{n} album"
 msgid_plural "{n} albums"
 msgstr[0] "{n} album"
-msgstr[1] "{n} albums"
+msgstr[1] "{n} alba"
+msgstr[2] "{n} alb"
 
 msgid "{n} playlist"
 msgid_plural "{n} playlists"
 msgstr[0] "{n} playlist"
-msgstr[1] "{n} playlists"
+msgstr[1] "{n} playlisty"
+msgstr[2] "{n} playlistů"
 
 msgid "Bypassed — your curves are kept"
-msgstr "Bypassed — your curves are kept"
+msgstr "Vypnuto — vaše křivky zůstávají"
 
 msgid "One curve for every track"
-msgstr "One curve for every track"
+msgstr "Jedna křivka pro všechny skladby"
 
 msgid "Play a track to give it its own curve"
-msgstr "Play a track to give it its own curve"
+msgstr "Přehrajte skladbu a dejte jí vlastní křivku"
 
 msgid "own curve"
-msgstr "own curve"
+msgstr "vlastní křivka"
 
 msgid "flat"
-msgstr "flat"
+msgstr "plochá"
 
 msgid "New playlist"
-msgstr "New playlist"
+msgstr "Nový playlist"
 
 msgid "Name it, pick a folder"
-msgstr "Name it, pick a folder"
+msgstr "Pojmenujte ho, vyberte složku"
 
 msgid "No folder"
-msgstr "No folder"
+msgstr "Bez složky"
 
 msgid "New folder..."
-msgstr "New folder..."
+msgstr "Nová složka..."
 
 msgid "Folder name"
-msgstr "Folder name"
+msgstr "Název složky"
 
 msgid "Add"
-msgstr "Add"
+msgstr "Přidat"
 
 msgid "System"
-msgstr "System"
+msgstr "Systém"
 
 msgid "Appearance"
-msgstr "Appearance"
+msgstr "Vzhled"
 
 msgid "Language"
-msgstr "Language"
+msgstr "Jazyk"
 
 msgid "Security"
-msgstr "Security"
+msgstr "Zabezpečení"
 
 msgid "AI & stems"
-msgstr "AI & stems"
+msgstr "AI a stopy"
 
 msgid "Library"
-msgstr "Library"
+msgstr "Knihovna"
 
 msgid "Themes and colors"
-msgstr "Themes and colors"
+msgstr "Motivy a barvy"
 
 msgid "Interface language"
-msgstr "Interface language"
+msgstr "Jazyk rozhraní"
 
 msgid "App lock"
-msgstr "App lock"
+msgstr "Zámek aplikace"
 
 msgid "Stem separation"
-msgstr "Stem separation"
+msgstr "Separace stop"
 
 msgid "Music folder"
-msgstr "Music folder"
+msgstr "Hudební složka"
 
 msgid "How Radiant looks."
-msgstr "How Radiant looks."
+msgstr "Jak Radiant vypadá."
 
 msgid "The language of the interface."
-msgstr "The language of the interface."
+msgstr "Jazyk uživatelského rozhraní."
 
 msgid "Keep your music private."
-msgstr "Keep your music private."
+msgstr "Udržte svou hudbu v soukromí."
 
 msgid "Splitting tracks into vocals, drums, bass and the rest."
-msgstr "Splitting tracks into vocals, drums, bass and the rest."
+msgstr "Rozdělení skladeb na zpěv, bicí, basy a zbytek."
 
 msgid "Where the music lives."
-msgstr "Where the music lives."
+msgstr "Kde je vaše hudba uložena."
 
 msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
-msgstr "4 digits, 6 digits or your own code, asked at start and when returning to the app."
+msgstr "4 číslice, 6 číslic nebo vlastní kód; vyžaduje se při spuštění a po návratu do aplikace."
 
 msgid "Recovery file"
-msgstr "Recovery file"
+msgstr "Záchranný soubor"
 
 msgid "A file of 12 words to get back in if the code is forgotten."
-msgstr "A file of 12 words to get back in if the code is forgotten."
+msgstr "Soubor s 12 slovy pro obnovení přístupu při zapomenutém kódu."
 
 msgid "Models"
-msgstr "Models"
+msgstr "Modely"
 
 msgid "Download the separation models or import them from files."
-msgstr "Download the separation models or import them from files."
+msgstr "Stáhněte modely separace nebo je importujte ze souborů."
 
 msgid "Stems"
-msgstr "Stems"
+msgstr "Stopy"
 
 msgid "Choose which parts to keep and where they are saved."
-msgstr "Choose which parts to keep and where they are saved."
+msgstr "Vyberte, které části ponechat a kam se uloží."
 
 msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
-msgstr "Choose and rescan the folder (for now these two buttons stay in the header)."
+msgstr "Výběr a opětovné prohledání složky (zatím tato dvě tlačítka zůstávají v záhlaví)."
 
 msgid "SETTINGS"
-msgstr "SETTINGS"
+msgstr "NASTAVENÍ"
 
 msgid "Theme"
-msgstr "Theme"
+msgstr "Motiv"
 
 msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
-msgstr "System follows the Windows light / dark setting. Black is pure black for OLED screens."
+msgstr "Systémový motiv sleduje světlé / tmavé nastavení Windows. Černý je čistě černý pro OLED displeje."
 
 msgid "Light"
-msgstr "Light"
+msgstr "Světlý"
 
 msgid "Dark"
-msgstr "Dark"
+msgstr "Tmavý"
 
 msgid "Black"
-msgstr "Black"
+msgstr "Černý"
 
 msgid "Color palette"
-msgstr "Color palette"
+msgstr "Barevná paleta"
 
 msgid "Ten colors for every theme. The last circle is your own color."
-msgstr "Ten colors for every theme. The last circle is your own color."
+msgstr "Deset barev pro každý motiv. Poslední kruh je vaše vlastní barva."
 
 msgid "Save color"
-msgstr "Save color"
+msgstr "Uložit barvu"
 
 msgid "Save it to reuse it later"
-msgstr "Save it to reuse it later"
+msgstr "Uložte ji pro pozdější použití"
 
 msgid "Right-click to remove"
-msgstr "Right-click to remove"
+msgstr "Odebrat pravým kliknutím"
 
 msgid "Hue"
-msgstr "Hue"
+msgstr "Odstín"
 
 msgid "Saturation"
-msgstr "Saturation"
+msgstr "Sytost"
 
 msgid "Brightness"
-msgstr "Brightness"
+msgstr "Jas"
 
 msgid "10 languages plus System; switches on the fly without stopping the music."
-msgstr "10 languages plus System; switches on the fly without stopping the music."
+msgstr "10 jazyků plus Systém; přepíná se za chodu bez zastavení hudby."
 
 msgid "Soon"
-msgstr "Soon"
+msgstr "Brzy"
 
 msgid "Date created"
-msgstr "Date created"
+msgstr "Datum vytvoření"
 
 msgid "Name"
-msgstr "Name"
+msgstr "Název"
 
 msgid "Date changed"
-msgstr "Date changed"
+msgstr "Datum změny"
 
 msgid "Tracks"
-msgstr "Tracks"
+msgstr "Skladby"
 
 msgid "Manual order"
-msgstr "Manual order"
+msgstr "Ruční pořadí"
 
 msgid "Artist"
-msgstr "Artist"
+msgstr "Interpret"
 
 msgid "Duration"
-msgstr "Duration"
+msgstr "Délka"
 
 msgid "Album"
 msgstr "Album"
 
 msgid "File date"
-msgstr "File date"
+msgstr "Datum souboru"
 
 msgid "Albums"
-msgstr "Albums"
+msgstr "Alba"
 
 msgid "Playlists"
-msgstr "Playlists"
+msgstr "Playlisty"
 
 msgid "Queues"
-msgstr "Queues"
+msgstr "Fronty"
 
 msgid "Sort"
-msgstr "Sort"
+msgstr "Řadit"
 
 msgid "Sound"
-msgstr "Sound"
+msgstr "Zvuk"
 
 msgid "Choose folder"
-msgstr "Choose folder"
+msgstr "Vybrat složku"
 
 msgid "Queue {}"
-msgstr "Queue {}"
+msgstr "Fronta {}"
 
 msgid "No albums yet. Choose a music folder to start."
-msgstr "No albums yet. Choose a music folder to start."
+msgstr "Zatím žádná alba. Začněte výběrem hudební složky."
 
 msgid "No matching albums"
-msgstr "No matching albums"
+msgstr "Žádná odpovídající alba"
 
 msgid "Pause"
-msgstr "Pause"
+msgstr "Pozastavit"
 
 msgid "Play"
-msgstr "Play"
+msgstr "Přehrát"
 
 msgid "Shuffle"
-msgstr "Shuffle"
+msgstr "Náhodně"
 
 msgid "Title"
-msgstr "Title"
+msgstr "Název"
 
 msgid "Time"
-msgstr "Time"
+msgstr "Čas"
 
 msgid "Add tracks from the three-dot menu of any track, or press New playlist."
-msgstr "Add tracks from the three-dot menu of any track, or press New playlist."
+msgstr "Přidejte skladby z nabídky se třemi tečkami, nebo stiskněte Nový playlist."
 
 msgid "Rename"
-msgstr "Rename"
+msgstr "Přejmenovat"
 
 msgid "Delete"
-msgstr "Delete"
+msgstr "Smazat"
 
 msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
-msgstr "No tracks yet. Use \"Add to playlist\" in the menu of a track."
+msgstr "Zatím žádné skladby. V nabídce skladby je příkaz \"Přidat do playlistu\"."
 
 msgid "Clear"
-msgstr "Clear"
+msgstr "Vyprázdnit"
 
 msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
-msgstr "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
+msgstr "Fronta {} je prázdná. V nabídce skladby je příkaz \"Přidat do fronty\"."
 
 msgid "Year"
-msgstr "Year"
+msgstr "Rok"
 
 msgid "Choose a music folder to start"
-msgstr "Choose a music folder to start"
+msgstr "Začněte výběrem hudební složky"
 
 msgid "No matching tracks"
-msgstr "No matching tracks"
+msgstr "Žádné odpovídající skladby"
 
 msgid "Repeat"
-msgstr "Repeat"
+msgstr "Opakovat"
 
 msgid "Repeat all"
-msgstr "Repeat all"
+msgstr "Opakovat vše"
 
 msgid "Repeat one"
-msgstr "Repeat one"
+msgstr "Opakovat jednu"
 
 msgid "Hi-Res"
 msgstr "Hi-Res"
@@ -288,258 +291,259 @@ msgid "Lossless"
 msgstr "Lossless"
 
 msgid "No lyrics for this track"
-msgstr "No lyrics for this track"
+msgstr "Pro tuto skladbu nejsou texty"
 
 msgid "Back to current line"
-msgstr "Back to current line"
+msgstr "Zpět na aktuální řádek"
 
 msgid "No information"
-msgstr "No information"
+msgstr "Žádné informace"
 
 msgid "Now playing"
-msgstr "Now playing"
+msgstr "Právě hraje"
 
 msgid "Lyrics"
-msgstr "Lyrics"
+msgstr "Texty"
 
 msgid "Info"
 msgstr "Info"
 
 msgid "Sort playlists"
-msgstr "Sort playlists"
+msgstr "Řazení playlistů"
 
 msgid "Sort albums"
-msgstr "Sort albums"
+msgstr "Řazení alb"
 
 msgid "Sort tracks"
-msgstr "Sort tracks"
+msgstr "Řazení skladeb"
 
 msgid "Ascending"
-msgstr "Ascending"
+msgstr "Vzestupně"
 
 msgid "Descending"
-msgstr "Descending"
+msgstr "Sestupně"
 
 msgid "Normalize"
-msgstr "Normalize"
+msgstr "Normalizovat"
 
 msgid "Mono"
 msgstr "Mono"
 
 msgid "Reset"
-msgstr "Reset"
+msgstr "Obnovit"
 
 msgid "Speed"
-msgstr "Speed"
+msgstr "Rychlost"
 
 msgid "Bass"
-msgstr "Bass"
+msgstr "Basy"
 
 msgid "Treble"
-msgstr "Treble"
+msgstr "Výšky"
 
 msgid "Subsonic"
 msgstr "Subsonic"
 
 msgid "Off"
-msgstr "Off"
+msgstr "Vyp."
 
 msgid "All tracks"
-msgstr "All tracks"
+msgstr "Všechny skladby"
 
 msgid "Per track"
-msgstr "Per track"
+msgstr "Po skladbách"
 
 msgid "Preset"
-msgstr "Preset"
+msgstr "Předvolba"
 
 msgid "Custom"
-msgstr "Custom"
+msgstr "Vlastní"
 
 msgid "Equalizer presets"
-msgstr "Equalizer presets"
+msgstr "Předvolby ekvalizéru"
 
 msgid "The equalizer is off — picking a preset turns it on"
-msgstr "The equalizer is off — picking a preset turns it on"
+msgstr "Ekvalizér je vypnutý — výběrem předvolby se zapne"
 
 msgid "Play a track to give it a preset"
-msgstr "Play a track to give it a preset"
+msgstr "Přehrajte skladbu a přiřaďte jí předvolbu"
 
 msgid "Applies to {}"
-msgstr "Applies to {}"
+msgstr "Platí pro {}"
 
 msgid "Applies to every track"
-msgstr "Applies to every track"
+msgstr "Platí pro všechny skladby"
 
 msgid "Open album"
-msgstr "Open album"
+msgstr "Otevřít album"
 
 msgid "Add to playlist"
-msgstr "Add to playlist"
+msgstr "Přidat do playlistu"
 
 msgid "Add to queue"
-msgstr "Add to queue"
+msgstr "Přidat do fronty"
 
 msgid "Remove from queue"
-msgstr "Remove from queue"
+msgstr "Odebrat z fronty"
 
 msgid "Create stems"
-msgstr "Create stems"
+msgstr "Vytvořit stopy"
 
 msgid "ADD TO QUEUE"
-msgstr "ADD TO QUEUE"
+msgstr "PŘIDAT DO FRONTY"
 
 msgid "Click a queue to add the track, click again to take it out."
-msgstr "Click a queue to add the track, click again to take it out."
+msgstr "Kliknutím na frontu skladbu přidáte, dalším kliknutím ji odeberete."
 
 msgid "Done"
-msgstr "Done"
+msgstr "Hotovo"
 
 msgid "ADD TO PLAYLIST"
-msgstr "ADD TO PLAYLIST"
+msgstr "PŘIDAT DO PLAYLISTU"
 
 msgid "Click a record to add the track, click again to take it out."
-msgstr "Click a record to add the track, click again to take it out."
+msgstr "Kliknutím na playlist skladbu přidáte, dalším kliknutím ji odeberete."
 
 msgid "NAME"
-msgstr "NAME"
+msgstr "NÁZEV"
 
 msgid "Playlist name"
-msgstr "Playlist name"
+msgstr "Název playlistu"
 
 msgid "FOLDER (optional)"
-msgstr "FOLDER (optional)"
+msgstr "SLOŽKA (volitelné)"
 
 msgid "Cancel"
-msgstr "Cancel"
+msgstr "Zrušit"
 
 msgid "Create and add"
-msgstr "Create and add"
+msgstr "Vytvořit a přidat"
 
 msgid "Create"
-msgstr "Create"
+msgstr "Vytvořit"
 
 msgid "Move to folder"
-msgstr "Move to folder"
+msgstr "Přesunout do složky"
 
 msgid "Move"
-msgstr "Move"
+msgstr "Přesunout"
 
 msgid "Save"
-msgstr "Save"
+msgstr "Uložit"
 
 msgid "Could not save settings: {}"
-msgstr "Could not save settings: {}"
+msgstr "Nastavení se nepodařilo uložit: {}"
 
 msgid "Album artist"
-msgstr "Album artist"
+msgstr "Interpret alba"
 
 msgid "Track no."
-msgstr "Track no."
+msgstr "Č. skladby"
 
 msgid "Format"
-msgstr "Format"
+msgstr "Formát"
 
 msgid "Bitrate"
-msgstr "Bitrate"
+msgstr "Datový tok"
 
 msgid "Sample rate"
-msgstr "Sample rate"
+msgstr "Vzorkovací frekvence"
 
 msgid "Channels"
-msgstr "Channels"
+msgstr "Kanály"
 
 msgid "Stereo"
 msgstr "Stereo"
 
 msgid "Size"
-msgstr "Size"
+msgstr "Velikost"
 
 msgid "File next to the track"
-msgstr "File next to the track"
+msgstr "Soubor vedle skladby"
 
 msgid "Embedded in tags"
-msgstr "Embedded in tags"
+msgstr "Vložené ve značkách"
 
 msgid "File"
-msgstr "File"
+msgstr "Soubor"
 
 msgid "Folder"
-msgstr "Folder"
+msgstr "Složka"
 
 msgid "Scanning..."
-msgstr "Scanning..."
+msgstr "Prohledávání..."
 
 msgid "Unknown album"
-msgstr "Unknown album"
+msgstr "Neznámé album"
 
 msgid "Unknown artist"
-msgstr "Unknown artist"
+msgstr "Neznámý interpret"
 
 msgid "Disc {}"
-msgstr "Disc {}"
+msgstr "Disk {}"
 
 msgid "Liked tracks"
-msgstr "Liked tracks"
+msgstr "Oblíbené skladby"
 
 msgid "Could not save playlists: {}"
-msgstr "Could not save playlists: {}"
+msgstr "Playlisty se nepodařilo uložit: {}"
 
 msgid "File not found"
-msgstr "File not found"
+msgstr "Soubor nenalezen"
 
 msgid "Could not save queues: {}"
-msgstr "Could not save queues: {}"
+msgstr "Fronty se nepodařilo uložit: {}"
 
 msgid "Could not read settings: {}"
-msgstr "Could not read settings: {}"
+msgstr "Nastavení se nepodařilo načíst: {}"
 
 msgid "Could not read playlists: {}"
-msgstr "Could not read playlists: {}"
+msgstr "Playlisty se nepodařilo načíst: {}"
 
 msgid "Could not read queues: {}"
-msgstr "Could not read queues: {}"
+msgstr "Fronty se nepodařilo načíst: {}"
 
 msgid "This file is not in the library"
-msgstr "This file is not in the library"
+msgstr "Tento soubor není v knihovně"
 
 msgid "This queue has no playable tracks yet"
-msgstr "This queue has no playable tracks yet"
+msgstr "Tato fronta zatím neobsahuje žádné přehratelné skladby"
 
 msgid "Clear queue {}?"
-msgstr "Clear queue {}?"
+msgstr "Vyprázdnit frontu {}?"
 
 msgid "All tracks will be removed from this queue. The files stay in your library."
-msgstr "All tracks will be removed from this queue. The files stay in your library."
+msgstr "Všechny skladby budou z této fronty odebrány. Soubory zůstanou v knihovně."
 
 msgid "This playlist has no playable tracks yet"
-msgstr "This playlist has no playable tracks yet"
+msgstr "Tento playlist zatím neobsahuje žádné přehratelné skladby"
 
 msgid "Rename playlist"
-msgstr "Rename playlist"
+msgstr "Přejmenovat playlist"
 
 msgid "Delete playlist?"
-msgstr "Delete playlist?"
+msgstr "Smazat playlist?"
 
 msgid "\"{}\" will be deleted. The tracks stay in your library."
-msgstr "\"{}\" will be deleted. The tracks stay in your library."
+msgstr "\"{}\" bude smazán. Skladby zůstanou v knihovně."
 
 msgid "Rename folder"
-msgstr "Rename folder"
+msgstr "Přejmenovat složku"
 
 msgid "Delete folder?"
-msgstr "Delete folder?"
+msgstr "Smazat složku?"
 
 msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
-msgstr "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
+msgstr "Složka \"{}\" bude smazána. Její playlisty se zachovají a přesunou se mimo složku."
 
 msgid "Choose a music folder first"
-msgstr "Choose a music folder first"
+msgstr "Nejprve vyberte hudební složku"
 
 msgid "{n} channel"
 msgid_plural "{n} channels"
-msgstr[0] "{n} channel"
-msgstr[1] "{n} channels"
+msgstr[0] "{n} kanál"
+msgstr[1] "{n} kanály"
+msgstr[2] "{n} kanálů"
 
 msgid "Rock"
 msgstr "Rock"
@@ -548,63 +552,63 @@ msgid "Pop"
 msgstr "Pop"
 
 msgid "Hip-Hop"
-msgstr "Hip-Hop"
+msgstr "Hip-hop"
 
 msgid "Electronic"
-msgstr "Electronic"
+msgstr "Elektronika"
 
 msgid "Jazz"
 msgstr "Jazz"
 
 msgid "Classical"
-msgstr "Classical"
+msgstr "Klasika"
 
 msgid "Metal"
 msgstr "Metal"
 
 msgid "Acoustic"
-msgstr "Acoustic"
+msgstr "Akustika"
 
 msgid "Vocal"
-msgstr "Vocal"
+msgstr "Vokály"
 
 # Low-power mode
 
 msgid "Power"
-msgstr "Power"
+msgstr "Napájení"
 
 msgid "Low-power mode"
-msgstr "Low-power mode"
+msgstr "Úsporný režim"
 
 msgid "Save battery and CPU: a calmer interface and a lighter sound engine."
-msgstr "Save battery and CPU: a calmer interface and a lighter sound engine."
+msgstr "Šetří baterii a procesor: klidnější rozhraní a lehčí zvukový modul."
 
 msgid "Animations are off: pages, menus and sliders switch instantly."
-msgstr "Animations are off: pages, menus and sliders switch instantly."
+msgstr "Animace jsou vypnuté: stránky, nabídky a posuvníky se přepínají okamžitě."
 
 msgid "Spectrum rays and the drifting glow stand still."
-msgstr "Spectrum rays and the drifting glow stand still."
+msgstr "Paprsky spektra a plynoucí záře zůstávají stát."
 
 msgid "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
-msgstr "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+msgstr "Zvukové efekty jsou obejity: ekvalizér, basy, výšky, subsonic a normalizace. Mono a rychlost přehrávání fungují dál."
 
 msgid "AI stem separation (coming later) will stay off in this mode."
-msgstr "AI stem separation (coming later) will stay off in this mode."
+msgstr "AI oddělování stop (přijde později) zůstane v tomto režimu vypnuté."
 
 msgid "The playback engine wakes up less often and keeps a deeper buffer."
-msgstr "The playback engine wakes up less often and keeps a deeper buffer."
+msgstr "Přehrávací modul se probouzí méně často a drží hlubší vyrovnávací paměť."
 
 msgid "Turns off what is only for looks or extra sound polish; everything else keeps working."
-msgstr "Turns off what is only for looks or extra sound polish; everything else keeps working."
+msgstr "Vypne to, co slouží jen vzhledu nebo doplňkovému vyladění zvuku; vše ostatní funguje dál."
 
 msgid "What changes"
-msgstr "What changes"
+msgstr "Co se změní"
 
 msgid "On"
-msgstr "On"
+msgstr "Zap."
 
 msgid "Low-power mode — tap to turn off"
-msgstr "Low-power mode — tap to turn off"
+msgstr "Úsporný režim — klepnutím vypnete"
 
 msgid "Stems are not available in low-power mode"
-msgstr "Stems are not available in low-power mode"
+msgstr "Stopy nejsou v úsporném režimu k dispozici"
