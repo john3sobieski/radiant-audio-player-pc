@@ -18,34 +18,32 @@ use std::sync::{OnceLock, RwLock};
 pub struct Language {
     /// Directory name in `lang/` and value stored in `settings.json` (`language`).
     pub code: &'static str,
-    /// Name in its own language (shown in the picker, never translated).
-    pub native_name: &'static str,
     po: &'static str,
 }
 
 macro_rules! lang {
-    ($code:literal, $name:literal) => {
+    ($code:literal) => {
         Language {
             code: $code,
-            native_name: $name,
             po: include_str!(concat!("../lang/", $code, "/LC_MESSAGES/radiant-ui.po")),
         }
     };
 }
 
-/// The ten languages in the order of the picker (index in the UI = position + 1; 0 is "System").
+/// The ten languages in the order of the picker (their own names are in `SettingsPage` in `main.slint`:
+/// English, Deutsch, Русский, Українська, 中文, 日本語, Français, Čeština, Español, Polski) (index in the UI = position + 1; 0 is "System").
 /// Keep in step with `LANGUAGE_CODES` in `radiant-core/src/settings.rs`.
 pub static LANGUAGES: [Language; 10] = [
-    lang!("en", "English"),
-    lang!("de", "Deutsch"),
-    lang!("ru", "Русский"),
-    lang!("uk", "Українська"),
-    lang!("zh", "中文"),
-    lang!("ja", "日本語"),
-    lang!("fr", "Français"),
-    lang!("cs", "Čeština"),
-    lang!("es", "Español"),
-    lang!("pl", "Polski"),
+    lang!("en"),
+    lang!("de"),
+    lang!("ru"),
+    lang!("uk"),
+    lang!("zh"),
+    lang!("ja"),
+    lang!("fr"),
+    lang!("cs"),
+    lang!("es"),
+    lang!("pl"),
 ];
 
 const SYSTEM: &str = "system";
@@ -140,11 +138,6 @@ pub fn set_language(setting: &str) -> &'static str {
     let mut guard = state().write().unwrap_or_else(|e| e.into_inner());
     *guard = State { code, table };
     code
-}
-
-/// The active language code.
-pub fn current_code() -> &'static str {
-    state().read().unwrap_or_else(|e| e.into_inner()).code
 }
 
 /// Translated text for the English `key` (the key itself when there is no translation).
