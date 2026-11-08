@@ -110,6 +110,7 @@ fn apply_settings(
         theme.set_sel_dark(settings.palettes[1] as i32);
         theme.set_sel_black(settings.palettes[2] as i32);
     }
+    ui.set_settings_section(settings.settings_section as i32);
     apply_custom_color(ui, settings.custom_hsv);
     refresh_saved_colors(ui, &settings.saved_colors);
     ui.set_volume(settings.volume);
@@ -2153,6 +2154,14 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_volume_changed(move |v| {
             player.send(Command::SetVolume(v));
             settings.borrow_mut().volume = v;
+            save_settings(&weak, &settings);
+        });
+    }
+    {
+        // Open section of the settings page: remembered between launches.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_settings_section_changed(move |i| {
+            settings.borrow_mut().settings_section = i.clamp(0, 4) as u8;
             save_settings(&weak, &settings);
         });
     }

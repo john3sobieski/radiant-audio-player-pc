@@ -104,6 +104,8 @@ pub struct AppSettings {
     pub album_order: Vec<String>,
     /// Color theme: 0 = System (follows Windows), 1 = Light, 2 = Dark, 3 = Black (OLED).
     pub theme: u8,
+    /// The section the settings page was left on (0 = first); it opens there next time.
+    pub settings_section: u8,
     /// Chosen palette per theme kind [light, dark, black]: 0..=9 = preset, 10 = own color.
     pub palettes: [u8; 3],
     /// The own accent color as [hue, saturation, value], each 0.0..=1.0 (shared by all themes).
@@ -133,6 +135,7 @@ impl Default for AppSettings {
             album_sort_desc: false,
             album_order: Vec::new(),
             theme: 2,
+            settings_section: 0,
             palettes: [0, 0, 0],
             custom_hsv: [0.75, 0.55, 1.0],
             saved_colors: Vec::new(),
@@ -310,6 +313,7 @@ fn sanitize(settings: &mut AppSettings) {
     settings.album_sort = settings.album_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.theme = settings.theme.min(3);
+    settings.settings_section = settings.settings_section.min(4); // 5 sections now; raise when one is added
     for p in settings.palettes.iter_mut() {
         *p = (*p).min(10);
     }

@@ -1387,6 +1387,7 @@ component SettingsPage inherits Rectangle {
     in-out property <int> section: 0;
     callback close();
     callback theme-changed(int);
+    callback section-changed(int);
     callback palette-changed(int, int, int);
     callback custom-color-edited(float, float, float);
     callback custom-save();
@@ -1556,7 +1557,10 @@ component SettingsPage inherits Rectangle {
         hint: root.hints[i];
         show-hint: root.nh >= 48px;
         active: root.section == i;
-        clicked => { root.section = i; }
+        clicked => {
+            root.section = i;
+            root.section-changed(i);
+        }
     }
 
     // ---- content of the open section ----
@@ -2248,6 +2252,9 @@ export component MainWindow inherits Window {
     callback rescan-folder();
     /// The theme was changed in the settings (0 System, 1 Light, 2 Dark, 3 Black); Rust remembers it.
     callback theme-changed(int);
+    /// The settings page section that is open (0 = first); Rust remembers it between launches.
+    in-out property <int> settings-section: 0;
+    callback settings-section-changed(int);
     /// Palette choice per theme kind (light, dark, black): 0..9 preset, 10 own color; Rust remembers it.
     callback palette-changed(int, int, int);
     /// The own color moved (hue, saturation, value, each 0..1); Rust remembers it and updates `Theme`.
@@ -5561,6 +5568,8 @@ export component MainWindow inherits Window {
         opacity: root.settings-t;
         close => { root.show-settings = false; }
         theme-changed(k) => { root.theme-changed(k); }
+        section <=> root.settings-section;
+        section-changed(i) => { root.settings-section-changed(i); }
         palette-changed(l, d, b) => { root.palette-changed(l, d, b); }
         custom-color-edited(h, sat, v) => { root.custom-color-edited(h, sat, v); }
         custom-save() => { root.custom-save(); }
