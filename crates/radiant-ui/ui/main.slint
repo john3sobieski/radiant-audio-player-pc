@@ -501,12 +501,12 @@ component FxRow inherits Rectangle {
 
     HorizontalLayout {
         spacing: 10px;
-        Text {
+        FitText {
             text: root.label;
             width: 64px;
-            color: Theme.muted;
+            ink: Theme.muted;
             font-size: 12px;
-            vertical-alignment: center;
+            h-align: left;
         }
         FxSlider {
             lo: root.lo;
@@ -524,6 +524,38 @@ component FxRow inherits Rectangle {
             horizontal-alignment: right;
             vertical-alignment: center;
         }
+    }
+}
+
+// Text that never leaves its box, whatever the language: it shrinks (down to 60 %) when the translation is
+// longer than the room it has, and elides only as the last resort. The box is the size of this element.
+component FitText inherits Rectangle {
+    in property <string> text;
+    in property <length> font-size: 14px;
+    in property <int> font-weight: 400;
+    in property <color> ink: Theme.text;
+    in property <TextHorizontalAlignment> h-align: TextHorizontalAlignment.center;
+    private property <float> scale: root.width <= 0px ? 1.0
+        : Math.min(1.0, Math.max(0.6, root.width / Math.max(1px, probe.preferred-width)));
+
+    // Invisible copy at full size: its natural width decides how much to shrink.
+    probe := Text {
+        visible: false;
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+    }
+    Text {
+        width: root.width;
+        height: root.height;
+        text: root.text;
+        color: root.ink;
+        font-size: root.font-size * root.scale;
+        font-weight: root.font-weight;
+        horizontal-alignment: root.h-align;
+        vertical-alignment: center;
+        overflow: elide;
+        animate color { duration: 160ms; }
     }
 }
 
@@ -560,14 +592,13 @@ component MenuItem inherits Rectangle {
     border-radius: 8px;
     background: ta.has-hover ? Theme.surface-hover : transparent;
 
-    Text {
+    FitText {
         x: 12px;
         width: parent.width - 24px;
         height: parent.height;
         text: root.text;
-        color: root.dim ? Theme.muted : Theme.text;
-        vertical-alignment: center;
-        overflow: elide;
+        ink: root.dim ? Theme.muted : Theme.text;
+        h-align: left;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -585,12 +616,13 @@ component ToggleText inherits Rectangle {
     background: root.active ? Theme.accent.with-alpha(0.2)
         : ta.has-hover ? Theme.surface-hover : transparent;
 
-    Text {
+    FitText {
+        x: 6px;
+        width: max(0px, root.width - 12px);
+        height: root.height;
         text: root.text;
-        color: root.active ? Theme.accent : Theme.muted;
+        ink: root.active ? Theme.accent : Theme.muted;
         font-size: 12px;
-        horizontal-alignment: center;
-        vertical-alignment: center;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -608,15 +640,24 @@ component PillButton inherits Rectangle {
     background: root.active ? Theme.accent.with-alpha(0.2)
         : ta.has-hover ? Theme.surface-hover : Theme.surface;
 
+    // Invisible copy of the label: it gives the button its natural width inside layouts.
     HorizontalLayout {
         padding-left: 16px;
         padding-right: 16px;
         Text {
             text: root.text;
-            color: root.active ? Theme.accent : Theme.text;
+            opacity: 0;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
+    }
+    // The visible label shrinks when the button is narrower than the translated word.
+    FitText {
+        x: 12px;
+        width: max(0px, root.width - 24px);
+        height: root.height;
+        text: root.text;
+        ink: root.active ? Theme.accent : Theme.text;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -734,17 +775,16 @@ component PresetCard inherits Rectangle {
     border-color: root.active ? Theme.accent.with-alpha(0.7) : transparent;
     animate background { duration: 120ms; }
 
-    Text {
+    FitText {
         x: 12px;
         y: 8px;
         width: parent.width - 24px;
         height: 16px;
         text: root.text;
-        color: root.active ? Theme.accent : Theme.text;
+        ink: root.active ? Theme.accent : Theme.text;
         font-size: 13px;
         font-weight: root.active ? 700 : 500;
-        overflow: elide;
-        vertical-alignment: center;
+        h-align: left;
     }
     // Zero line of the miniature.
     Rectangle {
@@ -813,14 +853,14 @@ component SegmentedControl inherits Rectangle {
         y: 0px;
         width: root.seg-w;
         height: root.height;
-        Text {
+        FitText {
+            x: 4px;
+            width: max(0px, root.seg-w - 8px);
+            height: root.height;
             text: label;
-            color: k == root.current ? Theme.on-accent : (seg-ta.has-hover ? Theme.text : Theme.muted);
+            ink: k == root.current ? Theme.on-accent : (seg-ta.has-hover ? Theme.text : Theme.muted);
             font-size: 12px;
             font-weight: k == root.current ? 700 : 400;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            animate color { duration: 160ms; }
         }
         seg-ta := TouchArea {
             mouse-cursor: pointer;
@@ -894,7 +934,7 @@ component EqGraph inherits Rectangle {
     Text {
         x: 10px;
         y: 2px;
-        width: root.width - 20px - (root.chip-visible ? 64px : 0px);
+        width: root.width - 20px - (root.chip-visible ? 80px : 0px);
         height: 13px;
         font-size: 10px;
         color: Theme.muted;
@@ -906,19 +946,20 @@ component EqGraph inherits Rectangle {
             : "\u{266A} " + root.track-name;
     }
     if root.chip-visible : Rectangle {
-        x: root.width - 62px;
+        x: root.width - 78px;
         y: 2px;
-        width: 54px;
+        width: 70px;
         height: 13px;
         border-radius: 6.5px;
         background: root.saved ? Theme.accent.with-alpha(0.25) : Theme.surface-hover;
-        Text {
+        FitText {
+            x: 3px;
+            width: parent.width - 6px;
+            height: parent.height;
             text: root.saved ? @tr("own curve") : @tr("flat");
-            color: root.saved ? Theme.accent : Theme.muted;
+            ink: root.saved ? Theme.accent : Theme.muted;
             font-size: 9px;
             font-weight: 700;
-            horizontal-alignment: center;
-            vertical-alignment: center;
         }
     }
 }
@@ -936,12 +977,13 @@ component AccentButton inherits Rectangle {
     background: root.enabled ? (ta.has-hover ? root.tone.brighter(0.15) : root.tone) : Theme.surface-hover;
     animate background { duration: 120ms; }
 
-    Text {
+    FitText {
+        x: 10px;
+        width: max(0px, root.width - 20px);
+        height: root.height;
         text: root.text;
-        color: root.enabled ? (root.tone == Theme.accent ? Theme.on-accent : #ffffff) : Theme.muted;
+        ink: root.enabled ? (root.tone == Theme.accent ? Theme.on-accent : #ffffff) : Theme.muted;
         font-weight: 700;
-        horizontal-alignment: center;
-        vertical-alignment: center;
     }
     ta := TouchArea {
         enabled: root.enabled;
@@ -1621,10 +1663,12 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 38px;
                 width: parent.width - 32px;
+                height: 38px;
                 text: @tr("System follows the Windows light / dark setting. Black is pure black for OLED screens.");
                 color: Theme.muted;
                 font-size: 13px;
                 wrap: word-wrap;
+                overflow: elide;
             }
             SegmentedControl {
                 x: 16px;
@@ -1662,10 +1706,12 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 38px;
                 width: parent.width - 32px;
+                height: 34px;
                 text: @tr("Ten colors for every theme. The last circle is your own color.");
                 color: Theme.muted;
                 font-size: 13px;
                 wrap: word-wrap;
+                overflow: elide;
             }
             for i in 11 : Rectangle {
                 x: 16px + Math.mod(i, root.pal-cols) * 44px;
@@ -1817,10 +1863,12 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 38px;
                 width: parent.width - 32px;
+                height: 40px;
                 text: @tr("10 languages plus System; switches on the fly without stopping the music.");
                 color: Theme.muted;
                 font-size: 13px;
                 wrap: word-wrap;
+                overflow: elide;
             }
             for lang-name[i] in root.language-names : Rectangle {
                 x: 8px;
@@ -1880,32 +1928,41 @@ component SettingsPage inherits Rectangle {
             border-width: 1px;
             border-color: Theme.surface-hover;
 
-            VerticalLayout {
-                padding: 16px;
-                spacing: 4px;
-                alignment: start;
-                Text {
-                    text: card.title;
-                    color: Theme.text;
-                    font-size: 16px;
-                    font-weight: 600;
-                    overflow: elide;
-                }
-                Text {
-                    text: card.text;
-                    color: Theme.muted;
-                    font-size: 13px;
-                    wrap: word-wrap;
-                }
+            // Measures the translated "Soon" badge: the badge is as wide as its word, the title keeps clear of it.
+            soon-probe := Text { visible: false; text: @tr("Soon"); font-size: 11px; font-weight: 600; }
+            Text {
+                x: 16px;
+                y: 14px;
+                width: max(0px, parent.width - 32px - soon-probe.preferred-width - 22px - 12px);
+                height: 22px;
+                text: card.title;
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 40px;
+                width: parent.width - 32px;
+                height: 42px;
+                text: card.text;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+                overflow: elide;
             }
             Rectangle {
-                x: parent.width - 66px;
+                x: parent.width - self.width - 14px;
                 y: 14px;
-                width: 52px;
+                width: soon-probe.preferred-width + 22px;
                 height: 22px;
                 border-radius: 11px;
                 background: Theme.accent.with-alpha(0.15);
                 Text {
+                    width: parent.width;
+                    height: parent.height;
                     text: @tr("Soon");
                     color: Theme.accent;
                     font-size: 11px;
@@ -2706,6 +2763,7 @@ export component MainWindow inherits Window {
                     font-size: 13px;
                     horizontal-alignment: right;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
             }
 
@@ -2730,6 +2788,7 @@ export component MainWindow inherits Window {
                         font-size: 16px;
                         horizontal-alignment: center;
                         vertical-alignment: center;
+                        wrap: word-wrap;
                     }
                     if root.albums.length > 0 : ListView {
                         for r in root.album-rows : Rectangle {
@@ -2896,6 +2955,7 @@ export component MainWindow inherits Window {
                                     color: Theme.muted;
                                     font-size: 12px;
                                     vertical-alignment: center;
+                                    overflow: elide;
                                 }
                                 Text {
                                     x: root.dur-x;
@@ -2906,6 +2966,7 @@ export component MainWindow inherits Window {
                                     font-size: 12px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
+                                    overflow: elide;
                                 }
                                 Rectangle {
                                     x: root.col-pad;
@@ -3375,6 +3436,7 @@ export component MainWindow inherits Window {
                                     font-size: 15px;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
+                                    wrap: word-wrap;
                                 }
                             }
                             if root.pl-page-tracks.length > 0 : Rectangle {
@@ -3397,6 +3459,7 @@ export component MainWindow inherits Window {
                                     color: Theme.muted;
                                     font-size: 12px;
                                     vertical-alignment: center;
+                                    overflow: elide;
                                 }
                                 Text {
                                     x: root.dur-x;
@@ -3407,6 +3470,7 @@ export component MainWindow inherits Window {
                                     font-size: 12px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
+                                    overflow: elide;
                                 }
                                 Rectangle {
                                     x: root.col-pad;
@@ -3540,6 +3604,7 @@ export component MainWindow inherits Window {
                                 font-size: 22px;
                                 font-weight: 700;
                                 vertical-alignment: center;
+                                overflow: elide;
                             }
                             Text {
                                 x: 28px;
@@ -3594,6 +3659,7 @@ export component MainWindow inherits Window {
                                 font-size: 15px;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
+                                wrap: word-wrap;
                             }
                         }
                         if root.queue-page-tracks.length > 0 : Rectangle {
@@ -3616,6 +3682,7 @@ export component MainWindow inherits Window {
                                 color: Theme.muted;
                                 font-size: 12px;
                                 vertical-alignment: center;
+                                overflow: elide;
                             }
                             Text {
                                 x: root.dur-x;
@@ -3626,6 +3693,7 @@ export component MainWindow inherits Window {
                                 font-size: 12px;
                                 horizontal-alignment: right;
                                 vertical-alignment: center;
+                                overflow: elide;
                             }
                             Rectangle {
                                 x: root.col-pad;
@@ -3766,6 +3834,7 @@ export component MainWindow inherits Window {
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
                 if root.show-album : Text {
                     x: root.album-x;
@@ -3775,6 +3844,7 @@ export component MainWindow inherits Window {
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
                 if root.show-year : Text {
                     x: root.year-x;
@@ -3784,6 +3854,7 @@ export component MainWindow inherits Window {
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
                 Text {
                     x: root.dur-x;
@@ -3794,6 +3865,7 @@ export component MainWindow inherits Window {
                     font-size: 12px;
                     horizontal-alignment: right;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
                 Rectangle {
                     x: root.col-pad;
@@ -3814,6 +3886,7 @@ export component MainWindow inherits Window {
                     font-size: 16px;
                     horizontal-alignment: center;
                     vertical-alignment: center;
+                    wrap: word-wrap;
                 }
             }
 
@@ -4044,19 +4117,19 @@ export component MainWindow inherits Window {
                 Rectangle {
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
-                    width: 348px;
+                    width: 396px;
                     height: 52px;
                     ToggleText {
                         x: 0px;
                         y: 12px;
-                        width: 84px;
+                        width: 96px;
                         height: 28px;
                         text: @tr("Shuffle");
                         active: root.shuffle;
                         clicked => { root.shuffle-changed(!root.shuffle); }
                     }
                     IconButton {
-                        x: 96px;
+                        x: 104px;
                         y: 6px;
                         width: 40px;
                         height: 40px;
@@ -4064,7 +4137,7 @@ export component MainWindow inherits Window {
                         clicked => { root.previous-track(); }
                     }
                     IconButton {
-                        x: 148px;
+                        x: 156px;
                         y: 0px;
                         width: 52px;
                         height: 52px;
@@ -4078,7 +4151,7 @@ export component MainWindow inherits Window {
                         clicked => { root.toggle-play(); }
                     }
                     IconButton {
-                        x: 212px;
+                        x: 220px;
                         y: 6px;
                         width: 40px;
                         height: 40px;
@@ -4086,9 +4159,9 @@ export component MainWindow inherits Window {
                         clicked => { root.next-track(); }
                     }
                     ToggleText {
-                        x: 264px;
+                        x: 272px;
                         y: 12px;
-                        width: 84px;
+                        width: 124px;
                         height: 28px;
                         text: root.repeat-mode == 0 ? @tr("Repeat")
                             : root.repeat-mode == 1 ? @tr("Repeat all") : @tr("Repeat one");
@@ -4420,15 +4493,14 @@ export component MainWindow inherits Window {
                     height: 14px;
                     border-radius: 7px;
                     background: root.np-quality-tier == 2 ? #e9b949 : Theme.accent;
-                    Text {
-                        width: parent.width;
+                    FitText {
+                        x: 2px;
+                        width: parent.width - 4px;
                         height: parent.height;
                         text: root.np-quality-tier == 2 ? @tr("Hi-Res") : @tr("Lossless");
-                        color: root.np-quality-tier == 2 ? #1a1405 : Theme.on-accent;
+                        ink: root.np-quality-tier == 2 ? #1a1405 : Theme.on-accent;
                         font-size: 9.5px;
                         font-weight: 800;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
                     }
                 }
                 quality-text := Text {
@@ -4462,6 +4534,7 @@ export component MainWindow inherits Window {
                 color: Theme.muted;
                 horizontal-alignment: center;
                 vertical-alignment: center;
+                wrap: word-wrap;
             }
             // Synchronized: the current line stays in the middle, sung lines are dimmed, click a line to jump
             // there. The wheel scrolls (auto-follow pauses); a line under the mouse shimmers in the colors of
@@ -4579,20 +4652,22 @@ export component MainWindow inherits Window {
                 if root.lyr-user-scroll : Rectangle {
                     x: (parent.width - self.width) / 2;
                     y: parent.height - 46px;
-                    width: 168px;
+                    width: min(parent.width - 24px, max(168px, pback-probe.preferred-width + 32px));
                     height: 32px;
                     border-radius: 16px;
                     background: pback-ta.has-hover ? Theme.accent : Theme.accent.with-alpha(0.85);
                     animate background { duration: 120ms; }
                     drop-shadow-blur: 12px;
                     drop-shadow-color: #00000080;
-                    Text {
+                    pback-probe := Text { visible: false; text: @tr("Back to current line"); font-size: 12px; font-weight: 700; }
+                    FitText {
+                        x: 12px;
+                        width: parent.width - 24px;
+                        height: parent.height;
                         text: @tr("Back to current line");
-                        color: Theme.on-accent;
+                        ink: Theme.on-accent;
                         font-size: 12px;
                         font-weight: 700;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
                     }
                     pback-ta := TouchArea {
                         mouse-cursor: pointer;
@@ -4808,7 +4883,7 @@ export component MainWindow inherits Window {
                     spacing: 8px;
                     alignment: start;
                     ToggleText {
-                        width: 96px;
+                        width: 116px;
                         height: 28px;
                         text: @tr("Normalize");
                         active: root.fx-normalize;
@@ -4818,7 +4893,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     ToggleText {
-                        width: 64px;
+                        width: 76px;
                         height: 28px;
                         text: @tr("Mono");
                         active: root.fx-mono;
@@ -4828,7 +4903,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     ToggleText {
-                        width: 64px;
+                        width: 88px;
                         height: 28px;
                         text: @tr("Reset");
                         active: false;
@@ -4912,14 +4987,14 @@ export component MainWindow inherits Window {
                     border-radius: 10px;
                     background: pick-ta.has-hover && root.eq-presets-enabled ? Theme.surface-hover : Theme.bg;
                     animate background { duration: 120ms; }
-                    Text {
+                    FitText {
                         x: 12px;
                         width: 56px;
                         height: parent.height;
                         text: @tr("Preset");
-                        color: Theme.muted;
+                        ink: Theme.muted;
                         font-size: 11px;
-                        vertical-alignment: center;
+                        h-align: left;
                     }
                     Text {
                         x: 68px;
@@ -5013,6 +5088,7 @@ export component MainWindow inherits Window {
                 font-size: 16px;
                 font-weight: 700;
                 vertical-alignment: center;
+                overflow: elide;
             }
             Text {
                 x: 16px;
@@ -5191,6 +5267,7 @@ export component MainWindow inherits Window {
                         color: Theme.accent.brighter(0.5);
                         font-size: 11px;
                         font-weight: 700;
+                        overflow: elide;
                     }
                     Text {
                         x: 60px;
@@ -5258,6 +5335,7 @@ export component MainWindow inherits Window {
                         font-size: 15px;
                         font-weight: 600;
                         vertical-alignment: center;
+                        overflow: elide;
                     }
                     Text {
                         x: 62px;
@@ -5267,6 +5345,7 @@ export component MainWindow inherits Window {
                         text: @tr("{n} track" | "{n} tracks" % root.queue-counts[q]);
                         color: Theme.muted;
                         font-size: 13px;
+                        overflow: elide;
                     }
                     // Tick: the track is already in this queue (click again to take it out).
                     if root.q-added[q] : Path {
@@ -5373,6 +5452,7 @@ export component MainWindow inherits Window {
                         color: Theme.accent.brighter(0.5);
                         font-size: 11px;
                         font-weight: 700;
+                        overflow: elide;
                     }
                     Text {
                         x: 60px;
@@ -5526,6 +5606,7 @@ export component MainWindow inherits Window {
                         font-size: 20px;
                         font-weight: 700;
                         vertical-alignment: center;
+                        overflow: elide;
                     }
                     Text {
                         x: 0px;
