@@ -567,3 +567,44 @@ msgstr "Acoustic"
 
 msgid "Vocal"
 msgstr "Vocal"
+
+# Low-power mode
+
+msgid "Power"
+msgstr "Power"
+
+msgid "Low-power mode"
+msgstr "Low-power mode"
+
+msgid "Save battery and CPU: a calmer interface and a lighter sound engine."
+msgstr "Save battery and CPU: a calmer interface and a lighter sound engine."
+
+msgid "Animations are off: pages, menus and sliders switch instantly."
+msgstr "Animations are off: pages, menus and sliders switch instantly."
+
+msgid "Spectrum rays and the drifting glow stand still."
+msgstr "Spectrum rays and the drifting glow stand still."
+
+msgid "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+msgstr "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+
+msgid "AI stem separation (coming later) will stay off in this mode."
+msgstr "AI stem separation (coming later) will stay off in this mode."
+
+msgid "The playback engine wakes up less often and keeps a deeper buffer."
+msgstr "The playback engine wakes up less often and keeps a deeper buffer."
+
+msgid "Turns off what is only for looks or extra sound polish; everything else keeps working."
+msgstr "Turns off what is only for looks or extra sound polish; everything else keeps working."
+
+msgid "What changes"
+msgstr "What changes"
+
+msgid "On"
+msgstr "On"
+
+msgid "Low-power mode — tap to turn off"
+msgstr "Low-power mode — tap to turn off"
+
+msgid "Stems are not available in low-power mode"
+msgstr "Stems are not available in low-power mode"

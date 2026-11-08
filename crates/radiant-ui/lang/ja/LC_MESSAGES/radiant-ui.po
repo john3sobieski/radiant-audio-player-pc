@@ -1,282 +1,285 @@
-# Radiant interface translation: ja. Keys are the English texts of the interface.
+# Radiant interface translation: en. Keys are the English texts of the interface.
 msgid ""
 msgstr ""
 "Project-Id-Version: radiant-ui\n"
-"Language: ja\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 msgid "{n} track"
 msgid_plural "{n} tracks"
-msgstr[0] "{n} 曲"
+msgstr[0] "{n} track"
+msgstr[1] "{n} tracks"
 
 msgid "{n} album"
 msgid_plural "{n} albums"
-msgstr[0] "{n} 枚のアルバム"
+msgstr[0] "{n} album"
+msgstr[1] "{n} albums"
 
 msgid "{n} playlist"
 msgid_plural "{n} playlists"
-msgstr[0] "{n} 件のプレイリスト"
+msgstr[0] "{n} playlist"
+msgstr[1] "{n} playlists"
 
 msgid "Bypassed — your curves are kept"
-msgstr "バイパス中 — カーブは保持されます"
+msgstr "Bypassed — your curves are kept"
 
 msgid "One curve for every track"
-msgstr "全曲で1つのカーブ"
+msgstr "One curve for every track"
 
 msgid "Play a track to give it its own curve"
-msgstr "曲を再生すると専用カーブを設定できます"
+msgstr "Play a track to give it its own curve"
 
 msgid "own curve"
-msgstr "専用カーブ"
+msgstr "own curve"
 
 msgid "flat"
-msgstr "フラット"
+msgstr "flat"
 
 msgid "New playlist"
-msgstr "新しいプレイリスト"
+msgstr "New playlist"
 
 msgid "Name it, pick a folder"
-msgstr "名前とフォルダを選択"
+msgstr "Name it, pick a folder"
 
 msgid "No folder"
-msgstr "フォルダなし"
+msgstr "No folder"
 
 msgid "New folder..."
-msgstr "新しいフォルダ..."
+msgstr "New folder..."
 
 msgid "Folder name"
-msgstr "フォルダ名"
+msgstr "Folder name"
 
 msgid "Add"
-msgstr "追加"
+msgstr "Add"
 
 msgid "System"
-msgstr "システム"
+msgstr "System"
 
 msgid "Appearance"
-msgstr "外観"
+msgstr "Appearance"
 
 msgid "Language"
-msgstr "言語"
+msgstr "Language"
 
 msgid "Security"
-msgstr "セキュリティ"
+msgstr "Security"
 
 msgid "AI & stems"
-msgstr "AI とステム"
+msgstr "AI & stems"
 
 msgid "Library"
-msgstr "ライブラリ"
+msgstr "Library"
 
 msgid "Themes and colors"
-msgstr "テーマとカラー"
+msgstr "Themes and colors"
 
 msgid "Interface language"
-msgstr "表示言語"
+msgstr "Interface language"
 
 msgid "App lock"
-msgstr "アプリロック"
+msgstr "App lock"
 
 msgid "Stem separation"
-msgstr "ステム分離"
+msgstr "Stem separation"
 
 msgid "Music folder"
-msgstr "音楽フォルダ"
+msgstr "Music folder"
 
 msgid "How Radiant looks."
-msgstr "Radiant の見た目を設定します。"
+msgstr "How Radiant looks."
 
 msgid "The language of the interface."
-msgstr "インターフェースの言語です。"
+msgstr "The language of the interface."
 
 msgid "Keep your music private."
-msgstr "音楽をプライベートに保ちます。"
+msgstr "Keep your music private."
 
 msgid "Splitting tracks into vocals, drums, bass and the rest."
-msgstr "曲をボーカル、ドラム、ベースなどに分離します。"
+msgstr "Splitting tracks into vocals, drums, bass and the rest."
 
 msgid "Where the music lives."
-msgstr "音楽の保存場所です。"
+msgstr "Where the music lives."
 
 msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
-msgstr "4桁、6桁、または任意のコード。起動時とアプリに戻る際に求められます。"
+msgstr "4 digits, 6 digits or your own code, asked at start and when returning to the app."
 
 msgid "Recovery file"
-msgstr "リカバリーファイル"
+msgstr "Recovery file"
 
 msgid "A file of 12 words to get back in if the code is forgotten."
-msgstr "コードを忘れた場合に再びアクセスするための12語のファイルです。"
+msgstr "A file of 12 words to get back in if the code is forgotten."
 
 msgid "Models"
-msgstr "モデル"
+msgstr "Models"
 
 msgid "Download the separation models or import them from files."
-msgstr "分離モデルをダウンロードするか、ファイルからインポートします。"
+msgstr "Download the separation models or import them from files."
 
 msgid "Stems"
-msgstr "ステム"
+msgstr "Stems"
 
 msgid "Choose which parts to keep and where they are saved."
-msgstr "保持するパートと保存先を選びます。"
+msgstr "Choose which parts to keep and where they are saved."
 
 msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
-msgstr "フォルダの選択と再スキャン（現在この2つのボタンはヘッダーに残ります）。"
+msgstr "Choose and rescan the folder (for now these two buttons stay in the header)."
 
 msgid "SETTINGS"
-msgstr "設定"
+msgstr "SETTINGS"
 
 msgid "Theme"
-msgstr "テーマ"
+msgstr "Theme"
 
 msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
-msgstr "「システム」は Windows のライト/ダーク設定に従います。「ブラック」は OLED 画面向けの純黒です。"
+msgstr "System follows the Windows light / dark setting. Black is pure black for OLED screens."
 
 msgid "Light"
-msgstr "ライト"
+msgstr "Light"
 
 msgid "Dark"
-msgstr "ダーク"
+msgstr "Dark"
 
 msgid "Black"
-msgstr "ブラック"
+msgstr "Black"
 
 msgid "Color palette"
-msgstr "カラーパレット"
+msgstr "Color palette"
 
 msgid "Ten colors for every theme. The last circle is your own color."
-msgstr "各テーマ10色。最後の円は自分で選んだ色です。"
+msgstr "Ten colors for every theme. The last circle is your own color."
 
 msgid "Save color"
-msgstr "色を保存"
+msgstr "Save color"
 
 msgid "Save it to reuse it later"
-msgstr "保存して後で再利用できます"
+msgstr "Save it to reuse it later"
 
 msgid "Right-click to remove"
-msgstr "右クリックで削除"
+msgstr "Right-click to remove"
 
 msgid "Hue"
-msgstr "色相"
+msgstr "Hue"
 
 msgid "Saturation"
-msgstr "彩度"
+msgstr "Saturation"
 
 msgid "Brightness"
-msgstr "明度"
+msgstr "Brightness"
 
 msgid "10 languages plus System; switches on the fly without stopping the music."
-msgstr "10言語とシステム設定。音楽を止めずにその場で切り替わります。"
+msgstr "10 languages plus System; switches on the fly without stopping the music."
 
 msgid "Soon"
-msgstr "近日公開"
+msgstr "Soon"
 
 msgid "Date created"
-msgstr "作成日"
+msgstr "Date created"
 
 msgid "Name"
-msgstr "名前"
+msgstr "Name"
 
 msgid "Date changed"
-msgstr "変更日"
+msgstr "Date changed"
 
 msgid "Tracks"
-msgstr "曲"
+msgstr "Tracks"
 
 msgid "Manual order"
-msgstr "手動順"
+msgstr "Manual order"
 
 msgid "Artist"
-msgstr "アーティスト"
+msgstr "Artist"
 
 msgid "Duration"
-msgstr "再生時間"
+msgstr "Duration"
 
 msgid "Album"
-msgstr "アルバム"
+msgstr "Album"
 
 msgid "File date"
-msgstr "ファイル日付"
+msgstr "File date"
 
 msgid "Albums"
-msgstr "アルバム"
+msgstr "Albums"
 
 msgid "Playlists"
-msgstr "プレイリスト"
+msgstr "Playlists"
 
 msgid "Queues"
-msgstr "キュー"
+msgstr "Queues"
 
 msgid "Sort"
-msgstr "並べ替え"
+msgstr "Sort"
 
 msgid "Sound"
-msgstr "サウンド"
+msgstr "Sound"
 
 msgid "Choose folder"
-msgstr "フォルダを選択"
+msgstr "Choose folder"
 
 msgid "Queue {}"
-msgstr "キュー {}"
+msgstr "Queue {}"
 
 msgid "No albums yet. Choose a music folder to start."
-msgstr "アルバムはまだありません。音楽フォルダを選択してください。"
+msgstr "No albums yet. Choose a music folder to start."
 
 msgid "No matching albums"
-msgstr "一致するアルバムがありません"
+msgstr "No matching albums"
 
 msgid "Pause"
-msgstr "一時停止"
+msgstr "Pause"
 
 msgid "Play"
-msgstr "再生"
+msgstr "Play"
 
 msgid "Shuffle"
-msgstr "シャッフル"
+msgstr "Shuffle"
 
 msgid "Title"
-msgstr "タイトル"
+msgstr "Title"
 
 msgid "Time"
-msgstr "時間"
+msgstr "Time"
 
 msgid "Add tracks from the three-dot menu of any track, or press New playlist."
-msgstr "曲の「…」メニューから曲を追加するか、「新しいプレイリスト」を押してください。"
+msgstr "Add tracks from the three-dot menu of any track, or press New playlist."
 
 msgid "Rename"
-msgstr "名前を変更"
+msgstr "Rename"
 
 msgid "Delete"
-msgstr "削除"
+msgstr "Delete"
 
 msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
-msgstr "曲はまだありません。曲のメニューの「プレイリストに追加」を使ってください。"
+msgstr "No tracks yet. Use \"Add to playlist\" in the menu of a track."
 
 msgid "Clear"
-msgstr "クリア"
+msgstr "Clear"
 
 msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
-msgstr "キュー {} は空です。曲のメニューの「キューに追加」を使ってください。"
+msgstr "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
 
 msgid "Year"
-msgstr "年"
+msgstr "Year"
 
 msgid "Choose a music folder to start"
-msgstr "音楽フォルダを選択してください"
+msgstr "Choose a music folder to start"
 
 msgid "No matching tracks"
-msgstr "一致する曲がありません"
+msgstr "No matching tracks"
 
 msgid "Repeat"
-msgstr "リピート"
+msgstr "Repeat"
 
 msgid "Repeat all"
-msgstr "全曲リピート"
+msgstr "Repeat all"
 
 msgid "Repeat one"
-msgstr "1曲リピート"
+msgstr "Repeat one"
 
 msgid "Hi-Res"
 msgstr "Hi-Res"
@@ -285,281 +288,323 @@ msgid "Lossless"
 msgstr "Lossless"
 
 msgid "No lyrics for this track"
-msgstr "この曲の歌詞はありません"
+msgstr "No lyrics for this track"
 
 msgid "Back to current line"
-msgstr "現在の行に戻る"
+msgstr "Back to current line"
 
 msgid "No information"
-msgstr "情報なし"
+msgstr "No information"
 
 msgid "Now playing"
-msgstr "再生中"
+msgstr "Now playing"
 
 msgid "Lyrics"
-msgstr "歌詞"
+msgstr "Lyrics"
 
 msgid "Info"
-msgstr "情報"
+msgstr "Info"
 
 msgid "Sort playlists"
-msgstr "プレイリストの並べ替え"
+msgstr "Sort playlists"
 
 msgid "Sort albums"
-msgstr "アルバムの並べ替え"
+msgstr "Sort albums"
 
 msgid "Sort tracks"
-msgstr "曲の並べ替え"
+msgstr "Sort tracks"
 
 msgid "Ascending"
-msgstr "昇順"
+msgstr "Ascending"
 
 msgid "Descending"
-msgstr "降順"
+msgstr "Descending"
 
 msgid "Normalize"
-msgstr "ノーマライズ"
+msgstr "Normalize"
 
 msgid "Mono"
-msgstr "モノラル"
+msgstr "Mono"
 
 msgid "Reset"
-msgstr "リセット"
+msgstr "Reset"
 
 msgid "Speed"
-msgstr "速度"
+msgstr "Speed"
 
 msgid "Bass"
-msgstr "ベース"
+msgstr "Bass"
 
 msgid "Treble"
-msgstr "高音"
+msgstr "Treble"
 
 msgid "Subsonic"
-msgstr "サブソニック"
+msgstr "Subsonic"
 
 msgid "Off"
-msgstr "オフ"
+msgstr "Off"
 
 msgid "All tracks"
-msgstr "全曲"
+msgstr "All tracks"
 
 msgid "Per track"
-msgstr "曲ごと"
+msgstr "Per track"
 
 msgid "Preset"
-msgstr "プリセット"
+msgstr "Preset"
 
 msgid "Custom"
-msgstr "カスタム"
+msgstr "Custom"
 
 msgid "Equalizer presets"
-msgstr "イコライザープリセット"
+msgstr "Equalizer presets"
 
 msgid "The equalizer is off — picking a preset turns it on"
-msgstr "イコライザーはオフです — プリセットを選ぶとオンになります"
+msgstr "The equalizer is off — picking a preset turns it on"
 
 msgid "Play a track to give it a preset"
-msgstr "曲を再生するとプリセットを設定できます"
+msgstr "Play a track to give it a preset"
 
 msgid "Applies to {}"
-msgstr "{} に適用"
+msgstr "Applies to {}"
 
 msgid "Applies to every track"
-msgstr "全曲に適用"
+msgstr "Applies to every track"
 
 msgid "Open album"
-msgstr "アルバムを開く"
+msgstr "Open album"
 
 msgid "Add to playlist"
-msgstr "プレイリストに追加"
+msgstr "Add to playlist"
 
 msgid "Add to queue"
-msgstr "キューに追加"
+msgstr "Add to queue"
 
 msgid "Remove from queue"
-msgstr "キューから削除"
+msgstr "Remove from queue"
 
 msgid "Create stems"
-msgstr "ステムを作成"
+msgstr "Create stems"
 
 msgid "ADD TO QUEUE"
-msgstr "キューに追加"
+msgstr "ADD TO QUEUE"
 
 msgid "Click a queue to add the track, click again to take it out."
-msgstr "キューをクリックして曲を追加し、もう一度クリックすると削除します。"
+msgstr "Click a queue to add the track, click again to take it out."
 
 msgid "Done"
-msgstr "完了"
+msgstr "Done"
 
 msgid "ADD TO PLAYLIST"
-msgstr "プレイリストに追加"
+msgstr "ADD TO PLAYLIST"
 
 msgid "Click a record to add the track, click again to take it out."
-msgstr "プレイリストをクリックして曲を追加し、もう一度クリックすると削除します。"
+msgstr "Click a record to add the track, click again to take it out."
 
 msgid "NAME"
-msgstr "名前"
+msgstr "NAME"
 
 msgid "Playlist name"
-msgstr "プレイリスト名"
+msgstr "Playlist name"
 
 msgid "FOLDER (optional)"
-msgstr "フォルダ（任意）"
+msgstr "FOLDER (optional)"
 
 msgid "Cancel"
-msgstr "キャンセル"
+msgstr "Cancel"
 
 msgid "Create and add"
-msgstr "作成して追加"
+msgstr "Create and add"
 
 msgid "Create"
-msgstr "作成"
+msgstr "Create"
 
 msgid "Move to folder"
-msgstr "フォルダに移動"
+msgstr "Move to folder"
 
 msgid "Move"
-msgstr "移動"
+msgstr "Move"
 
 msgid "Save"
-msgstr "保存"
+msgstr "Save"
 
 msgid "Could not save settings: {}"
-msgstr "設定を保存できませんでした: {}"
+msgstr "Could not save settings: {}"
 
 msgid "Album artist"
-msgstr "アルバムアーティスト"
+msgstr "Album artist"
 
 msgid "Track no."
-msgstr "トラック番号"
+msgstr "Track no."
 
 msgid "Format"
-msgstr "フォーマット"
+msgstr "Format"
 
 msgid "Bitrate"
-msgstr "ビットレート"
+msgstr "Bitrate"
 
 msgid "Sample rate"
-msgstr "サンプルレート"
+msgstr "Sample rate"
 
 msgid "Channels"
-msgstr "チャンネル"
+msgstr "Channels"
 
 msgid "Stereo"
-msgstr "ステレオ"
+msgstr "Stereo"
 
 msgid "Size"
-msgstr "サイズ"
+msgstr "Size"
 
 msgid "File next to the track"
-msgstr "曲と同じ場所のファイル"
+msgstr "File next to the track"
 
 msgid "Embedded in tags"
-msgstr "タグに埋め込み"
+msgstr "Embedded in tags"
 
 msgid "File"
-msgstr "ファイル"
+msgstr "File"
 
 msgid "Folder"
-msgstr "フォルダ"
+msgstr "Folder"
 
 msgid "Scanning..."
-msgstr "スキャン中..."
+msgstr "Scanning..."
 
 msgid "Unknown album"
-msgstr "不明なアルバム"
+msgstr "Unknown album"
 
 msgid "Unknown artist"
-msgstr "不明なアーティスト"
+msgstr "Unknown artist"
 
 msgid "Disc {}"
-msgstr "ディスク {}"
+msgstr "Disc {}"
 
 msgid "Liked tracks"
-msgstr "お気に入りの曲"
+msgstr "Liked tracks"
 
 msgid "Could not save playlists: {}"
-msgstr "プレイリストを保存できませんでした: {}"
+msgstr "Could not save playlists: {}"
 
 msgid "File not found"
-msgstr "ファイルが見つかりません"
+msgstr "File not found"
 
 msgid "Could not save queues: {}"
-msgstr "キューを保存できませんでした: {}"
+msgstr "Could not save queues: {}"
 
 msgid "Could not read settings: {}"
-msgstr "設定を読み込めませんでした: {}"
+msgstr "Could not read settings: {}"
 
 msgid "Could not read playlists: {}"
-msgstr "プレイリストを読み込めませんでした: {}"
+msgstr "Could not read playlists: {}"
 
 msgid "Could not read queues: {}"
-msgstr "キューを読み込めませんでした: {}"
+msgstr "Could not read queues: {}"
 
 msgid "This file is not in the library"
-msgstr "このファイルはライブラリにありません"
+msgstr "This file is not in the library"
 
 msgid "This queue has no playable tracks yet"
-msgstr "このキューには再生できる曲がまだありません"
+msgstr "This queue has no playable tracks yet"
 
 msgid "Clear queue {}?"
-msgstr "キュー {} をクリアしますか？"
+msgstr "Clear queue {}?"
 
 msgid "All tracks will be removed from this queue. The files stay in your library."
-msgstr "このキューからすべての曲が削除されます。ファイルはライブラリに残ります。"
+msgstr "All tracks will be removed from this queue. The files stay in your library."
 
 msgid "This playlist has no playable tracks yet"
-msgstr "このプレイリストには再生できる曲がまだありません"
+msgstr "This playlist has no playable tracks yet"
 
 msgid "Rename playlist"
-msgstr "プレイリスト名を変更"
+msgstr "Rename playlist"
 
 msgid "Delete playlist?"
-msgstr "プレイリストを削除しますか？"
+msgstr "Delete playlist?"
 
 msgid "\"{}\" will be deleted. The tracks stay in your library."
-msgstr "「{}」が削除されます。曲はライブラリに残ります。"
+msgstr "\"{}\" will be deleted. The tracks stay in your library."
 
 msgid "Rename folder"
-msgstr "フォルダ名を変更"
+msgstr "Rename folder"
 
 msgid "Delete folder?"
-msgstr "フォルダを削除しますか？"
+msgstr "Delete folder?"
 
 msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
-msgstr "フォルダ「{}」が削除されます。中のプレイリストは残り、フォルダの外に移動します。"
+msgstr "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
 
 msgid "Choose a music folder first"
-msgstr "先に音楽フォルダを選択してください"
+msgstr "Choose a music folder first"
 
 msgid "{n} channel"
 msgid_plural "{n} channels"
-msgstr[0] "{n} チャンネル"
+msgstr[0] "{n} channel"
+msgstr[1] "{n} channels"
 
 msgid "Rock"
-msgstr "ロック"
+msgstr "Rock"
 
 msgid "Pop"
-msgstr "ポップ"
+msgstr "Pop"
 
 msgid "Hip-Hop"
-msgstr "ヒップホップ"
+msgstr "Hip-Hop"
 
 msgid "Electronic"
-msgstr "エレクトロニック"
+msgstr "Electronic"
 
 msgid "Jazz"
-msgstr "ジャズ"
+msgstr "Jazz"
 
 msgid "Classical"
-msgstr "クラシック"
+msgstr "Classical"
 
 msgid "Metal"
-msgstr "メタル"
+msgstr "Metal"
 
 msgid "Acoustic"
-msgstr "アコースティック"
+msgstr "Acoustic"
 
 msgid "Vocal"
-msgstr "ボーカル"
+msgstr "Vocal"
+
+# Low-power mode
+
+msgid "Power"
+msgstr "Power"
+
+msgid "Low-power mode"
+msgstr "Low-power mode"
+
+msgid "Save battery and CPU: a calmer interface and a lighter sound engine."
+msgstr "Save battery and CPU: a calmer interface and a lighter sound engine."
+
+msgid "Animations are off: pages, menus and sliders switch instantly."
+msgstr "Animations are off: pages, menus and sliders switch instantly."
+
+msgid "Spectrum rays and the drifting glow stand still."
+msgstr "Spectrum rays and the drifting glow stand still."
+
+msgid "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+msgstr "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+
+msgid "AI stem separation (coming later) will stay off in this mode."
+msgstr "AI stem separation (coming later) will stay off in this mode."
+
+msgid "The playback engine wakes up less often and keeps a deeper buffer."
+msgstr "The playback engine wakes up less often and keeps a deeper buffer."
+
+msgid "Turns off what is only for looks or extra sound polish; everything else keeps working."
+msgstr "Turns off what is only for looks or extra sound polish; everything else keeps working."
+
+msgid "What changes"
+msgstr "What changes"
+
+msgid "On"
+msgstr "On"
+
+msgid "Low-power mode — tap to turn off"
+msgstr "Low-power mode — tap to turn off"
+
+msgid "Stems are not available in low-power mode"
+msgstr "Stems are not available in low-power mode"

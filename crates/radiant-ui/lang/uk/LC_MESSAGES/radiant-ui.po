@@ -1,288 +1,285 @@
-# Radiant interface translation: uk. Keys are the English texts of the interface.
+# Radiant interface translation: en. Keys are the English texts of the interface.
 msgid ""
 msgstr ""
 "Project-Id-Version: radiant-ui\n"
-"Language: uk\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 msgid "{n} track"
 msgid_plural "{n} tracks"
-msgstr[0] "{n} трек"
-msgstr[1] "{n} треки"
-msgstr[2] "{n} треків"
+msgstr[0] "{n} track"
+msgstr[1] "{n} tracks"
 
 msgid "{n} album"
 msgid_plural "{n} albums"
-msgstr[0] "{n} альбом"
-msgstr[1] "{n} альбоми"
-msgstr[2] "{n} альбомів"
+msgstr[0] "{n} album"
+msgstr[1] "{n} albums"
 
 msgid "{n} playlist"
 msgid_plural "{n} playlists"
-msgstr[0] "{n} плейлист"
-msgstr[1] "{n} плейлисти"
-msgstr[2] "{n} плейлистів"
+msgstr[0] "{n} playlist"
+msgstr[1] "{n} playlists"
 
 msgid "Bypassed — your curves are kept"
-msgstr "Обхід — ваші криві збережено"
+msgstr "Bypassed — your curves are kept"
 
 msgid "One curve for every track"
-msgstr "Одна крива для всіх треків"
+msgstr "One curve for every track"
 
 msgid "Play a track to give it its own curve"
-msgstr "Увімкніть трек, щоб задати йому власну криву"
+msgstr "Play a track to give it its own curve"
 
 msgid "own curve"
-msgstr "власна крива"
+msgstr "own curve"
 
 msgid "flat"
-msgstr "пласка"
+msgstr "flat"
 
 msgid "New playlist"
-msgstr "Новий плейлист"
+msgstr "New playlist"
 
 msgid "Name it, pick a folder"
-msgstr "Назвіть і виберіть теку"
+msgstr "Name it, pick a folder"
 
 msgid "No folder"
-msgstr "Без теки"
+msgstr "No folder"
 
 msgid "New folder..."
-msgstr "Нова тека..."
+msgstr "New folder..."
 
 msgid "Folder name"
-msgstr "Назва теки"
+msgstr "Folder name"
 
 msgid "Add"
-msgstr "Додати"
+msgstr "Add"
 
 msgid "System"
-msgstr "Система"
+msgstr "System"
 
 msgid "Appearance"
-msgstr "Вигляд"
+msgstr "Appearance"
 
 msgid "Language"
-msgstr "Мова"
+msgstr "Language"
 
 msgid "Security"
-msgstr "Безпека"
+msgstr "Security"
 
 msgid "AI & stems"
-msgstr "ШІ та стеми"
+msgstr "AI & stems"
 
 msgid "Library"
-msgstr "Бібліотека"
+msgstr "Library"
 
 msgid "Themes and colors"
-msgstr "Теми та кольори"
+msgstr "Themes and colors"
 
 msgid "Interface language"
-msgstr "Мова інтерфейсу"
+msgstr "Interface language"
 
 msgid "App lock"
-msgstr "Блокування застосунку"
+msgstr "App lock"
 
 msgid "Stem separation"
-msgstr "Розділення на стеми"
+msgstr "Stem separation"
 
 msgid "Music folder"
-msgstr "Тека з музикою"
+msgstr "Music folder"
 
 msgid "How Radiant looks."
-msgstr "Зовнішній вигляд Radiant."
+msgstr "How Radiant looks."
 
 msgid "The language of the interface."
-msgstr "Мова інтерфейсу."
+msgstr "The language of the interface."
 
 msgid "Keep your music private."
-msgstr "Зберігайте музику в таємниці."
+msgstr "Keep your music private."
 
 msgid "Splitting tracks into vocals, drums, bass and the rest."
-msgstr "Розділення треків на вокал, ударні, бас та решту."
+msgstr "Splitting tracks into vocals, drums, bass and the rest."
 
 msgid "Where the music lives."
-msgstr "Де зберігається музика."
+msgstr "Where the music lives."
 
 msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
-msgstr "4 цифри, 6 цифр або власний код: запитується під час запуску та після повернення до застосунку."
+msgstr "4 digits, 6 digits or your own code, asked at start and when returning to the app."
 
 msgid "Recovery file"
-msgstr "Файл відновлення"
+msgstr "Recovery file"
 
 msgid "A file of 12 words to get back in if the code is forgotten."
-msgstr "Файл із 12 слів для входу, якщо код забуто."
+msgstr "A file of 12 words to get back in if the code is forgotten."
 
 msgid "Models"
-msgstr "Моделі"
+msgstr "Models"
 
 msgid "Download the separation models or import them from files."
-msgstr "Завантажте моделі розділення або імпортуйте їх із файлів."
+msgstr "Download the separation models or import them from files."
 
 msgid "Stems"
-msgstr "Стеми"
+msgstr "Stems"
 
 msgid "Choose which parts to keep and where they are saved."
-msgstr "Виберіть, які частини зберігати і куди."
+msgstr "Choose which parts to keep and where they are saved."
 
 msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
-msgstr "Виберіть теку й пересканюйте її (поки що ці дві кнопки лишаються в заголовку)."
+msgstr "Choose and rescan the folder (for now these two buttons stay in the header)."
 
 msgid "SETTINGS"
-msgstr "НАЛАШТУВАННЯ"
+msgstr "SETTINGS"
 
 msgid "Theme"
-msgstr "Тема"
+msgstr "Theme"
 
 msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
-msgstr "«Система» наслідує світлу/темну тему Windows. «Чорна» — суто чорний фон для OLED-екранів."
+msgstr "System follows the Windows light / dark setting. Black is pure black for OLED screens."
 
 msgid "Light"
-msgstr "Світла"
+msgstr "Light"
 
 msgid "Dark"
-msgstr "Темна"
+msgstr "Dark"
 
 msgid "Black"
-msgstr "Чорна"
+msgstr "Black"
 
 msgid "Color palette"
-msgstr "Палітра кольорів"
+msgstr "Color palette"
 
 msgid "Ten colors for every theme. The last circle is your own color."
-msgstr "Десять кольорів для кожної теми. Останнє коло — ваш власний колір."
+msgstr "Ten colors for every theme. The last circle is your own color."
 
 msgid "Save color"
-msgstr "Зберегти колір"
+msgstr "Save color"
 
 msgid "Save it to reuse it later"
-msgstr "Збережіть, щоб використати пізніше"
+msgstr "Save it to reuse it later"
 
 msgid "Right-click to remove"
-msgstr "Клацніть правою кнопкою, щоб видалити"
+msgstr "Right-click to remove"
 
 msgid "Hue"
-msgstr "Відтінок"
+msgstr "Hue"
 
 msgid "Saturation"
-msgstr "Насиченість"
+msgstr "Saturation"
 
 msgid "Brightness"
-msgstr "Яскравість"
+msgstr "Brightness"
 
 msgid "10 languages plus System; switches on the fly without stopping the music."
-msgstr "10 мов і «Система»; перемикання на льоту, музика не переривається."
+msgstr "10 languages plus System; switches on the fly without stopping the music."
 
 msgid "Soon"
-msgstr "Незабаром"
+msgstr "Soon"
 
 msgid "Date created"
-msgstr "Дата створення"
+msgstr "Date created"
 
 msgid "Name"
-msgstr "Назва"
+msgstr "Name"
 
 msgid "Date changed"
-msgstr "Дата зміни"
+msgstr "Date changed"
 
 msgid "Tracks"
-msgstr "Треки"
+msgstr "Tracks"
 
 msgid "Manual order"
-msgstr "Власний порядок"
+msgstr "Manual order"
 
 msgid "Artist"
-msgstr "Виконавець"
+msgstr "Artist"
 
 msgid "Duration"
-msgstr "Тривалість"
+msgstr "Duration"
 
 msgid "Album"
-msgstr "Альбом"
+msgstr "Album"
 
 msgid "File date"
-msgstr "Дата файлу"
+msgstr "File date"
 
 msgid "Albums"
-msgstr "Альбоми"
+msgstr "Albums"
 
 msgid "Playlists"
-msgstr "Плейлисти"
+msgstr "Playlists"
 
 msgid "Queues"
-msgstr "Черги"
+msgstr "Queues"
 
 msgid "Sort"
-msgstr "Сортування"
+msgstr "Sort"
 
 msgid "Sound"
-msgstr "Звук"
+msgstr "Sound"
 
 msgid "Choose folder"
-msgstr "Вибрати теку"
+msgstr "Choose folder"
 
 msgid "Queue {}"
-msgstr "Черга {}"
+msgstr "Queue {}"
 
 msgid "No albums yet. Choose a music folder to start."
-msgstr "Альбомів поки немає. Виберіть теку з музикою, щоб почати."
+msgstr "No albums yet. Choose a music folder to start."
 
 msgid "No matching albums"
-msgstr "Немає відповідних альбомів"
+msgstr "No matching albums"
 
 msgid "Pause"
-msgstr "Пауза"
+msgstr "Pause"
 
 msgid "Play"
-msgstr "Грати"
+msgstr "Play"
 
 msgid "Shuffle"
-msgstr "Перемішати"
+msgstr "Shuffle"
 
 msgid "Title"
-msgstr "Назва"
+msgstr "Title"
 
 msgid "Time"
-msgstr "Час"
+msgstr "Time"
 
 msgid "Add tracks from the three-dot menu of any track, or press New playlist."
-msgstr "Додавайте треки через меню з трьома крапками біля треку або натисніть Новий плейлист."
+msgstr "Add tracks from the three-dot menu of any track, or press New playlist."
 
 msgid "Rename"
-msgstr "Перейменувати"
+msgstr "Rename"
 
 msgid "Delete"
-msgstr "Видалити"
+msgstr "Delete"
 
 msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
-msgstr "Треків поки немає. Виберіть \"Додати до плейлиста\" в меню треку."
+msgstr "No tracks yet. Use \"Add to playlist\" in the menu of a track."
 
 msgid "Clear"
-msgstr "Очистити"
+msgstr "Clear"
 
 msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
-msgstr "Черга {} порожня. Виберіть \"Додати до черги\" в меню треку."
+msgstr "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
 
 msgid "Year"
-msgstr "Рік"
+msgstr "Year"
 
 msgid "Choose a music folder to start"
-msgstr "Виберіть теку з музикою, щоб почати"
+msgstr "Choose a music folder to start"
 
 msgid "No matching tracks"
-msgstr "Немає відповідних треків"
+msgstr "No matching tracks"
 
 msgid "Repeat"
-msgstr "Повтор"
+msgstr "Repeat"
 
 msgid "Repeat all"
-msgstr "Повторювати все"
+msgstr "Repeat all"
 
 msgid "Repeat one"
-msgstr "Повторювати один"
+msgstr "Repeat one"
 
 msgid "Hi-Res"
 msgstr "Hi-Res"
@@ -291,283 +288,323 @@ msgid "Lossless"
 msgstr "Lossless"
 
 msgid "No lyrics for this track"
-msgstr "Для цього треку немає тексту"
+msgstr "No lyrics for this track"
 
 msgid "Back to current line"
-msgstr "До поточного рядка"
+msgstr "Back to current line"
 
 msgid "No information"
-msgstr "Немає інформації"
+msgstr "No information"
 
 msgid "Now playing"
-msgstr "Зараз грає"
+msgstr "Now playing"
 
 msgid "Lyrics"
-msgstr "Текст"
+msgstr "Lyrics"
 
 msgid "Info"
-msgstr "Інфо"
+msgstr "Info"
 
 msgid "Sort playlists"
-msgstr "Сортування плейлистів"
+msgstr "Sort playlists"
 
 msgid "Sort albums"
-msgstr "Сортування альбомів"
+msgstr "Sort albums"
 
 msgid "Sort tracks"
-msgstr "Сортування треків"
+msgstr "Sort tracks"
 
 msgid "Ascending"
-msgstr "За зростанням"
+msgstr "Ascending"
 
 msgid "Descending"
-msgstr "За спаданням"
+msgstr "Descending"
 
 msgid "Normalize"
-msgstr "Нормалізація"
+msgstr "Normalize"
 
 msgid "Mono"
-msgstr "Моно"
+msgstr "Mono"
 
 msgid "Reset"
-msgstr "Скинути"
+msgstr "Reset"
 
 msgid "Speed"
-msgstr "Швидкість"
+msgstr "Speed"
 
 msgid "Bass"
-msgstr "Бас"
+msgstr "Bass"
 
 msgid "Treble"
-msgstr "Високі"
+msgstr "Treble"
 
 msgid "Subsonic"
 msgstr "Subsonic"
 
 msgid "Off"
-msgstr "Вимк."
+msgstr "Off"
 
 msgid "All tracks"
-msgstr "Усі треки"
+msgstr "All tracks"
 
 msgid "Per track"
-msgstr "Для кожного треку"
+msgstr "Per track"
 
 msgid "Preset"
-msgstr "Пресет"
+msgstr "Preset"
 
 msgid "Custom"
-msgstr "Власний"
+msgstr "Custom"
 
 msgid "Equalizer presets"
-msgstr "Пресети еквалайзера"
+msgstr "Equalizer presets"
 
 msgid "The equalizer is off — picking a preset turns it on"
-msgstr "Еквалайзер вимкнено — вибір пресета увімкне його"
+msgstr "The equalizer is off — picking a preset turns it on"
 
 msgid "Play a track to give it a preset"
-msgstr "Увімкніть трек, щоб задати йому пресет"
+msgstr "Play a track to give it a preset"
 
 msgid "Applies to {}"
-msgstr "Діє для {}"
+msgstr "Applies to {}"
 
 msgid "Applies to every track"
-msgstr "Діє для всіх треків"
+msgstr "Applies to every track"
 
 msgid "Open album"
-msgstr "Відкрити альбом"
+msgstr "Open album"
 
 msgid "Add to playlist"
-msgstr "Додати до плейлиста"
+msgstr "Add to playlist"
 
 msgid "Add to queue"
-msgstr "Додати до черги"
+msgstr "Add to queue"
 
 msgid "Remove from queue"
-msgstr "Прибрати з черги"
+msgstr "Remove from queue"
 
 msgid "Create stems"
-msgstr "Створити стеми"
+msgstr "Create stems"
 
 msgid "ADD TO QUEUE"
-msgstr "ДОДАТИ ДО ЧЕРГИ"
+msgstr "ADD TO QUEUE"
 
 msgid "Click a queue to add the track, click again to take it out."
-msgstr "Натисніть на чергу, щоб додати трек, натисніть ще раз, щоб прибрати."
+msgstr "Click a queue to add the track, click again to take it out."
 
 msgid "Done"
-msgstr "Готово"
+msgstr "Done"
 
 msgid "ADD TO PLAYLIST"
-msgstr "ДОДАТИ ДО ПЛЕЙЛИСТА"
+msgstr "ADD TO PLAYLIST"
 
 msgid "Click a record to add the track, click again to take it out."
-msgstr "Натисніть на плейлист, щоб додати трек, натисніть ще раз, щоб прибрати."
+msgstr "Click a record to add the track, click again to take it out."
 
 msgid "NAME"
-msgstr "НАЗВА"
+msgstr "NAME"
 
 msgid "Playlist name"
-msgstr "Назва плейлиста"
+msgstr "Playlist name"
 
 msgid "FOLDER (optional)"
-msgstr "ТЕКА (необов'язково)"
+msgstr "FOLDER (optional)"
 
 msgid "Cancel"
-msgstr "Скасувати"
+msgstr "Cancel"
 
 msgid "Create and add"
-msgstr "Створити й додати"
+msgstr "Create and add"
 
 msgid "Create"
-msgstr "Створити"
+msgstr "Create"
 
 msgid "Move to folder"
-msgstr "Перемістити до теки"
+msgstr "Move to folder"
 
 msgid "Move"
-msgstr "Перемістити"
+msgstr "Move"
 
 msgid "Save"
-msgstr "Зберегти"
+msgstr "Save"
 
 msgid "Could not save settings: {}"
-msgstr "Не вдалося зберегти налаштування: {}"
+msgstr "Could not save settings: {}"
 
 msgid "Album artist"
-msgstr "Виконавець альбому"
+msgstr "Album artist"
 
 msgid "Track no."
-msgstr "№ треку"
+msgstr "Track no."
 
 msgid "Format"
-msgstr "Формат"
+msgstr "Format"
 
 msgid "Bitrate"
-msgstr "Бітрейт"
+msgstr "Bitrate"
 
 msgid "Sample rate"
-msgstr "Частота дискретизації"
+msgstr "Sample rate"
 
 msgid "Channels"
-msgstr "Канали"
+msgstr "Channels"
 
 msgid "Stereo"
-msgstr "Стерео"
+msgstr "Stereo"
 
 msgid "Size"
-msgstr "Розмір"
+msgstr "Size"
 
 msgid "File next to the track"
-msgstr "Файл поруч із треком"
+msgstr "File next to the track"
 
 msgid "Embedded in tags"
-msgstr "Вбудовано в теги"
+msgstr "Embedded in tags"
 
 msgid "File"
-msgstr "Файл"
+msgstr "File"
 
 msgid "Folder"
-msgstr "Тека"
+msgstr "Folder"
 
 msgid "Scanning..."
-msgstr "Сканування..."
+msgstr "Scanning..."
 
 msgid "Unknown album"
-msgstr "Невідомий альбом"
+msgstr "Unknown album"
 
 msgid "Unknown artist"
-msgstr "Невідомий виконавець"
+msgstr "Unknown artist"
 
 msgid "Disc {}"
-msgstr "Диск {}"
+msgstr "Disc {}"
 
 msgid "Liked tracks"
-msgstr "Вподобані треки"
+msgstr "Liked tracks"
 
 msgid "Could not save playlists: {}"
-msgstr "Не вдалося зберегти плейлисти: {}"
+msgstr "Could not save playlists: {}"
 
 msgid "File not found"
-msgstr "Файл не знайдено"
+msgstr "File not found"
 
 msgid "Could not save queues: {}"
-msgstr "Не вдалося зберегти черги: {}"
+msgstr "Could not save queues: {}"
 
 msgid "Could not read settings: {}"
-msgstr "Не вдалося прочитати налаштування: {}"
+msgstr "Could not read settings: {}"
 
 msgid "Could not read playlists: {}"
-msgstr "Не вдалося прочитати плейлисти: {}"
+msgstr "Could not read playlists: {}"
 
 msgid "Could not read queues: {}"
-msgstr "Не вдалося прочитати черги: {}"
+msgstr "Could not read queues: {}"
 
 msgid "This file is not in the library"
-msgstr "Цього файлу немає в бібліотеці"
+msgstr "This file is not in the library"
 
 msgid "This queue has no playable tracks yet"
-msgstr "У цій черзі поки немає треків для відтворення"
+msgstr "This queue has no playable tracks yet"
 
 msgid "Clear queue {}?"
-msgstr "Очистити чергу {}?"
+msgstr "Clear queue {}?"
 
 msgid "All tracks will be removed from this queue. The files stay in your library."
-msgstr "Усі треки буде видалено з цієї черги. Файли залишаться в бібліотеці."
+msgstr "All tracks will be removed from this queue. The files stay in your library."
 
 msgid "This playlist has no playable tracks yet"
-msgstr "У цьому плейлисті поки немає треків для відтворення"
+msgstr "This playlist has no playable tracks yet"
 
 msgid "Rename playlist"
-msgstr "Перейменувати плейлист"
+msgstr "Rename playlist"
 
 msgid "Delete playlist?"
-msgstr "Видалити плейлист?"
+msgstr "Delete playlist?"
 
 msgid "\"{}\" will be deleted. The tracks stay in your library."
-msgstr "\"{}\" буде видалено. Треки залишаться в бібліотеці."
+msgstr "\"{}\" will be deleted. The tracks stay in your library."
 
 msgid "Rename folder"
-msgstr "Перейменувати теку"
+msgstr "Rename folder"
 
 msgid "Delete folder?"
-msgstr "Видалити теку?"
+msgstr "Delete folder?"
 
 msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
-msgstr "Теку \"{}\" буде видалено. Її плейлисти збережуться й вийдуть із теки."
+msgstr "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
 
 msgid "Choose a music folder first"
-msgstr "Спершу виберіть теку з музикою"
+msgstr "Choose a music folder first"
 
 msgid "{n} channel"
 msgid_plural "{n} channels"
-msgstr[0] "{n} канал"
-msgstr[1] "{n} канали"
-msgstr[2] "{n} каналів"
+msgstr[0] "{n} channel"
+msgstr[1] "{n} channels"
 
 msgid "Rock"
-msgstr "Рок"
+msgstr "Rock"
 
 msgid "Pop"
-msgstr "Поп"
+msgstr "Pop"
 
 msgid "Hip-Hop"
-msgstr "Хіп-хоп"
+msgstr "Hip-Hop"
 
 msgid "Electronic"
-msgstr "Електроніка"
+msgstr "Electronic"
 
 msgid "Jazz"
-msgstr "Джаз"
+msgstr "Jazz"
 
 msgid "Classical"
-msgstr "Класика"
+msgstr "Classical"
 
 msgid "Metal"
-msgstr "Метал"
+msgstr "Metal"
 
 msgid "Acoustic"
-msgstr "Акустика"
+msgstr "Acoustic"
 
 msgid "Vocal"
-msgstr "Вокал"
+msgstr "Vocal"
+
+# Low-power mode
+
+msgid "Power"
+msgstr "Power"
+
+msgid "Low-power mode"
+msgstr "Low-power mode"
+
+msgid "Save battery and CPU: a calmer interface and a lighter sound engine."
+msgstr "Save battery and CPU: a calmer interface and a lighter sound engine."
+
+msgid "Animations are off: pages, menus and sliders switch instantly."
+msgstr "Animations are off: pages, menus and sliders switch instantly."
+
+msgid "Spectrum rays and the drifting glow stand still."
+msgstr "Spectrum rays and the drifting glow stand still."
+
+msgid "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+msgstr "Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working."
+
+msgid "AI stem separation (coming later) will stay off in this mode."
+msgstr "AI stem separation (coming later) will stay off in this mode."
+
+msgid "The playback engine wakes up less often and keeps a deeper buffer."
+msgstr "The playback engine wakes up less often and keeps a deeper buffer."
+
+msgid "Turns off what is only for looks or extra sound polish; everything else keeps working."
+msgstr "Turns off what is only for looks or extra sound polish; everything else keeps working."
+
+msgid "What changes"
+msgstr "What changes"
+
+msgid "On"
+msgstr "On"
+
+msgid "Low-power mode — tap to turn off"
+msgstr "Low-power mode — tap to turn off"
+
+msgid "Stems are not available in low-power mode"
+msgstr "Stems are not available in low-power mode"

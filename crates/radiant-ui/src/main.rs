@@ -11,7 +11,7 @@
 slint::include_modules!();
 
 use radiant_audio::{
-    slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, EQ_PRESETS,
+    slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, SpectrumTap, EQ_PRESETS, SPECTRUM_BANDS,
 };
 use radiant_core::settings::{self, AppSettings, EqMode, RepeatModeSetting};
 mod eq_curve;
@@ -112,6 +112,72 @@ fn refresh_saved_colors(ui: &MainWindow, colors: &[[f32; 3]]) {
     ui.set_saved_colors(ModelRc::new(VecModel::from(model)));
 }
 
+/// Spectrum rays: while the big player view is open, poll the analyzer ~40 times a second.
+/// Hidden = the timer returns at once and the audio callback stops feeding the tap.
+/// Not used in low-power mode (see `apply_low_power_visuals`): the timer is stopped, so it never wakes the app.
+fn start_rays_timer(timer: &slint::Timer, weak: slint::Weak<MainWindow>, tap: SpectrumTap) {
+    let last = std::cell::Cell::new(std::time::Instant::now());
+    let was_quiet = std::cell::Cell::new(false);
+    let phase = std::cell::Cell::new(0.0_f32);
+    let clock = std::cell::Cell::new(0.0_f32);
+    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(25), move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(last.replace(now)).as_secs_f32();
+        if !ui.get_show_player() {
+            tap.pause();
+            was_quiet.set(false);
+            return;
+        }
+        let f = tap.poll(dt);
+        let quiet = f.level < 0.002 && f.bass < 0.002 && f.peaks.iter().all(|p| *p < 0.002);
+        if quiet && was_quiet.get() {
+            return; // nothing moves: keep the idle ticks, spend no CPU
+        }
+        was_quiet.set(quiet);
+        // The picture turns slowly, a bit faster when the music is loud.
+        phase.set((phase.get() + dt * (0.008 + 0.03 * f.level)).rem_euclid(1.0));
+        // Seconds for the sway / flicker of the rays (wrapped, so f32 stays precise).
+        clock.set((clock.get() + dt).rem_euclid(3600.0));
+        let energy = (f.level * 1.5).min(1.0);
+        let r = rays::build(&f.bands, &f.peaks, phase.get(), clock.get(), f.bass, energy);
+        ui.set_rays_halo(r.halo.into());
+        ui.set_rays_body(r.body.into());
+        ui.set_rays_tips(r.tips.into());
+        ui.set_rays_peaks(r.peaks.into());
+        ui.set_pulse(f.bass);
+        ui.set_energy(energy);
+    });
+}
+
+/// One calm, motionless picture of the rays (low-power mode): built once, nothing updates it afterwards.
+fn show_still_rays(ui: &MainWindow) {
+    let level = [0.2_f32; SPECTRUM_BANDS];
+    let r = rays::build(&level, &level, 0.0, 0.0, 0.0, 0.0);
+    ui.set_rays_halo(r.halo.into());
+    ui.set_rays_body(r.body.into());
+    ui.set_rays_tips(r.tips.into());
+    ui.set_rays_peaks(r.peaks.into());
+    ui.set_pulse(0.0);
+    ui.set_energy(0.0);
+}
+
+/// The UI side of low-power mode that Rust owns: the spectrum rays. On = the timer is stopped (no wake-ups at all),
+/// the analyzer is switched off and the rays show a still picture. Off = the live rays are back.
+/// (Animations are switched by `Theme.low-power` in `main.slint`, the sound effects by `Command::SetLowPower`.)
+fn apply_low_power_visuals(weak: &slint::Weak<MainWindow>, timer: &slint::Timer, player: &Player, on: bool) {
+    let tap = player.spectrum();
+    if on {
+        timer.stop();
+        tap.pause();
+        if let Some(ui) = weak.upgrade() {
+            show_still_rays(&ui);
+        }
+    } else {
+        start_rays_timer(timer, weak.clone(), tap);
+    }
+}
+
 fn apply_settings(
     ui: &MainWindow,
     player: &Rc<Player>,
@@ -126,6 +192,9 @@ fn apply_settings(
         theme.set_sel_dark(settings.palettes[1] as i32);
         theme.set_sel_black(settings.palettes[2] as i32);
     }
+    // Low-power mode: the UI flag (animations) and the engine (sound effects, wake-ups) before anything else is set.
+    ui.global::<Theme>().set_low_power(settings.low_power);
+    player.send(Command::SetLowPower(settings.low_power));
     ui.set_settings_section(settings.settings_section as i32);
     apply_custom_color(ui, settings.custom_hsv);
     refresh_saved_colors(ui, &settings.saved_colors);
@@ -1472,8 +1541,18 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
-        // Context menu stub: "Create stems" is not implemented yet.
-        ui.on_create_stems(|_row, _in_album| { /* TODO: stems */ });
+        // Context menu stub: "Create stems" is not implemented yet. Stem separation is the heaviest job of the app,
+        // so it will never start in low-power mode: the menu item is dimmed there and says why.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_create_stems(move |_row, _in_album| {
+            if settings.borrow().low_power {
+                if let Some(ui) = weak.upgrade() {
+                    ui.set_status(i18n::tr("Stems are not available in low-power mode").into());
+                }
+                return;
+            }
+            /* TODO: stems */
+        });
     }
     {
         // Sort panel of the Albums grid: applied at once and remembered.
@@ -2183,7 +2262,7 @@ fn main() -> Result<(), slint::PlatformError> {
         // Open section of the settings page: remembered between launches.
         let (settings, weak) = (settings.clone(), ui_weak.clone());
         ui.on_settings_section_changed(move |i| {
-            settings.borrow_mut().settings_section = i.clamp(0, 4) as u8;
+            settings.borrow_mut().settings_section = i.clamp(0, 5) as u8;
             save_settings(&weak, &settings);
         });
     }
@@ -2283,6 +2362,20 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_theme_changed(move |mode| {
             settings.borrow_mut().theme = mode.clamp(0, 3) as u8;
             save_settings(&weak, &settings);
+        });
+    }
+    // Low-power mode. The switch in the settings (or the chip in the Sound panel) has already flipped `Theme.low-power`
+    // (animations stop at once); here the choice is remembered, the engine bypasses its effects and the rays are
+    // frozen or restarted. The user's own sound settings stay stored and come back when the mode is turned off.
+    let rays_timer = Rc::new(slint::Timer::default());
+    let low_power_start = settings.borrow().low_power;
+    {
+        let (settings, weak, player, timer) = (settings.clone(), ui_weak.clone(), player.clone(), rays_timer.clone());
+        ui.on_low_power_changed(move |on| {
+            settings.borrow_mut().low_power = on;
+            save_settings(&weak, &settings);
+            player.send(Command::SetLowPower(on));
+            apply_low_power_visuals(&weak, &timer, &player, on);
         });
     }
     {
@@ -2516,45 +2609,8 @@ fn main() -> Result<(), slint::PlatformError> {
         scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true);
     });
 
-    // Spectrum rays: while the big player view is open, poll the analyzer ~40 times a second.
-    // Hidden = the timer returns at once and the audio callback stops feeding the tap.
-    let rays_timer = slint::Timer::default();
-    {
-        let weak = ui.as_weak();
-        let tap = player.spectrum();
-        let last = std::cell::Cell::new(std::time::Instant::now());
-        let was_quiet = std::cell::Cell::new(false);
-        let phase = std::cell::Cell::new(0.0_f32);
-        let clock = std::cell::Cell::new(0.0_f32);
-        rays_timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(25), move || {
-            let Some(ui) = weak.upgrade() else { return };
-            let now = std::time::Instant::now();
-            let dt = now.duration_since(last.replace(now)).as_secs_f32();
-            if !ui.get_show_player() {
-                tap.pause();
-                was_quiet.set(false);
-                return;
-            }
-            let f = tap.poll(dt);
-            let quiet = f.level < 0.002 && f.bass < 0.002 && f.peaks.iter().all(|p| *p < 0.002);
-            if quiet && was_quiet.get() {
-                return; // nothing moves: keep the idle ticks, spend no CPU
-            }
-            was_quiet.set(quiet);
-            // The picture turns slowly, a bit faster when the music is loud.
-            phase.set((phase.get() + dt * (0.008 + 0.03 * f.level)).rem_euclid(1.0));
-            // Seconds for the sway / flicker of the rays (wrapped, so f32 stays precise).
-            clock.set((clock.get() + dt).rem_euclid(3600.0));
-            let energy = (f.level * 1.5).min(1.0);
-            let r = rays::build(&f.bands, &f.peaks, phase.get(), clock.get(), f.bass, energy);
-            ui.set_rays_halo(r.halo.into());
-            ui.set_rays_body(r.body.into());
-            ui.set_rays_tips(r.tips.into());
-            ui.set_rays_peaks(r.peaks.into());
-            ui.set_pulse(f.bass);
-            ui.set_energy(energy);
-        });
-    }
+    // Spectrum rays: live (a timer, see `start_rays_timer`) or, in low-power mode, one still picture and no timer.
+    apply_low_power_visuals(&ui_weak, &rays_timer, &player, low_power_start);
 
     ui.run()
 }

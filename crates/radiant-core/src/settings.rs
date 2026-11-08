@@ -120,6 +120,9 @@ pub struct AppSettings {
     pub saved_colors: Vec<[f32; 3]>,
     /// Interface language: `LANGUAGE_SYSTEM` ("system") or one of `LANGUAGE_CODES`.
     pub language: String,
+    /// Low-power mode: no animations, no spectrum rays, sound effects (equalizer, bass, treble, subsonic,
+    /// normalization) bypassed, AI stems not allowed, the engine wakes up less often. Everything else keeps working.
+    pub low_power: bool,
 }
 
 impl Default for AppSettings {
@@ -148,6 +151,7 @@ impl Default for AppSettings {
             custom_hsv: [0.75, 0.55, 1.0],
             saved_colors: Vec::new(),
             language: LANGUAGE_SYSTEM.to_string(),
+            low_power: false,
         }
     }
 }
@@ -322,7 +326,7 @@ fn sanitize(settings: &mut AppSettings) {
     settings.album_sort = settings.album_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.theme = settings.theme.min(3);
-    settings.settings_section = settings.settings_section.min(4); // 5 sections now; raise when one is added
+    settings.settings_section = settings.settings_section.min(5); // 6 sections now; raise when one is added
     for p in settings.palettes.iter_mut() {
         *p = (*p).min(10);
     }
@@ -498,6 +502,16 @@ mod tests {
         assert_eq!(s.repeat_mode, RepeatModeSetting::Off);
         assert_eq!(s.music_folder, None);
         assert!((s.speed_t - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn low_power_is_off_by_default_and_remembered() {
+        assert!(!AppSettings::default().low_power);
+        assert!(!parse(r#"{}"#).unwrap().low_power);
+        assert!(parse(r#"{"low_power": true}"#).unwrap().low_power);
+        // The power section is the sixth one of the settings page.
+        assert_eq!(parse(r#"{"settings_section": 5}"#).unwrap().settings_section, 5);
+        assert_eq!(parse(r#"{"settings_section": 9}"#).unwrap().settings_section, 5);
     }
 
     #[test]

@@ -5,12 +5,21 @@
 //!       STFT (N_FFT 4096, HOP 1024, centered/reflect), block processing (512 hops + 86 context),
 //!       ONNX passes for all four stems, soft mask v^2/sum(v^2), 16-bit WAV writer,
 //!       progress/cancel, runs in a worker thread. Keep this crate optional for the UI.
+//!
+//! Low-power mode (Settings -> Power): stem separation is the heaviest job of the app, so it must never start
+//! (and no model may be downloaded) while the mode is on. Every entry point asks [`allowed`] first. The UI already
+//! dims "Create stems" in the track menu and says why; wire this function in when the pipeline exists.
 
 pub const N_FFT: usize = 4096;
 pub const HOP: usize = 1024;
 pub const BINS: usize = N_FFT / 2 + 1; // 2049
 pub const CORE_HOPS: usize = 512;
 pub const CONTEXT_HOPS: usize = 86;
+
+/// Stem separation may run only when low-power mode is off.
+pub fn allowed(low_power: bool) -> bool {
+    !low_power
+}
 
 pub struct StemModel {
     pub name: &'static str,
@@ -55,6 +64,12 @@ pub const MODELS: [StemModel; 4] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stems_are_not_allowed_in_low_power_mode() {
+        assert!(allowed(false));
+        assert!(!allowed(true));
+    }
 
     #[test]
     fn bins_match_model_input() {

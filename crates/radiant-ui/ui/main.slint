@@ -18,6 +18,11 @@ export global Theme {
     /// 0 = light, 1 = dark, 2 = black (what the colors are really using now; System resolves to light or dark).
     out property <int> kind: light ? 0 : (black ? 2 : 1);
 
+    /// Low-power mode (Settings -> Power). Set from Rust at start and flipped by the switch itself.
+    /// While it is on: every `animate` lasts 0 ms, nothing runs on `animation-tick()` (no endless redraws),
+    /// the spectrum rays stand still (Rust stops feeding them), sound effects are bypassed in the engine.
+    in-out property <bool> low-power: false;
+
     /// Chosen palette per kind: 0..9 = preset, 10 = own color. Set from Rust at start.
     in-out property <int> sel-light: 0;
     in-out property <int> sel-dark: 0;
@@ -201,7 +206,7 @@ component AlbumTile inherits Rectangle {
 
     init => { root.shown(); }
     opacity: root.dragging ? 0.45 : 1;
-    animate opacity { duration: 120ms; }
+    animate opacity { duration: Theme.low-power ? 0ms : 120ms; }
 
     // Cover (square, as wide as the tile).
     Rectangle {
@@ -215,7 +220,7 @@ component AlbumTile inherits Rectangle {
         drop-shadow-blur: ta.has-hover ? 22px : 14px;
         drop-shadow-color: #000000a0;
         drop-shadow-offset-y: ta.has-hover ? 10px : 5px;
-        animate y { duration: 140ms; easing: ease-out; }
+        animate y { duration: Theme.low-power ? 0ms : 140ms; easing: ease-out; }
 
         Rectangle {
             clip: true;
@@ -555,7 +560,7 @@ component FitText inherits Rectangle {
         horizontal-alignment: root.h-align;
         vertical-alignment: center;
         overflow: elide;
-        animate color { duration: 160ms; }
+        animate color { duration: Theme.low-power ? 0ms : 160ms; }
     }
 }
 
@@ -684,12 +689,13 @@ component RescanButton inherits Rectangle {
         viewbox-width: 24;
         viewbox-height: 24;
         commands: "M20 12A8 8 0 1 1 17.5 6.3M17.5 2V6.5H13";
-        stroke: ta.has-hover ? Theme.text : Theme.muted;
+        stroke: ta.has-hover ? Theme.text : ((root.spinning && Theme.low-power) ? Theme.accent : Theme.muted);
         stroke-width: 2.2px;
         stroke-line-cap: round;
         fill: transparent;
         // One turn per 0.9 s while scanning; at rest the arrow stands still.
-        transform-rotation: root.spinning ? Math.mod(animation-tick() / 900ms, 1.0) * 360deg : 0deg;
+        // In low-power mode the arrow does not turn (a turning icon redraws the window every frame); it is lit instead.
+        transform-rotation: (root.spinning && !Theme.low-power) ? Math.mod(animation-tick() / 900ms, 1.0) * 360deg : 0deg;
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -773,7 +779,7 @@ component PresetCard inherits Rectangle {
         : (ta.has-hover && root.enabled) ? Theme.surface-hover : Theme.bg;
     border-width: 1px;
     border-color: root.active ? Theme.accent.with-alpha(0.7) : transparent;
-    animate background { duration: 120ms; }
+    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
     FitText {
         x: 12px;
@@ -846,7 +852,7 @@ component SegmentedControl inherits Rectangle {
         background: Theme.accent;
         drop-shadow-color: Theme.accent.with-alpha(0.5);
         drop-shadow-blur: 10px;
-        animate x { duration: 220ms; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
+        animate x { duration: Theme.low-power ? 0ms : 220ms; easing: cubic-bezier(0.2, 0.8, 0.2, 1); }
     }
     for label[k] in root.labels : Rectangle {
         x: 3px + k * root.seg-w;
@@ -975,7 +981,7 @@ component AccentButton inherits Rectangle {
     height: 40px;
     border-radius: 20px;
     background: root.enabled ? (ta.has-hover ? root.tone.brighter(0.15) : root.tone) : Theme.surface-hover;
-    animate background { duration: 120ms; }
+    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
     FitText {
         x: 10px;
@@ -1004,7 +1010,7 @@ component NameField inherits Rectangle {
     border-width: 1px;
     border-color: ti.has-focus ? Theme.accent : Theme.surface-hover;
     background: Theme.bg;
-    animate border-color { duration: 120ms; }
+    animate border-color { duration: Theme.low-power ? 0ms : 120ms; }
 
     Text {
         x: 14px;
@@ -1044,7 +1050,7 @@ component SleeveCard inherits Rectangle {
     width: 176px;
     height: 186px;
     private property <length> lift: ta.has-hover ? -3px : 0px;
-    animate lift { duration: 140ms; easing: ease-out; }
+    animate lift { duration: Theme.low-power ? 0ms : 140ms; easing: ease-out; }
 
     // The record, behind the sleeve.
     if !root.is-new : Rectangle {
@@ -1056,7 +1062,7 @@ component SleeveCard inherits Rectangle {
         background: #0c0c0f;
         border-width: 1px;
         border-color: #ffffff18;
-        animate x { duration: 280ms; easing: ease-out; }
+        animate x { duration: Theme.low-power ? 0ms : 280ms; easing: ease-out; }
 
         Rectangle { x: 12px; y: 12px; width: 90px; height: 90px; border-radius: 45px; border-width: 1px; border-color: #ffffff12; }
         Rectangle { x: 24px; y: 24px; width: 66px; height: 66px; border-radius: 33px; border-width: 1px; border-color: #ffffff12; }
@@ -1111,7 +1117,7 @@ component SleeveCard inherits Rectangle {
             border-radius: 14px;
             background: Theme.accent;
             opacity: root.added ? 1 : 0;
-            animate opacity { duration: 180ms; }
+            animate opacity { duration: Theme.low-power ? 0ms : 180ms; }
             Path {
                 x: 4px;
                 y: 4px;
@@ -1135,7 +1141,7 @@ component SleeveCard inherits Rectangle {
         background: Theme.surface;
         border-width: 2px;
         border-color: Theme.accent.with-alpha(ta.has-hover ? 0.8 : 0.4);
-        animate border-color { duration: 140ms; }
+        animate border-color { duration: Theme.low-power ? 0ms : 140ms; }
         Path {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
@@ -1186,7 +1192,7 @@ component FolderRow inherits Rectangle {
     height: 40px;
     border-radius: 10px;
     background: root.active ? Theme.accent.with-alpha(0.18) : ta.has-hover ? Theme.surface-hover : transparent;
-    animate background { duration: 120ms; }
+    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
     if !root.plus && !root.blank : Path {
         x: 14px;
@@ -1379,7 +1385,7 @@ component SettingsNode inherits Rectangle {
         border-radius: 17px;
         background: @radial-gradient(circle, Theme.accent.with-alpha(0.45) 0%, Theme.accent.with-alpha(0) 70%);
         opacity: root.active ? 1 : 0;
-        animate opacity { duration: 250ms; }
+        animate opacity { duration: Theme.low-power ? 0ms : 250ms; }
     }
     Rectangle {
         x: 13px;
@@ -1390,7 +1396,7 @@ component SettingsNode inherits Rectangle {
         background: root.active ? Theme.accent : Theme.bg;
         border-width: 2px;
         border-color: root.active || ta.has-hover ? Theme.accent : Theme.muted.with-alpha(0.6);
-        animate background { duration: 200ms; }
+        animate background { duration: Theme.low-power ? 0ms : 200ms; }
     }
     VerticalLayout {
         x: 52px;
@@ -1429,6 +1435,8 @@ component SettingsPage inherits Rectangle {
     in-out property <int> section: 0;
     callback close();
     callback theme-changed(int);
+    /// Low-power switch (the flag itself is `Theme.low-power`; Rust remembers it and tells the engine).
+    callback low-power-changed(bool);
     callback section-changed(int);
     callback palette-changed(int, int, int);
     callback custom-color-edited(float, float, float);
@@ -1449,15 +1457,33 @@ component SettingsPage inherits Rectangle {
     in-out property <float> cu-v;
 
     // To add a section: extend the four lists below (same order), nothing else.
-    private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library")];
-    private property <[string]> hints: [@tr("Themes and colors"), @tr("Interface language"), @tr("App lock"), @tr("Stem separation"), @tr("Music folder")];
+    private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library"), @tr("Power")];
+    private property <[string]> hints: [@tr("Themes and colors"), @tr("Interface language"), @tr("App lock"), @tr("Stem separation"), @tr("Music folder"), @tr("Low-power mode")];
     private property <[string]> leads: [
         @tr("How Radiant looks."),
         @tr("The language of the interface."),
         @tr("Keep your music private."),
         @tr("Splitting tracks into vocals, drums, bass and the rest."),
         @tr("Where the music lives."),
+        @tr("Save battery and CPU: a calmer interface and a lighter sound engine."),
     ];
+    // Power: what the low-power mode changes (one text, so the card can be as tall as its lines need).
+    private property <string> pow-list: "• " + @tr("Animations are off: pages, menus and sliders switch instantly.")
+        + "\n• " + @tr("Spectrum rays and the drifting glow stand still.")
+        + "\n• " + @tr("Sound effects are bypassed: equalizer, bass, treble, subsonic and normalization. Mono and playback speed keep working.")
+        + "\n• " + @tr("AI stem separation (coming later) will stay off in this mode.")
+        + "\n• " + @tr("The playback engine wakes up less often and keeps a deeper buffer.");
+    // Invisible copy of the text: measures how tall the list is at the current width.
+    pow-probe := Text {
+        x: 0px;
+        y: 0px;
+        width: max(10px, root.content-w - 32px);
+        visible: false;
+        text: root.pow-list;
+        font-size: 13px;
+        wrap: word-wrap;
+    }
+    private property <length> pow-list-h: pow-probe.preferred-height + 4px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -1476,17 +1502,21 @@ component SettingsPage inherits Rectangle {
         [
             { title: @tr("Music folder"), text: @tr("Choose and rescan the folder (for now these two buttons stay in the header).") },
         ],
+        [
+            // Power: the switch card and the "What changes" card are drawn by hand below.
+        ],
     ];
 
     // Rail geometry: the rows shrink a little in short windows.
-    private property <length> nh: Math.max(30px, Math.min(60px, (root.height - 130px) / 5));
+    private property <length> nh: Math.max(30px, Math.min(60px, (root.height - 130px) / root.names.length));
     private property <length> y0: 104px;
     private property <length> rail-x: 40px;
     private property <length> content-x: 320px;
     private property <length> content-w: max(0px, root.width - root.content-x - 40px);
     // Room taken by the hand-made card at the top of a section (Appearance: the theme switch).
     private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px
-        : root.section == 1 ? root.lang-h + 12px : 0px;
+        : root.section == 1 ? root.lang-h + 12px
+        : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
     private property <int> pal-rows: Math.ceil(11.0 / root.pal-cols);
@@ -1495,7 +1525,7 @@ component SettingsPage inherits Rectangle {
     private property <int> saved-rows: Math.ceil(root.saved-colors.length / root.saved-cols);
     private property <length> custom-h: 142px + root.saved-rows * 34px + 8px;
     private property <length> pal-h: 72px + root.pal-rows * 44px + 16px + (Theme.sel == 10 ? root.custom-h : 0px);
-    animate pal-h { duration: 200ms; easing: ease-in-out; }
+    animate pal-h { duration: Theme.low-power ? 0ms : 200ms; easing: ease-in-out; }
 
     background: Theme.bg;
     clip: true;
@@ -1504,15 +1534,15 @@ component SettingsPage inherits Rectangle {
     GlowBlob {
         tint: Theme.accent;
         strength: 0.22;
-        cx: root.width * 0.75 + Math.sin(animation-tick() / 11s * 360deg) * 90px;
-        cy: root.height * 0.3 + Math.cos(animation-tick() / 13s * 360deg) * 60px;
+        cx: root.width * 0.75 + Math.sin((Theme.low-power ? 4s : animation-tick()) / 11s * 360deg) * 90px;
+        cy: root.height * 0.3 + Math.cos((Theme.low-power ? 4s : animation-tick()) / 13s * 360deg) * 60px;
         size: 520px;
     }
     GlowBlob {
         tint: #3aa6ff;
         strength: 0.12;
-        cx: root.width * 0.15 + Math.cos(animation-tick() / 17s * 360deg) * 80px;
-        cy: root.height * 0.85 + Math.sin(animation-tick() / 9s * 360deg) * 50px;
+        cx: root.width * 0.15 + Math.cos((Theme.low-power ? 4s : animation-tick()) / 17s * 360deg) * 80px;
+        cy: root.height * 0.85 + Math.sin((Theme.low-power ? 4s : animation-tick()) / 9s * 360deg) * 50px;
         size: 460px;
     }
 
@@ -1522,7 +1552,7 @@ component SettingsPage inherits Rectangle {
     OrbitRing { cx: 0px; cy: root.height; radius: 500px; strength: 0.08; }
     OrbitRing { cx: 0px; cy: root.height; radius: 700px; strength: 0.05; }
     Rectangle {
-        private property <angle> a: (0.5 + 0.5 * Math.sin(animation-tick() / 8s * 360deg)) * 90deg;
+        private property <angle> a: (0.5 + 0.5 * Math.sin((Theme.low-power ? 4s : animation-tick()) / 8s * 360deg)) * 90deg;
         x: 340px * Math.cos(self.a) - 5px;
         y: root.height - 340px * Math.sin(self.a) - 5px;
         width: 10px;
@@ -1585,7 +1615,7 @@ component SettingsPage inherits Rectangle {
         x: root.rail-x + 19px;
         y: root.y0 + root.nh / 2;
         width: 2px;
-        height: 4 * root.nh;
+        height: (root.names.length - 1) * root.nh;
         background: Theme.muted.with-alpha(0.25);
     }
     // The lit part of the line, from the first dot down to the open one.
@@ -1595,7 +1625,7 @@ component SettingsPage inherits Rectangle {
         width: 2px;
         height: root.section * root.nh;
         background: Theme.accent;
-        animate height { duration: 280ms; easing: ease-in-out; }
+        animate height { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
     }
     for name[i] in root.names : SettingsNode {
         x: root.rail-x;
@@ -1731,7 +1761,7 @@ component SettingsPage inherits Rectangle {
                     border-width: 2px;
                     border-color: Theme.text;
                     opacity: Theme.sel == i ? 1 : 0;
-                    animate opacity { duration: 150ms; }
+                    animate opacity { duration: Theme.low-power ? 0ms : 150ms; }
                 }
                 if i == 10 : Text {
                     width: parent.width;
@@ -1895,7 +1925,7 @@ component SettingsPage inherits Rectangle {
                         border-radius: 3px;
                         background: Theme.accent;
                         opacity: i == root.language ? 1 : 0;
-                        animate opacity { duration: 150ms; }
+                        animate opacity { duration: Theme.low-power ? 0ms : 150ms; }
                     }
                 }
                 Text {
@@ -1916,6 +1946,80 @@ component SettingsPage inherits Rectangle {
                         root.language-changed(i);
                     }
                 }
+            }
+        }
+        if root.section == 5 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: 124px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Low-power mode");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 38px;
+                width: parent.width - 32px;
+                height: 38px;
+                text: @tr("Turns off what is only for looks or extra sound polish; everything else keeps working.");
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+                overflow: elide;
+            }
+            SegmentedControl {
+                x: 16px;
+                y: 80px;
+                width: min(parent.width - 32px, 240px);
+                labels: [@tr("Off"), @tr("On")];
+                current: Theme.low-power ? 1 : 0;
+                selected(k) => {
+                    Theme.low-power = k == 1;
+                    root.low-power-changed(k == 1);
+                }
+            }
+        }
+        if root.section == 5 : Rectangle {
+            x: 0px;
+            y: 136px;
+            width: parent.width;
+            height: root.pow-list-h + 56px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("What changes");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: root.pow-list-h;
+                text: root.pow-list;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
             }
         }
         for card[k] in root.pages[root.section] : Rectangle {
@@ -2301,7 +2405,7 @@ export component MainWindow inherits Window {
     /// The settings page is open (it slides/fades in over the library, the player bar stays visible).
     in-out property <bool> show-settings: false;
     private property <float> settings-t: root.show-settings ? 1 : 0;
-    animate settings-t { duration: 260ms; easing: ease-out; }
+    animate settings-t { duration: Theme.low-power ? 0ms : 260ms; easing: ease-out; }
     in-out property <bool> show-sort: false;
     in-out property <bool> fx-normalize: false;
     in-out property <bool> fx-mono: false;
@@ -2398,6 +2502,8 @@ export component MainWindow inherits Window {
     callback rescan-folder();
     /// The theme was changed in the settings (0 System, 1 Light, 2 Dark, 3 Black); Rust remembers it.
     callback theme-changed(int);
+    /// Low-power switch of the settings page; `Theme.low-power` is already flipped when this fires.
+    callback low-power-changed(bool);
     /// The settings page section that is open (0 = first); Rust remembers it between launches.
     in-out property <int> settings-section: 0;
     callback settings-section-changed(int);
@@ -2583,7 +2689,7 @@ export component MainWindow inherits Window {
                 Rectangle {
                     width: root.sort-available ? 60px : 0px;
                     clip: true;
-                    animate width { duration: 280ms; easing: ease-in-out; }
+                    animate width { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
                     PillButton {
                         x: 0px;
                         y: (parent.height - self.height) / 2;
@@ -2591,7 +2697,7 @@ export component MainWindow inherits Window {
                         text: @tr("Sort");
                         active: root.show-sort;
                         opacity: root.sort-available ? 1 : 0;
-                        animate opacity { duration: 200ms; }
+                        animate opacity { duration: Theme.low-power ? 0ms : 200ms; }
                         clicked => {
                             if (root.sort-available) {
                                 root.show-sort = !root.show-sort;
@@ -2650,7 +2756,7 @@ export component MainWindow inherits Window {
                     height: 38px;
                     border-radius: 19px;
                     background: Theme.surface;
-                    animate width { duration: 280ms; easing: ease-in-out; }
+                    animate width { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
 
                     // Glass highlight under the open segment.
                     Rectangle {
@@ -2662,8 +2768,8 @@ export component MainWindow inherits Window {
                         background: Theme.accent.with-alpha(0.26);
                         border-width: 1px;
                         border-color: Theme.accent.with-alpha(0.55);
-                        animate x { duration: 280ms; easing: ease-in-out; }
-                        animate width { duration: 280ms; easing: ease-in-out; }
+                        animate x { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
+                        animate width { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
                     }
                     for item[i] in root.nav-items : Rectangle {
                         x: root.seg-x(i, root.section, root.open-extra);
@@ -2673,8 +2779,8 @@ export component MainWindow inherits Window {
                         border-radius: 16px;
                         clip: true;
                         background: seg-ta.has-hover && i != root.section ? Theme.surface-hover : transparent;
-                        animate x { duration: 280ms; easing: ease-in-out; }
-                        animate width { duration: 280ms; easing: ease-in-out; }
+                        animate x { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
+                        animate width { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
 
                         Path {
                             x: 10px;
@@ -2697,7 +2803,7 @@ export component MainWindow inherits Window {
                             font-weight: 600;
                             vertical-alignment: center;
                             opacity: i == root.section ? 1 : 0;
-                            animate opacity { duration: 220ms; }
+                            animate opacity { duration: Theme.low-power ? 0ms : 220ms; }
                         }
                         // Click = open; wheel = previous / next section.
                         seg-ta := TouchArea {
@@ -2734,7 +2840,7 @@ export component MainWindow inherits Window {
                                     : chip-ta.has-hover ? Theme.surface-hover : transparent;
                                 border-width: root.queue-counts[q] > 0 || q == root.queue-index ? 0px : 1px;
                                 border-color: Theme.muted.with-alpha(0.5);
-                                animate background { duration: 150ms; }
+                                animate background { duration: Theme.low-power ? 0ms : 150ms; }
                                 Text {
                                     text: q + 1;
                                     color: q == root.queue-index ? Theme.on-accent : Theme.text;
@@ -2778,7 +2884,7 @@ export component MainWindow inherits Window {
                     width: parent.width;
                     height: parent.height;
                     clip: true;
-                    animate x { duration: 320ms; easing: ease-in-out; }
+                    animate x { duration: Theme.low-power ? 0ms : 320ms; easing: ease-in-out; }
 
                     if root.albums.length == 0 : Text {
                         width: parent.width;
@@ -2840,7 +2946,7 @@ export component MainWindow inherits Window {
                         width: parent.width;
                         height: parent.height;
                         background: Theme.bg;
-                        animate x { duration: 260ms; easing: ease-in-out; }
+                        animate x { duration: Theme.low-power ? 0ms : 260ms; easing: ease-in-out; }
 
                         // Keeps clicks and the wheel away from the grid underneath.
                         TouchArea {
@@ -2984,7 +3090,7 @@ export component MainWindow inherits Window {
                                     background: t.header != "" ? transparent
                                         : i == root.album-current-index ? Theme.accent.with-alpha(0.16)
                                         : arow-ta.has-hover ? Theme.surface : transparent;
-                                    animate background { duration: 120ms; }
+                                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                                     // "Disc N" caption (multi-disc albums).
                                     if t.header != "" : Text {
@@ -3062,7 +3168,7 @@ export component MainWindow inherits Window {
                     x: (k + 2 - root.section) * parent.width;
                     width: parent.width;
                     height: parent.height;
-                    animate x { duration: 320ms; easing: ease-in-out; }
+                    animate x { duration: Theme.low-power ? 0ms : 320ms; easing: ease-in-out; }
 
                     // Playlists: Liked tracks, loose playlists, then folders with their playlists.
                     if k == 0 : Rectangle {
@@ -3109,7 +3215,7 @@ export component MainWindow inherits Window {
                                 height: r.is-folder ? 50px : 64px;
                                 background: root.plr-drag-active && i == root.plr-drag-from ? Theme.accent.with-alpha(0.28)
                                     : plrow-ta.has-hover ? Theme.surface : transparent;
-                                animate background { duration: 120ms; }
+                                animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                                 // Drop marker: the dragged playlist takes the place of this row.
                                 if root.plr-drag-active && i == root.plr-drag-to && root.plr-valid(root.plr-drag-from, i) : Rectangle {
@@ -3311,11 +3417,11 @@ export component MainWindow inherits Window {
                         width: root.width;
                         height: parent.height;
                         background: Theme.bg;
-                        animate x { duration: 260ms; easing: ease-in-out; }
+                        animate x { duration: Theme.low-power ? 0ms : 260ms; easing: ease-in-out; }
                         // Never shows over another section, whatever happens to the strip.
                         opacity: root.section == 2 ? 1 : 0;
                         visible: self.opacity > 0.01;
-                        animate opacity { duration: 320ms; }
+                        animate opacity { duration: Theme.low-power ? 0ms : 320ms; }
 
                         TouchArea {
                             scroll-event(e) => { return accept; }
@@ -3487,7 +3593,7 @@ export component MainWindow inherits Window {
                                     background: root.pl-drag-active && i == root.pl-drag-from ? Theme.accent.with-alpha(0.28)
                                         : i == root.pl-current-index ? Theme.accent.with-alpha(0.16)
                                         : plt-ta.has-hover ? Theme.surface : transparent;
-                                    animate background { duration: 120ms; }
+                                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                                     if root.pl-drag-active && i == root.pl-drag-to : Rectangle {
                                         x: 12px;
@@ -3589,8 +3695,8 @@ export component MainWindow inherits Window {
                       width: parent.width;
                       height: parent.height;
                       opacity: root.q-fade;
-                      animate x { duration: root.q-anim-reset ? 0ms : 260ms; easing: ease-out; }
-                      animate opacity { duration: root.q-anim-reset ? 0ms : 260ms; easing: ease-out; }
+                      animate x { duration: (root.q-anim-reset || Theme.low-power) ? 0ms : 260ms; easing: ease-out; }
+                      animate opacity { duration: (root.q-anim-reset || Theme.low-power) ? 0ms : 260ms; easing: ease-out; }
                       VerticalLayout {
                         Rectangle {
                             height: 124px;
@@ -3710,7 +3816,7 @@ export component MainWindow inherits Window {
                                 background: root.q-drag-active && i == root.q-drag-from ? Theme.accent.with-alpha(0.28)
                                     : i == root.queue-current-index ? Theme.accent.with-alpha(0.16)
                                     : qt-ta.has-hover ? Theme.surface : transparent;
-                                animate background { duration: 120ms; }
+                                animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                                 if root.q-drag-active && i == root.q-drag-to : Rectangle {
                                     x: 12px;
@@ -3810,7 +3916,7 @@ export component MainWindow inherits Window {
                 x: (0 - root.section) * parent.width;
                 width: parent.width;
                 height: parent.height;
-                animate x { duration: 320ms; easing: ease-in-out; }
+                animate x { duration: Theme.low-power ? 0ms : 320ms; easing: ease-in-out; }
             VerticalLayout {
 
             // Column captions.
@@ -3897,8 +4003,8 @@ export component MainWindow inherits Window {
                     background: root.drag-active && i == root.drag-from ? Theme.accent.with-alpha(0.28)
                         : i == root.current-index ? Theme.accent.with-alpha(0.16)
                         : row-ta.has-hover ? Theme.surface : transparent;
-                    animate y { duration: 180ms; easing: ease-in-out; }
-                    animate background { duration: 120ms; }
+                    animate y { duration: Theme.low-power ? 0ms : 180ms; easing: ease-in-out; }
+                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                     if root.drag-active && i == root.drag-to : Rectangle {
                         x: 12px;
@@ -4261,7 +4367,8 @@ export component MainWindow inherits Window {
             property <length> ring-x: (self.width - self.ring-d) / 2;
             property <length> ring-y: max(0px, (self.zone-h - self.ring-d) / 2);
             // Seconds, ticking every frame while the stage is on screen (drives the drifting lights).
-            property <float> t: animation-tick() / 1s;
+            // Low-power mode: a fixed moment, so the lights stand still and the window is not redrawn every frame.
+            property <float> t: (Theme.low-power ? 2500ms : animation-tick()) / 1s;
             property <float> ring-drag: 0;
             property <bool> ring-band: false;
             property <float> ring-ratio: ring-ta.pressed && self.ring-band ? self.ring-drag : root.progress;
@@ -4479,7 +4586,7 @@ export component MainWindow inherits Window {
                 property <length> chip-w: root.np-quality-tier == 2 ? 46px : root.np-quality-tier == 1 ? 60px : 0px;
                 // No artist / album line under the title: the badge moves up into its place.
                 y: root.np-sub == "" ? parent.height - 44px : parent.height - 22px;
-                animate y { duration: 160ms; easing: ease-out; }
+                animate y { duration: Theme.low-power ? 0ms : 160ms; easing: ease-out; }
                 height: 18px;
                 width: min(parent.width - 48px, self.chip-w + (self.chip-w > 0px ? 6px : 0px) + quality-text.preferred-width + 20px);
                 x: (parent.width - self.width) / 2;
@@ -4554,14 +4661,14 @@ export component MainWindow inherits Window {
                     y: root.lyr-user-scroll ? root.lyr-scroll-y : lyr-area.follow-y;
                     width: parent.width;
                     height: root.lyrics.length * 56px;
-                    animate y { duration: 260ms; easing: ease-in-out; }
+                    animate y { duration: Theme.low-power ? 0ms : 260ms; easing: ease-in-out; }
                     for l[i] in root.lyrics : row := Rectangle {
                         y: i * 56px;
                         width: parent.width;
                         height: 56px;
                         // 0..1, glides in and out with the mouse.
                         property <float> hot: lyr-ta.has-hover ? 1.0 : 0.0;
-                        animate hot { duration: 180ms; easing: ease-out; }
+                        animate hot { duration: Theme.low-power ? 0ms : 180ms; easing: ease-out; }
 
                         // Hover highlight: a moving gradient of the emitter colors with two lights sweeping over it.
                         if row.hot > 0.01 : hl := Rectangle {
@@ -4575,7 +4682,7 @@ export component MainWindow inherits Window {
                             drop-shadow-color: root.glow-color.with-alpha(0.45);
 
                             // Seconds; read only while a line is hovered, so nothing animates otherwise.
-                            property <float> t: animation-tick() / 1s;
+                            property <float> t: (Theme.low-power ? 1500ms : animation-tick()) / 1s;
                             // The five lights of the emitter glow (same mixes as behind the rays).
                             property <color> p0: root.glow-color;
                             property <color> p1: root.glow-color.mix(#ff4fd8, 0.5);
@@ -4625,9 +4732,9 @@ export component MainWindow inherits Window {
                             color: i == root.lyric-index ? Theme.text : Theme.muted.mix(Theme.text, row.hot);
                             opacity: max(row.hot, i == root.lyric-index ? 1.0
                                 : (i < root.lyric-index ? 0.7 : 1.0) * max(0.18, 0.75 - self.dist * 0.14));
-                            animate font-size { duration: 240ms; easing: ease-out; }
-                            animate color { duration: 240ms; easing: ease-out; }
-                            animate opacity { duration: 240ms; easing: ease-out; }
+                            animate font-size { duration: Theme.low-power ? 0ms : 240ms; easing: ease-out; }
+                            animate color { duration: Theme.low-power ? 0ms : 240ms; easing: ease-out; }
+                            animate opacity { duration: Theme.low-power ? 0ms : 240ms; easing: ease-out; }
                             vertical-alignment: center;
                             // Long lines wrap (two lines fit a row); anything longer is cut with "...".
                             wrap: word-wrap;
@@ -4656,7 +4763,7 @@ export component MainWindow inherits Window {
                     height: 32px;
                     border-radius: 16px;
                     background: pback-ta.has-hover ? Theme.accent : Theme.accent.with-alpha(0.85);
-                    animate background { duration: 120ms; }
+                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
                     drop-shadow-blur: 12px;
                     drop-shadow-color: #00000080;
                     pback-probe := Text { visible: false; text: @tr("Back to current line"); font-size: 12px; font-weight: 700; }
@@ -4870,12 +4977,46 @@ export component MainWindow inherits Window {
             spacing: 4px;
             alignment: start;
 
-            Text {
-                text: @tr("Sound");
-                color: Theme.text;
-                font-size: 16px;
-                font-weight: 700;
+            Rectangle {
                 height: 26px;
+                Text {
+                    x: 0px;
+                    y: 0px;
+                    height: 26px;
+                    text: @tr("Sound");
+                    color: Theme.text;
+                    font-size: 16px;
+                    font-weight: 700;
+                }
+                // Low-power mode: the effects below are bypassed; a tap turns the mode off.
+                if Theme.low-power : Rectangle {
+                    x: parent.width - self.width;
+                    y: 2px;
+                    width: min(parent.width - 76px, 250px);
+                    height: 22px;
+                    border-radius: 11px;
+                    background: lp-ta.has-hover ? Theme.accent.with-alpha(0.28) : Theme.accent.with-alpha(0.15);
+                    Text {
+                        x: 10px;
+                        y: 0px;
+                        width: parent.width - 20px;
+                        height: parent.height;
+                        text: @tr("Low-power mode — tap to turn off");
+                        color: Theme.accent;
+                        font-size: 11px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    lp-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            Theme.low-power = false;
+                            root.low-power-changed(false);
+                        }
+                    }
+                }
             }
             Rectangle {
                 height: 32px;
@@ -4885,6 +5026,7 @@ export component MainWindow inherits Window {
                     ToggleText {
                         width: 116px;
                         height: 28px;
+                        opacity: Theme.low-power ? 0.4 : 1.0;
                         text: @tr("Normalize");
                         active: root.fx-normalize;
                         clicked => {
@@ -4926,6 +5068,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
+                opacity: Theme.low-power ? 0.4 : 1.0;
                 label: @tr("Bass");
                 lo: 0;
                 hi: 15;
@@ -4937,6 +5080,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
+                opacity: Theme.low-power ? 0.4 : 1.0;
                 label: @tr("Treble");
                 lo: 0;
                 hi: 15;
@@ -4948,6 +5092,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
+                opacity: Theme.low-power ? 0.4 : 1.0;
                 label: @tr("Subsonic");
                 lo: 0;
                 hi: 100;
@@ -4960,6 +5105,7 @@ export component MainWindow inherits Window {
                 }
             }
             SegmentedControl {
+                opacity: Theme.low-power ? 0.4 : 1.0;
                 labels: [@tr("Off"), @tr("All tracks"), @tr("Per track")];
                 current: root.eq-mode;
                 selected(k) => {
@@ -4968,6 +5114,7 @@ export component MainWindow inherits Window {
                 }
             }
             EqGraph {
+                opacity: Theme.low-power ? 0.4 : 1.0;
                 gains: root.eq-gains;
                 line: root.eq-curve-line;
                 fill: root.eq-curve-fill;
@@ -4979,14 +5126,14 @@ export component MainWindow inherits Window {
             // Preset picker: one button that shows the current preset and opens the preset sheet.
             Rectangle {
                 height: 40px;
-                opacity: root.eq-presets-enabled ? 1.0 : 0.4;
-                animate opacity { duration: 160ms; }
+                opacity: (root.eq-presets-enabled && !Theme.low-power) ? 1.0 : 0.4;
+                animate opacity { duration: Theme.low-power ? 0ms : 160ms; }
                 Rectangle {
                     y: 2px;
                     height: 36px;
                     border-radius: 10px;
                     background: pick-ta.has-hover && root.eq-presets-enabled ? Theme.surface-hover : Theme.bg;
-                    animate background { duration: 120ms; }
+                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
                     FitText {
                         x: 12px;
                         width: 56px;
@@ -5028,8 +5175,8 @@ export component MainWindow inherits Window {
             // 12 bands (compact: no gaps between the rows); dimmed while the curve cannot be edited.
             Rectangle {
                 height: 252px;
-                opacity: root.eq-editable ? 1.0 : 0.4;
-                animate opacity { duration: 160ms; }
+                opacity: (root.eq-editable && !Theme.low-power) ? 1.0 : 0.4;
+                animate opacity { duration: Theme.low-power ? 0ms : 160ms; }
                 VerticalLayout {
                     spacing: 0px;
                     for g[i] in root.eq-gains : FxRow {
@@ -5065,7 +5212,7 @@ export component MainWindow inherits Window {
                 height: 32px;
                 border-radius: 16px;
                 background: back-ta.has-hover ? Theme.surface-hover : transparent;
-                animate background { duration: 120ms; }
+                animate background { duration: Theme.low-power ? 0ms : 120ms; }
                 Text {
                     text: "\u{2039}";
                     color: Theme.text;
@@ -5196,6 +5343,7 @@ export component MainWindow inherits Window {
                 }
             }
             MenuItem {
+                dim: Theme.low-power;
                 text: @tr("Create stems");
                 clicked => {
                     root.show-menu = false;
@@ -5214,7 +5362,7 @@ export component MainWindow inherits Window {
         background: #000000b0;
         opacity: root.show-q-popup ? 1 : 0;
         visible: self.opacity > 0.01;
-        animate opacity { duration: 180ms; }
+        animate opacity { duration: Theme.low-power ? 0ms : 180ms; }
 
         TouchArea {
             clicked => { root.show-q-popup = false; }
@@ -5233,7 +5381,7 @@ export component MainWindow inherits Window {
             drop-shadow-blur: 32px;
             drop-shadow-color: #000000a0;
             drop-shadow-offset-y: 8px;
-            animate y { duration: 220ms; easing: ease-out; }
+            animate y { duration: Theme.low-power ? 0ms : 220ms; easing: ease-out; }
 
             q-fs := FocusScope {
                 key-pressed(e) => {
@@ -5307,7 +5455,7 @@ export component MainWindow inherits Window {
                     border-radius: 12px;
                     background: root.q-added[q] ? Theme.accent.with-alpha(0.2)
                         : q-row-ta.has-hover ? Theme.surface-hover : Theme.bg.with-alpha(0.5);
-                    animate background { duration: 120ms; }
+                    animate background { duration: Theme.low-power ? 0ms : 120ms; }
 
                     Rectangle {
                         x: 14px;
@@ -5396,7 +5544,7 @@ export component MainWindow inherits Window {
         background: #000000b0;
         opacity: root.show-pl-popup ? 1 : 0;
         visible: self.opacity > 0.01;
-        animate opacity { duration: 180ms; }
+        animate opacity { duration: Theme.low-power ? 0ms : 180ms; }
 
         TouchArea {
             clicked => { root.show-pl-popup = false; }
@@ -5415,9 +5563,9 @@ export component MainWindow inherits Window {
             drop-shadow-blur: 32px;
             drop-shadow-color: #000000a0;
             drop-shadow-offset-y: 8px;
-            animate y { duration: 220ms; easing: ease-out; }
-            animate width { duration: 160ms; easing: ease-out; }
-            animate height { duration: 160ms; easing: ease-out; }
+            animate y { duration: Theme.low-power ? 0ms : 220ms; easing: ease-out; }
+            animate width { duration: Theme.low-power ? 0ms : 160ms; easing: ease-out; }
+            animate height { duration: Theme.low-power ? 0ms : 160ms; easing: ease-out; }
 
             pl-fs := FocusScope {
                 key-pressed(e) => {
@@ -5741,6 +5889,7 @@ export component MainWindow inherits Window {
         opacity: root.settings-t;
         close => { root.show-settings = false; }
         theme-changed(k) => { root.theme-changed(k); }
+        low-power-changed(on) => { root.low-power-changed(on); }
         section <=> root.settings-section;
         section-changed(i) => { root.settings-section-changed(i); }
         palette-changed(l, d, b) => { root.palette-changed(l, d, b); }

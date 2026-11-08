@@ -26,16 +26,25 @@ const FADE_OUT_SECS: f32 = 0.25;
 /// Ring buffer length in milliseconds of audio. The effects run before the ring buffer, so this is
 /// also how long a sound-settings change takes to become audible (was 1000 ms, shortened for that).
 const RING_MS: usize = 400;
+/// Low-power mode: the ring buffer is kept this full (the buffer is always allocated for it). The engine thread then
+/// wakes up a few times a second and decodes in bigger bursts instead of 20 times a second.
+const RING_MS_LOW_POWER: usize = 1200;
 /// How often the engine tops up the ring buffer while playing.
 const FILL_INTERVAL: Duration = Duration::from_millis(50);
+/// The same in low-power mode (only while the buffer is deeply filled; must stay well under `RING_MS_LOW_POWER`).
+const FILL_INTERVAL_LOW_POWER: Duration = Duration::from_millis(400);
 /// After pausing, keep the stream alive this long (fade-out), then pause it (0 % CPU).
 const PAUSE_STREAM_AFTER: Duration = Duration::from_millis(450);
 /// How often the UI gets a position update while playing.
 const POSITION_INTERVAL: Duration = Duration::from_millis(250);
+/// The same in low-power mode (a little under one wake-up interval, so every wake-up reports).
+const POSITION_INTERVAL_LOW_POWER: Duration = Duration::from_millis(350);
 /// Unreadable files in a row after which the player stops (avoids an endless loop over a broken queue).
 const MAX_SKIPS: u32 = 100;
 /// How often the default output device is compared with the open one (only while playing).
 const DEVICE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+/// The same in low-power mode.
+const DEVICE_CHECK_INTERVAL_LOW_POWER: Duration = Duration::from_secs(5);
 /// Audio held inside the phase vocoder; used to correct the position after a speed change (estimate).
 const VOCODER_LATENCY_MS: usize = 90;
 
@@ -43,6 +52,12 @@ const VOCODER_LATENCY_MS: usize = 90;
 fn guarded<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     catch_unwind(AssertUnwindSafe(f))
         .unwrap_or_else(|_| Err("decoder crashed on a damaged file".into()))
+}
+
+/// What the effects chain gets in low-power mode: everything off except mono (a listening need, and it costs almost nothing).
+/// The user's own settings stay stored; they apply again when low-power mode is turned off.
+fn low_power_fx(settings: &AudioFxSettings) -> AudioFxSettings {
+    AudioFxSettings { mono: settings.mono, ..AudioFxSettings::default() }
 }
 
 fn default_device_name() -> Option<String> {
@@ -78,6 +93,9 @@ pub enum Command {
     SetVolume(f32),
     /// Replace the sound settings (EQ, bass, treble, subsonic, normalization, mono).
     SetFx(AudioFxSettings),
+    /// Low-power mode: sound effects are bypassed (mono stays), the engine wakes up less often and keeps a deeper buffer.
+    /// Playback speed keeps working. Send it again with `false` to get the effects back.
+    SetLowPower(bool),
     /// Playback speed, pitch preserved (phase vocoder). 1.0 = normal, clamped to 0.25..=4.
     /// The UI converts its slider with `slider_to_speed`.
     SetSpeed(f32),
@@ -177,8 +195,9 @@ fn open_output(tap: &SpectrumTap) -> Result<Output, String> {
     let channels = config.channels as usize;
     let rate = config.sample_rate.0;
 
-    // Whole frames only (a multiple of `channels`).
-    let capacity = (rate as usize * RING_MS / 1000) * channels;
+    // Whole frames only (a multiple of `channels`). Room for the deepest fill (low-power mode); the engine
+    // decides how full it keeps the buffer (`Engine::fill_target`).
+    let capacity = (rate as usize * RING_MS_LOW_POWER / 1000) * channels;
     let (prod, mut cons) = rtrb::RingBuffer::<f32>::new(capacity);
     let playing = Arc::new(AtomicBool::new(false));
     let flush_req = Arc::new(AtomicU32::new(0));
@@ -308,6 +327,11 @@ struct Engine {
     /// Files in a row that gave no audio.
     skip_streak: u32,
     last_device_check: Instant,
+    /// Low-power mode (see `Command::SetLowPower`).
+    low_power: bool,
+    /// The deep buffer is allowed: false right after a track start / seek / new stream, so the sound starts as fast
+    /// as always; the first wake-up afterwards tops the buffer up.
+    deep_fill: bool,
 }
 
 fn run(
@@ -363,6 +387,8 @@ fn run(
         voc_drain: false,
         skip_streak: 0,
         last_device_check: Instant::now(),
+        low_power: false,
+        deep_fill: false,
     };
     loop {
         // Block without polling when there is nothing to do (0 % CPU while paused).
@@ -400,11 +426,40 @@ fn run(
 impl Engine {
     fn timeout(&self) -> Option<Duration> {
         match self.transport.state {
-            PlayState::Playing => Some(FILL_INTERVAL),
+            PlayState::Playing => Some(self.fill_interval()),
             _ => self
                 .pause_deadline
                 .map(|d| d.saturating_duration_since(Instant::now())),
         }
+    }
+
+    /// The buffer is kept deeply filled (low-power mode, speed 1x: no vocoder, so nothing needs a quick reaction).
+    /// Not at the end of a track: the engine then polls quickly to start the next track the moment the buffer is empty.
+    fn deep(&self) -> bool {
+        self.low_power && self.deep_fill && !self.use_voc && !self.eof
+    }
+
+    fn fill_interval(&self) -> Duration {
+        if self.deep() { FILL_INTERVAL_LOW_POWER } else { FILL_INTERVAL }
+    }
+
+    fn position_interval(&self) -> Duration {
+        if self.deep() { POSITION_INTERVAL_LOW_POWER } else { POSITION_INTERVAL }
+    }
+
+    fn device_check_interval(&self) -> Duration {
+        if self.low_power { DEVICE_CHECK_INTERVAL_LOW_POWER } else { DEVICE_CHECK_INTERVAL }
+    }
+
+    /// How many samples the ring buffer is topped up to.
+    fn fill_target(&self) -> usize {
+        let ms = if self.deep() { RING_MS_LOW_POWER } else { RING_MS };
+        (self.out.rate as usize * ms / 1000) * self.out.channels
+    }
+
+    /// The settings the effects chain really gets (low-power mode bypasses almost everything).
+    fn effective_fx(&self) -> AudioFxSettings {
+        if self.low_power { low_power_fx(&self.fx_settings) } else { self.fx_settings.clone() }
     }
 
     fn position_ms(&self) -> u64 {
@@ -458,7 +513,7 @@ impl Engine {
         self.stretch = TimeStretch::new(ch, rate);
         self.stretch.set_speed(speed);
         self.vocoder_reset();
-        self.fx = AudioFxProcessor::new(self.fx_settings.clone());
+        self.fx = AudioFxProcessor::new(self.effective_fx());
         self.conv = None; // recreated on the next chunk for the new rate
         self.pending.clear();
         self.pending_pos = 0;
@@ -470,6 +525,7 @@ impl Engine {
             }
         }
         self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, speed);
+        self.deep_fill = false;
         self.fill();
         if self.transport.state == PlayState::Playing {
             stream_play(&self.out.stream);
@@ -485,6 +541,14 @@ impl Engine {
     fn set_speed(&mut self, speed: f32) {
         let speed = speed.clamp(MIN_SPEED, MAX_SPEED);
         if (speed - self.stretch.speed()).abs() < 1e-4 {
+            return;
+        }
+        if self.deep() && (speed - 1.0).abs() >= 1e-4 && self.decoder.is_some() && self.duration_ms.is_some() {
+            // Low-power mode: the buffer holds up to ~1.2 s of audio at the old speed. Restart from the current
+            // position so the new speed is heard at once (the vocoder is on from here, so the buffer is shallow again).
+            let ms = self.position_ms();
+            self.stretch.set_speed(speed);
+            self.seek_ms(ms);
             return;
         }
         let ch = self.out.channels.max(1);
@@ -564,8 +628,12 @@ impl Engine {
                 self.out.volume.store((v * v).to_bits(), Ordering::Relaxed);
             }
             Command::SetFx(settings) => {
-                self.fx.set_settings(settings.clone());
                 self.fx_settings = settings;
+                self.fx.set_settings(self.effective_fx());
+            }
+            Command::SetLowPower(on) => {
+                self.low_power = on;
+                self.fx.set_settings(self.effective_fx());
             }
             Command::SetSpeed(speed) => self.set_speed(speed),
             Command::DurationScanned { path, ms } => {
@@ -585,7 +653,7 @@ impl Engine {
         match self.transport.state {
             PlayState::Playing => {
                 if self.out.lost.load(Ordering::Relaxed)
-                    || self.last_device_check.elapsed() >= DEVICE_CHECK_INTERVAL
+                    || self.last_device_check.elapsed() >= self.device_check_interval()
                 {
                     self.last_device_check = Instant::now();
                     if !self.refresh_output() {
@@ -595,8 +663,9 @@ impl Engine {
                     }
                 }
                 self.pos.settle(self.out.played.load(Ordering::Relaxed));
+                self.deep_fill = true; // the sound is running: from now on the buffer may be filled deeply
                 self.fill();
-                if self.last_notify.get().elapsed() >= POSITION_INTERVAL {
+                if self.last_notify.get().elapsed() >= self.position_interval() {
                     self.notify();
                 }
                 let drained = self.out.prod.slots() == self.out.capacity;
@@ -645,6 +714,11 @@ impl Engine {
     fn seek_ratio(&mut self, ratio: f32) {
         let Some(duration) = self.duration_ms else { return };
         let ms = (duration as f64 * ratio.clamp(0.0, 1.0) as f64) as u64;
+        self.seek_ms(ms);
+    }
+
+    /// Jumps to `ms` (source time): decoder, resampler, vocoder and the ring buffer are restarted there.
+    fn seek_ms(&mut self, ms: u64) {
         let Some(dec) = self.decoder.as_mut() else { return };
         if let Err(e) = dec.seek(ms as f64 / 1000.0) {
             self.error = Some(e);
@@ -659,6 +733,7 @@ impl Engine {
         self.vocoder_reset(); // restart the vocoder (no old audio mixed into the new position)
         self.flush();
         self.pos.reset(self.out.played.load(Ordering::Relaxed), ms, self.stretch.speed());
+        self.deep_fill = false;
         self.fill();
     }
 
@@ -699,6 +774,7 @@ impl Engine {
                         self.flush();
                     }
                     self.pos.reset(self.out.played.load(Ordering::Relaxed), 0, self.stretch.speed());
+                    self.deep_fill = false;
                     self.fill();
                     self.start();
                     return;
@@ -750,7 +826,10 @@ impl Engine {
             // 1. Push what is already converted. Whole frames only, so the callback
             //    never sees half a frame (that would swap the channels).
             while self.pending_pos < self.pending.len() {
-                let free = self.out.prod.slots() / ch * ch;
+                // Only up to the target level (400 ms, or 1.2 s in low-power mode), not up to the full buffer.
+                let queued = self.out.capacity - self.out.prod.slots();
+                let room = self.fill_target().saturating_sub(queued);
+                let free = room.min(self.out.prod.slots()) / ch * ch;
                 let left = self.pending.len() - self.pending_pos;
                 let n = free.min(left);
                 if n == 0 {
@@ -833,5 +912,34 @@ impl Engine {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn low_power_bypasses_effects_but_keeps_mono() {
+        let mut s = AudioFxSettings::default();
+        s.normalize = true;
+        s.bass_db = 6.0;
+        s.treble_db = 3.0;
+        s.subsonic_percent = 40.0;
+        s.eq_gains_db[3] = 5.0;
+        assert!(low_power_fx(&s).is_neutral());
+        s.mono = true;
+        let low = low_power_fx(&s);
+        assert!(low.mono && !low.normalize);
+        assert_eq!(low.bass_db, 0.0);
+        assert_eq!(low.eq_gains_db, [0.0; 12]);
+    }
+
+    #[test]
+    fn low_power_buffer_stays_below_the_ring_and_above_the_wake_interval() {
+        assert!(RING_MS_LOW_POWER > RING_MS);
+        // The thread sleeps at most this long; the buffer must outlast it with a wide margin.
+        assert!(FILL_INTERVAL_LOW_POWER.as_millis() * 2 <= RING_MS_LOW_POWER as u128);
+        assert!(POSITION_INTERVAL_LOW_POWER < FILL_INTERVAL_LOW_POWER);
     }
 }
