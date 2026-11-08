@@ -72,6 +72,12 @@ pub struct TrackSound {
 /// How many own colors can be saved as presets.
 pub const MAX_SAVED_COLORS: usize = 12;
 
+/// Interface language that follows the Windows display language (falls back to English).
+pub const LANGUAGE_SYSTEM: &str = "system";
+
+/// The ten interface languages, in the order of the picker (must match `radiant-ui/src/i18n.rs` and `radiant-ui/lang/`).
+pub const LANGUAGE_CODES: [&str; 10] = ["en", "de", "ru", "uk", "zh", "ja", "fr", "cs", "es", "pl"];
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -112,6 +118,8 @@ pub struct AppSettings {
     pub custom_hsv: [f32; 3],
     /// Own colors the user saved as presets ([hue, saturation, value]); at most `MAX_SAVED_COLORS`.
     pub saved_colors: Vec<[f32; 3]>,
+    /// Interface language: `LANGUAGE_SYSTEM` ("system") or one of `LANGUAGE_CODES`.
+    pub language: String,
 }
 
 impl Default for AppSettings {
@@ -139,6 +147,7 @@ impl Default for AppSettings {
             palettes: [0, 0, 0],
             custom_hsv: [0.75, 0.55, 1.0],
             saved_colors: Vec::new(),
+            language: LANGUAGE_SYSTEM.to_string(),
         }
     }
 }
@@ -318,6 +327,9 @@ fn sanitize(settings: &mut AppSettings) {
         *p = (*p).min(10);
     }
     settings.saved_colors.truncate(MAX_SAVED_COLORS);
+    if settings.language != LANGUAGE_SYSTEM && !LANGUAGE_CODES.contains(&settings.language.as_str()) {
+        settings.language = LANGUAGE_SYSTEM.to_string();
+    }
     for color in settings.saved_colors.iter_mut() {
         for c in color.iter_mut() {
             *c = finite(*c, 0.0).clamp(0.0, 1.0);
@@ -422,6 +434,7 @@ mod tests {
         s.volume = 0.25;
         s.shuffle = true;
         s.repeat_mode = RepeatModeSetting::One;
+        s.language = "uk".to_string();
         s.speed_t = -1.5;
         s.fx.normalize = true;
         s.fx.mono = true;
@@ -485,6 +498,14 @@ mod tests {
         assert_eq!(s.repeat_mode, RepeatModeSetting::Off);
         assert_eq!(s.music_folder, None);
         assert!((s.speed_t - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn language_defaults_to_system_and_rejects_unknown_codes() {
+        assert_eq!(AppSettings::default().language, LANGUAGE_SYSTEM);
+        assert_eq!(parse(r#"{"language": "pl"}"#).unwrap().language, "pl");
+        assert_eq!(parse(r#"{"language": "klingon"}"#).unwrap().language, LANGUAGE_SYSTEM);
+        assert_eq!(parse(r#"{}"#).unwrap().language, LANGUAGE_SYSTEM);
     }
 
     #[test]

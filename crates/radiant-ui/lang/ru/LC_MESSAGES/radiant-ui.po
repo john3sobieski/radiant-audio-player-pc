@@ -1,0 +1,573 @@
+# Radiant interface translation: ru. Keys are the English texts of the interface.
+msgid ""
+msgstr ""
+"Project-Id-Version: radiant-ui\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "{n} track"
+msgid_plural "{n} tracks"
+msgstr[0] "{n} трек"
+msgstr[1] "{n} трека"
+msgstr[2] "{n} треков"
+
+msgid "{n} album"
+msgid_plural "{n} albums"
+msgstr[0] "{n} альбом"
+msgstr[1] "{n} альбома"
+msgstr[2] "{n} альбомов"
+
+msgid "{n} playlist"
+msgid_plural "{n} playlists"
+msgstr[0] "{n} плейлист"
+msgstr[1] "{n} плейлиста"
+msgstr[2] "{n} плейлистов"
+
+msgid "Bypassed — your curves are kept"
+msgstr "Обход — ваши кривые сохранены"
+
+msgid "One curve for every track"
+msgstr "Одна кривая для всех треков"
+
+msgid "Play a track to give it its own curve"
+msgstr "Включите трек, чтобы задать ему свою кривую"
+
+msgid "own curve"
+msgstr "своя кривая"
+
+msgid "flat"
+msgstr "плоская"
+
+msgid "New playlist"
+msgstr "Новый плейлист"
+
+msgid "Name it, pick a folder"
+msgstr "Назовите и выберите папку"
+
+msgid "No folder"
+msgstr "Без папки"
+
+msgid "New folder..."
+msgstr "Новая папка..."
+
+msgid "Folder name"
+msgstr "Название папки"
+
+msgid "Add"
+msgstr "Добавить"
+
+msgid "System"
+msgstr "Система"
+
+msgid "Appearance"
+msgstr "Оформление"
+
+msgid "Language"
+msgstr "Язык"
+
+msgid "Security"
+msgstr "Безопасность"
+
+msgid "AI & stems"
+msgstr "ИИ и стемы"
+
+msgid "Library"
+msgstr "Библиотека"
+
+msgid "Themes and colors"
+msgstr "Темы и цвета"
+
+msgid "Interface language"
+msgstr "Язык интерфейса"
+
+msgid "App lock"
+msgstr "Блокировка приложения"
+
+msgid "Stem separation"
+msgstr "Разделение на стемы"
+
+msgid "Music folder"
+msgstr "Папка с музыкой"
+
+msgid "How Radiant looks."
+msgstr "Внешний вид Radiant."
+
+msgid "The language of the interface."
+msgstr "Язык интерфейса."
+
+msgid "Keep your music private."
+msgstr "Храните музыку в тайне."
+
+msgid "Splitting tracks into vocals, drums, bass and the rest."
+msgstr "Разделение треков на вокал, ударные, бас и остальное."
+
+msgid "Where the music lives."
+msgstr "Где хранится музыка."
+
+msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
+msgstr "4 цифры, 6 цифр или свой код: запрашивается при запуске и при возврате в приложение."
+
+msgid "Recovery file"
+msgstr "Файл восстановления"
+
+msgid "A file of 12 words to get back in if the code is forgotten."
+msgstr "Файл из 12 слов для входа, если код забыт."
+
+msgid "Models"
+msgstr "Модели"
+
+msgid "Download the separation models or import them from files."
+msgstr "Скачайте модели разделения или импортируйте их из файлов."
+
+msgid "Stems"
+msgstr "Стемы"
+
+msgid "Choose which parts to keep and where they are saved."
+msgstr "Выберите, какие части сохранять и куда."
+
+msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
+msgstr "Выберите папку и пересканируйте её (пока эти две кнопки остаются в заголовке)."
+
+msgid "SETTINGS"
+msgstr "НАСТРОЙКИ"
+
+msgid "Theme"
+msgstr "Тема"
+
+msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
+msgstr "«Система» следует светлой/тёмной теме Windows. «Чёрная» — чисто чёрный фон для OLED-экранов."
+
+msgid "Light"
+msgstr "Светлая"
+
+msgid "Dark"
+msgstr "Тёмная"
+
+msgid "Black"
+msgstr "Чёрная"
+
+msgid "Color palette"
+msgstr "Цветовая палитра"
+
+msgid "Ten colors for every theme. The last circle is your own color."
+msgstr "Десять цветов для каждой темы. Последний круг — ваш собственный цвет."
+
+msgid "Save color"
+msgstr "Сохранить цвет"
+
+msgid "Save it to reuse it later"
+msgstr "Сохраните, чтобы использовать позже"
+
+msgid "Right-click to remove"
+msgstr "Щёлкните правой кнопкой, чтобы удалить"
+
+msgid "Hue"
+msgstr "Оттенок"
+
+msgid "Saturation"
+msgstr "Насыщенность"
+
+msgid "Brightness"
+msgstr "Яркость"
+
+msgid "10 languages plus System; switches on the fly without stopping the music."
+msgstr "10 языков и «Система»; переключение на лету, музыка не прерывается."
+
+msgid "Soon"
+msgstr "Скоро"
+
+msgid "Date created"
+msgstr "Дата создания"
+
+msgid "Name"
+msgstr "Название"
+
+msgid "Date changed"
+msgstr "Дата изменения"
+
+msgid "Tracks"
+msgstr "Треки"
+
+msgid "Manual order"
+msgstr "Свой порядок"
+
+msgid "Artist"
+msgstr "Исполнитель"
+
+msgid "Duration"
+msgstr "Длительность"
+
+msgid "Album"
+msgstr "Альбом"
+
+msgid "File date"
+msgstr "Дата файла"
+
+msgid "Albums"
+msgstr "Альбомы"
+
+msgid "Playlists"
+msgstr "Плейлисты"
+
+msgid "Queues"
+msgstr "Очереди"
+
+msgid "Sort"
+msgstr "Сортировка"
+
+msgid "Sound"
+msgstr "Звук"
+
+msgid "Choose folder"
+msgstr "Выбрать папку"
+
+msgid "Queue {}"
+msgstr "Очередь {}"
+
+msgid "No albums yet. Choose a music folder to start."
+msgstr "Альбомов пока нет. Выберите папку с музыкой, чтобы начать."
+
+msgid "No matching albums"
+msgstr "Нет подходящих альбомов"
+
+msgid "Pause"
+msgstr "Пауза"
+
+msgid "Play"
+msgstr "Играть"
+
+msgid "Shuffle"
+msgstr "Вперемешку"
+
+msgid "Title"
+msgstr "Название"
+
+msgid "Time"
+msgstr "Время"
+
+msgid "Add tracks from the three-dot menu of any track, or press New playlist."
+msgstr "Добавляйте треки через меню с тремя точками у трека или нажмите Новый плейлист."
+
+msgid "Rename"
+msgstr "Переименовать"
+
+msgid "Delete"
+msgstr "Удалить"
+
+msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
+msgstr "Треков пока нет. Выберите \"Добавить в плейлист\" в меню трека."
+
+msgid "Clear"
+msgstr "Очистить"
+
+msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
+msgstr "Очередь {} пуста. Выберите \"Добавить в очередь\" в меню трека."
+
+msgid "Year"
+msgstr "Год"
+
+msgid "Choose a music folder to start"
+msgstr "Выберите папку с музыкой, чтобы начать"
+
+msgid "No matching tracks"
+msgstr "Нет подходящих треков"
+
+msgid "Repeat"
+msgstr "Повтор"
+
+msgid "Repeat all"
+msgstr "Повторять все"
+
+msgid "Repeat one"
+msgstr "Повторять один"
+
+msgid "Hi-Res"
+msgstr "Hi-Res"
+
+msgid "Lossless"
+msgstr "Lossless"
+
+msgid "No lyrics for this track"
+msgstr "Для этого трека нет текста"
+
+msgid "Back to current line"
+msgstr "К текущей строке"
+
+msgid "No information"
+msgstr "Нет информации"
+
+msgid "Now playing"
+msgstr "Сейчас играет"
+
+msgid "Lyrics"
+msgstr "Текст"
+
+msgid "Info"
+msgstr "Инфо"
+
+msgid "Sort playlists"
+msgstr "Сортировка плейлистов"
+
+msgid "Sort albums"
+msgstr "Сортировка альбомов"
+
+msgid "Sort tracks"
+msgstr "Сортировка треков"
+
+msgid "Ascending"
+msgstr "По возрастанию"
+
+msgid "Descending"
+msgstr "По убыванию"
+
+msgid "Normalize"
+msgstr "Нормализация"
+
+msgid "Mono"
+msgstr "Моно"
+
+msgid "Reset"
+msgstr "Сбросить"
+
+msgid "Speed"
+msgstr "Скорость"
+
+msgid "Bass"
+msgstr "Бас"
+
+msgid "Treble"
+msgstr "Высокие"
+
+msgid "Subsonic"
+msgstr "Subsonic"
+
+msgid "Off"
+msgstr "Выкл."
+
+msgid "All tracks"
+msgstr "Все треки"
+
+msgid "Per track"
+msgstr "Для каждого трека"
+
+msgid "Preset"
+msgstr "Пресет"
+
+msgid "Custom"
+msgstr "Свой"
+
+msgid "Equalizer presets"
+msgstr "Пресеты эквалайзера"
+
+msgid "The equalizer is off — picking a preset turns it on"
+msgstr "Эквалайзер выключен — выбор пресета включит его"
+
+msgid "Play a track to give it a preset"
+msgstr "Включите трек, чтобы задать ему пресет"
+
+msgid "Applies to {}"
+msgstr "Действует для {}"
+
+msgid "Applies to every track"
+msgstr "Действует для всех треков"
+
+msgid "Open album"
+msgstr "Открыть альбом"
+
+msgid "Add to playlist"
+msgstr "Добавить в плейлист"
+
+msgid "Add to queue"
+msgstr "Добавить в очередь"
+
+msgid "Remove from queue"
+msgstr "Убрать из очереди"
+
+msgid "Create stems"
+msgstr "Создать стемы"
+
+msgid "ADD TO QUEUE"
+msgstr "ДОБАВИТЬ В ОЧЕРЕДЬ"
+
+msgid "Click a queue to add the track, click again to take it out."
+msgstr "Нажмите на очередь, чтобы добавить трек, нажмите ещё раз, чтобы убрать."
+
+msgid "Done"
+msgstr "Готово"
+
+msgid "ADD TO PLAYLIST"
+msgstr "ДОБАВИТЬ В ПЛЕЙЛИСТ"
+
+msgid "Click a record to add the track, click again to take it out."
+msgstr "Нажмите на плейлист, чтобы добавить трек, нажмите ещё раз, чтобы убрать."
+
+msgid "NAME"
+msgstr "НАЗВАНИЕ"
+
+msgid "Playlist name"
+msgstr "Название плейлиста"
+
+msgid "FOLDER (optional)"
+msgstr "ПАПКА (необязательно)"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Create and add"
+msgstr "Создать и добавить"
+
+msgid "Create"
+msgstr "Создать"
+
+msgid "Move to folder"
+msgstr "Переместить в папку"
+
+msgid "Move"
+msgstr "Переместить"
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "Could not save settings: {}"
+msgstr "Не удалось сохранить настройки: {}"
+
+msgid "Album artist"
+msgstr "Исполнитель альбома"
+
+msgid "Track no."
+msgstr "№ трека"
+
+msgid "Format"
+msgstr "Формат"
+
+msgid "Bitrate"
+msgstr "Битрейт"
+
+msgid "Sample rate"
+msgstr "Частота дискретизации"
+
+msgid "Channels"
+msgstr "Каналы"
+
+msgid "Stereo"
+msgstr "Стерео"
+
+msgid "Size"
+msgstr "Размер"
+
+msgid "File next to the track"
+msgstr "Файл рядом с треком"
+
+msgid "Embedded in tags"
+msgstr "Встроено в теги"
+
+msgid "File"
+msgstr "Файл"
+
+msgid "Folder"
+msgstr "Папка"
+
+msgid "Scanning..."
+msgstr "Сканирование..."
+
+msgid "Unknown album"
+msgstr "Неизвестный альбом"
+
+msgid "Unknown artist"
+msgstr "Неизвестный исполнитель"
+
+msgid "Disc {}"
+msgstr "Диск {}"
+
+msgid "Liked tracks"
+msgstr "Понравившиеся треки"
+
+msgid "Could not save playlists: {}"
+msgstr "Не удалось сохранить плейлисты: {}"
+
+msgid "File not found"
+msgstr "Файл не найден"
+
+msgid "Could not save queues: {}"
+msgstr "Не удалось сохранить очереди: {}"
+
+msgid "Could not read settings: {}"
+msgstr "Не удалось прочитать настройки: {}"
+
+msgid "Could not read playlists: {}"
+msgstr "Не удалось прочитать плейлисты: {}"
+
+msgid "Could not read queues: {}"
+msgstr "Не удалось прочитать очереди: {}"
+
+msgid "This file is not in the library"
+msgstr "Этого файла нет в библиотеке"
+
+msgid "This queue has no playable tracks yet"
+msgstr "В этой очереди пока нет воспроизводимых треков"
+
+msgid "Clear queue {}?"
+msgstr "Очистить очередь {}?"
+
+msgid "All tracks will be removed from this queue. The files stay in your library."
+msgstr "Все треки будут удалены из этой очереди. Файлы останутся в библиотеке."
+
+msgid "This playlist has no playable tracks yet"
+msgstr "В этом плейлисте пока нет воспроизводимых треков"
+
+msgid "Rename playlist"
+msgstr "Переименовать плейлист"
+
+msgid "Delete playlist?"
+msgstr "Удалить плейлист?"
+
+msgid "\"{}\" will be deleted. The tracks stay in your library."
+msgstr "\"{}\" будет удалён. Треки останутся в библиотеке."
+
+msgid "Rename folder"
+msgstr "Переименовать папку"
+
+msgid "Delete folder?"
+msgstr "Удалить папку?"
+
+msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
+msgstr "Папка \"{}\" будет удалена. Её плейлисты сохранятся и выйдут из папки."
+
+msgid "Choose a music folder first"
+msgstr "Сначала выберите папку с музыкой"
+
+msgid "{n} channel"
+msgid_plural "{n} channels"
+msgstr[0] "{n} канал"
+msgstr[1] "{n} канала"
+msgstr[2] "{n} каналов"
+
+msgid "Rock"
+msgstr "Рок"
+
+msgid "Pop"
+msgstr "Поп"
+
+msgid "Hip-Hop"
+msgstr "Хип-хоп"
+
+msgid "Electronic"
+msgstr "Электроника"
+
+msgid "Jazz"
+msgstr "Джаз"
+
+msgid "Classical"
+msgstr "Классика"
+
+msgid "Metal"
+msgstr "Метал"
+
+msgid "Acoustic"
+msgstr "Акустика"
+
+msgid "Vocal"
+msgstr "Вокал"

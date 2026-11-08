@@ -1,0 +1,569 @@
+# Radiant interface translation: es. Keys are the English texts of the interface.
+msgid ""
+msgstr ""
+"Project-Id-Version: radiant-ui\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "{n} track"
+msgid_plural "{n} tracks"
+msgstr[0] "{n} pista"
+msgstr[1] "{n} pistas"
+
+msgid "{n} album"
+msgid_plural "{n} albums"
+msgstr[0] "{n} álbum"
+msgstr[1] "{n} álbumes"
+
+msgid "{n} playlist"
+msgid_plural "{n} playlists"
+msgstr[0] "{n} lista"
+msgstr[1] "{n} listas"
+
+msgid "Bypassed — your curves are kept"
+msgstr "Desactivado — se conservan tus curvas"
+
+msgid "One curve for every track"
+msgstr "Una curva para todas las pistas"
+
+msgid "Play a track to give it its own curve"
+msgstr "Reproduce una pista para darle su propia curva"
+
+msgid "own curve"
+msgstr "curva propia"
+
+msgid "flat"
+msgstr "plana"
+
+msgid "New playlist"
+msgstr "Nueva lista"
+
+msgid "Name it, pick a folder"
+msgstr "Ponle nombre y elige una carpeta"
+
+msgid "No folder"
+msgstr "Sin carpeta"
+
+msgid "New folder..."
+msgstr "Nueva carpeta..."
+
+msgid "Folder name"
+msgstr "Nombre de la carpeta"
+
+msgid "Add"
+msgstr "Añadir"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "Appearance"
+msgstr "Apariencia"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Security"
+msgstr "Seguridad"
+
+msgid "AI & stems"
+msgstr "IA y stems"
+
+msgid "Library"
+msgstr "Biblioteca"
+
+msgid "Themes and colors"
+msgstr "Temas y colores"
+
+msgid "Interface language"
+msgstr "Idioma de la interfaz"
+
+msgid "App lock"
+msgstr "Bloqueo de la app"
+
+msgid "Stem separation"
+msgstr "Separación de stems"
+
+msgid "Music folder"
+msgstr "Carpeta de música"
+
+msgid "How Radiant looks."
+msgstr "Cómo se ve Radiant."
+
+msgid "The language of the interface."
+msgstr "El idioma de la interfaz."
+
+msgid "Keep your music private."
+msgstr "Mantén tu música en privado."
+
+msgid "Splitting tracks into vocals, drums, bass and the rest."
+msgstr "Divide las pistas en voz, batería, bajo y el resto."
+
+msgid "Where the music lives."
+msgstr "Dónde está tu música."
+
+msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
+msgstr "4 dígitos, 6 dígitos o un código propio; se pide al iniciar y al volver a la app."
+
+msgid "Recovery file"
+msgstr "Archivo de recuperación"
+
+msgid "A file of 12 words to get back in if the code is forgotten."
+msgstr "Un archivo de 12 palabras para volver a entrar si olvidas el código."
+
+msgid "Models"
+msgstr "Modelos"
+
+msgid "Download the separation models or import them from files."
+msgstr "Descarga los modelos de separación o impórtalos desde archivos."
+
+msgid "Stems"
+msgstr "Stems"
+
+msgid "Choose which parts to keep and where they are saved."
+msgstr "Elige qué partes conservar y dónde se guardan."
+
+msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
+msgstr "Elegir y volver a escanear la carpeta (por ahora estos dos botones siguen en la cabecera)."
+
+msgid "SETTINGS"
+msgstr "AJUSTES"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
+msgstr "Sistema sigue el ajuste claro / oscuro de Windows. Negro es negro puro para pantallas OLED."
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Dark"
+msgstr "Oscuro"
+
+msgid "Black"
+msgstr "Negro"
+
+msgid "Color palette"
+msgstr "Paleta de colores"
+
+msgid "Ten colors for every theme. The last circle is your own color."
+msgstr "Diez colores para cada tema. El último círculo es tu propio color."
+
+msgid "Save color"
+msgstr "Guardar color"
+
+msgid "Save it to reuse it later"
+msgstr "Guárdalo para usarlo después"
+
+msgid "Right-click to remove"
+msgstr "Clic derecho para quitar"
+
+msgid "Hue"
+msgstr "Tono"
+
+msgid "Saturation"
+msgstr "Saturación"
+
+msgid "Brightness"
+msgstr "Brillo"
+
+msgid "10 languages plus System; switches on the fly without stopping the music."
+msgstr "10 idiomas más Sistema; cambia al instante sin detener la música."
+
+msgid "Soon"
+msgstr "Pronto"
+
+msgid "Date created"
+msgstr "Fecha de creación"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Date changed"
+msgstr "Fecha de cambio"
+
+msgid "Tracks"
+msgstr "Pistas"
+
+msgid "Manual order"
+msgstr "Orden manual"
+
+msgid "Artist"
+msgstr "Artista"
+
+msgid "Duration"
+msgstr "Duración"
+
+msgid "Album"
+msgstr "Álbum"
+
+msgid "File date"
+msgstr "Fecha del archivo"
+
+msgid "Albums"
+msgstr "Álbumes"
+
+msgid "Playlists"
+msgstr "Listas"
+
+msgid "Queues"
+msgstr "Colas"
+
+msgid "Sort"
+msgstr "Ordenar"
+
+msgid "Sound"
+msgstr "Sonido"
+
+msgid "Choose folder"
+msgstr "Elegir carpeta"
+
+msgid "Queue {}"
+msgstr "Cola {}"
+
+msgid "No albums yet. Choose a music folder to start."
+msgstr "Aún no hay álbumes. Elige una carpeta de música para empezar."
+
+msgid "No matching albums"
+msgstr "No hay álbumes coincidentes"
+
+msgid "Pause"
+msgstr "Pausa"
+
+msgid "Play"
+msgstr "Reproducir"
+
+msgid "Shuffle"
+msgstr "Aleatorio"
+
+msgid "Title"
+msgstr "Título"
+
+msgid "Time"
+msgstr "Tiempo"
+
+msgid "Add tracks from the three-dot menu of any track, or press New playlist."
+msgstr "Añade pistas desde el menú de tres puntos de cualquier pista, o pulsa Nueva lista."
+
+msgid "Rename"
+msgstr "Renombrar"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
+msgstr "Aún no hay pistas. Usa \"Añadir a lista\" en el menú de una pista."
+
+msgid "Clear"
+msgstr "Vaciar"
+
+msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
+msgstr "La cola {} está vacía. Usa \"Añadir a la cola\" en el menú de una pista."
+
+msgid "Year"
+msgstr "Año"
+
+msgid "Choose a music folder to start"
+msgstr "Elige una carpeta de música para empezar"
+
+msgid "No matching tracks"
+msgstr "No hay pistas coincidentes"
+
+msgid "Repeat"
+msgstr "Repetir"
+
+msgid "Repeat all"
+msgstr "Repetir todo"
+
+msgid "Repeat one"
+msgstr "Repetir una"
+
+msgid "Hi-Res"
+msgstr "Hi-Res"
+
+msgid "Lossless"
+msgstr "Lossless"
+
+msgid "No lyrics for this track"
+msgstr "No hay letra para esta pista"
+
+msgid "Back to current line"
+msgstr "Volver a la línea actual"
+
+msgid "No information"
+msgstr "Sin información"
+
+msgid "Now playing"
+msgstr "Reproduciendo"
+
+msgid "Lyrics"
+msgstr "Letra"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Sort playlists"
+msgstr "Ordenar listas"
+
+msgid "Sort albums"
+msgstr "Ordenar álbumes"
+
+msgid "Sort tracks"
+msgstr "Ordenar pistas"
+
+msgid "Ascending"
+msgstr "Ascendente"
+
+msgid "Descending"
+msgstr "Descendente"
+
+msgid "Normalize"
+msgstr "Normalizar"
+
+msgid "Mono"
+msgstr "Mono"
+
+msgid "Reset"
+msgstr "Restablecer"
+
+msgid "Speed"
+msgstr "Velocidad"
+
+msgid "Bass"
+msgstr "Graves"
+
+msgid "Treble"
+msgstr "Agudos"
+
+msgid "Subsonic"
+msgstr "Subsónico"
+
+msgid "Off"
+msgstr "Apagado"
+
+msgid "All tracks"
+msgstr "Todas las pistas"
+
+msgid "Per track"
+msgstr "Por pista"
+
+msgid "Preset"
+msgstr "Preajuste"
+
+msgid "Custom"
+msgstr "Personalizado"
+
+msgid "Equalizer presets"
+msgstr "Preajustes del ecualizador"
+
+msgid "The equalizer is off — picking a preset turns it on"
+msgstr "El ecualizador está apagado — al elegir un preajuste se activa"
+
+msgid "Play a track to give it a preset"
+msgstr "Reproduce una pista para asignarle un preajuste"
+
+msgid "Applies to {}"
+msgstr "Se aplica a {}"
+
+msgid "Applies to every track"
+msgstr "Se aplica a todas las pistas"
+
+msgid "Open album"
+msgstr "Abrir álbum"
+
+msgid "Add to playlist"
+msgstr "Añadir a lista"
+
+msgid "Add to queue"
+msgstr "Añadir a la cola"
+
+msgid "Remove from queue"
+msgstr "Quitar de la cola"
+
+msgid "Create stems"
+msgstr "Crear stems"
+
+msgid "ADD TO QUEUE"
+msgstr "AÑADIR A LA COLA"
+
+msgid "Click a queue to add the track, click again to take it out."
+msgstr "Haz clic en una cola para añadir la pista; vuelve a hacer clic para quitarla."
+
+msgid "Done"
+msgstr "Listo"
+
+msgid "ADD TO PLAYLIST"
+msgstr "AÑADIR A LISTA"
+
+msgid "Click a record to add the track, click again to take it out."
+msgstr "Haz clic en una lista para añadir la pista; vuelve a hacer clic para quitarla."
+
+msgid "NAME"
+msgstr "NOMBRE"
+
+msgid "Playlist name"
+msgstr "Nombre de la lista"
+
+msgid "FOLDER (optional)"
+msgstr "CARPETA (opcional)"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Create and add"
+msgstr "Crear y añadir"
+
+msgid "Create"
+msgstr "Crear"
+
+msgid "Move to folder"
+msgstr "Mover a carpeta"
+
+msgid "Move"
+msgstr "Mover"
+
+msgid "Save"
+msgstr "Guardar"
+
+msgid "Could not save settings: {}"
+msgstr "No se pudieron guardar los ajustes: {}"
+
+msgid "Album artist"
+msgstr "Artista del álbum"
+
+msgid "Track no."
+msgstr "N.º de pista"
+
+msgid "Format"
+msgstr "Formato"
+
+msgid "Bitrate"
+msgstr "Tasa de bits"
+
+msgid "Sample rate"
+msgstr "Frecuencia de muestreo"
+
+msgid "Channels"
+msgstr "Canales"
+
+msgid "Stereo"
+msgstr "Estéreo"
+
+msgid "Size"
+msgstr "Tamaño"
+
+msgid "File next to the track"
+msgstr "Archivo junto a la pista"
+
+msgid "Embedded in tags"
+msgstr "Incrustado en las etiquetas"
+
+msgid "File"
+msgstr "Archivo"
+
+msgid "Folder"
+msgstr "Carpeta"
+
+msgid "Scanning..."
+msgstr "Escaneando..."
+
+msgid "Unknown album"
+msgstr "Álbum desconocido"
+
+msgid "Unknown artist"
+msgstr "Artista desconocido"
+
+msgid "Disc {}"
+msgstr "Disco {}"
+
+msgid "Liked tracks"
+msgstr "Pistas favoritas"
+
+msgid "Could not save playlists: {}"
+msgstr "No se pudieron guardar las listas: {}"
+
+msgid "File not found"
+msgstr "Archivo no encontrado"
+
+msgid "Could not save queues: {}"
+msgstr "No se pudieron guardar las colas: {}"
+
+msgid "Could not read settings: {}"
+msgstr "No se pudieron leer los ajustes: {}"
+
+msgid "Could not read playlists: {}"
+msgstr "No se pudieron leer las listas: {}"
+
+msgid "Could not read queues: {}"
+msgstr "No se pudieron leer las colas: {}"
+
+msgid "This file is not in the library"
+msgstr "Este archivo no está en la biblioteca"
+
+msgid "This queue has no playable tracks yet"
+msgstr "Esta cola aún no tiene pistas reproducibles"
+
+msgid "Clear queue {}?"
+msgstr "¿Vaciar la cola {}?"
+
+msgid "All tracks will be removed from this queue. The files stay in your library."
+msgstr "Se quitarán todas las pistas de esta cola. Los archivos permanecen en tu biblioteca."
+
+msgid "This playlist has no playable tracks yet"
+msgstr "Esta lista aún no tiene pistas reproducibles"
+
+msgid "Rename playlist"
+msgstr "Renombrar lista"
+
+msgid "Delete playlist?"
+msgstr "¿Eliminar lista?"
+
+msgid "\"{}\" will be deleted. The tracks stay in your library."
+msgstr "Se eliminará \"{}\". Las pistas permanecen en tu biblioteca."
+
+msgid "Rename folder"
+msgstr "Renombrar carpeta"
+
+msgid "Delete folder?"
+msgstr "¿Eliminar carpeta?"
+
+msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
+msgstr "Se eliminará la carpeta \"{}\". Sus listas se conservan y salen de la carpeta."
+
+msgid "Choose a music folder first"
+msgstr "Primero elige una carpeta de música"
+
+msgid "{n} channel"
+msgid_plural "{n} channels"
+msgstr[0] "{n} canal"
+msgstr[1] "{n} canales"
+
+msgid "Rock"
+msgstr "Rock"
+
+msgid "Pop"
+msgstr "Pop"
+
+msgid "Hip-Hop"
+msgstr "Hip-Hop"
+
+msgid "Electronic"
+msgstr "Electrónica"
+
+msgid "Jazz"
+msgstr "Jazz"
+
+msgid "Classical"
+msgstr "Clásica"
+
+msgid "Metal"
+msgstr "Metal"
+
+msgid "Acoustic"
+msgstr "Acústica"
+
+msgid "Vocal"
+msgstr "Vocal"

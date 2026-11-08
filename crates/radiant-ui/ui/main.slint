@@ -900,9 +900,9 @@ component EqGraph inherits Rectangle {
         color: Theme.muted;
         overflow: elide;
         vertical-alignment: center;
-        text: root.mode == 0 ? "Bypassed \u{2014} your curves are kept"
-            : root.mode == 1 ? "One curve for every track"
-            : root.track-name == "" ? "Play a track to give it its own curve"
+        text: root.mode == 0 ? @tr("Bypassed — your curves are kept")
+            : root.mode == 1 ? @tr("One curve for every track")
+            : root.track-name == "" ? @tr("Play a track to give it its own curve")
             : "\u{266A} " + root.track-name;
     }
     if root.chip-visible : Rectangle {
@@ -913,7 +913,7 @@ component EqGraph inherits Rectangle {
         border-radius: 6.5px;
         background: root.saved ? Theme.accent.with-alpha(0.25) : Theme.surface-hover;
         Text {
-            text: root.saved ? "own curve" : "flat";
+            text: root.saved ? @tr("own curve") : @tr("flat");
             color: root.saved ? Theme.accent : Theme.muted;
             font-size: 9px;
             font-weight: 700;
@@ -1111,7 +1111,7 @@ component SleeveCard inherits Rectangle {
         y: 142px;
         width: 134px;
         height: 20px;
-        text: root.is-new ? "New playlist" : root.name;
+        text: root.is-new ? @tr("New playlist") : root.name;
         color: Theme.text;
         font-size: 14px;
         font-weight: 600;
@@ -1122,7 +1122,7 @@ component SleeveCard inherits Rectangle {
         y: 162px;
         width: 134px;
         height: 18px;
-        text: root.is-new ? "Name it, pick a folder" : root.count;
+        text: root.is-new ? @tr("Name it, pick a folder") : root.count;
         color: Theme.muted;
         font-size: 12px;
         overflow: elide;
@@ -1227,7 +1227,7 @@ component FolderPicker inherits Rectangle {
     VerticalLayout {
         spacing: 4px;
         FolderRow {
-            name: "No folder";
+            name: @tr("No folder");
             blank: true;
             active: root.selected == "";
             clicked => { root.selected = ""; }
@@ -1241,7 +1241,7 @@ component FolderPicker inherits Rectangle {
             }
         }
         if !root.adding : FolderRow {
-            name: "New folder...";
+            name: @tr("New folder...");
             plus: true;
             clicked => { root.adding = true; }
         }
@@ -1250,7 +1250,7 @@ component FolderPicker inherits Rectangle {
             HorizontalLayout {
                 spacing: 8px;
                 NameField {
-                    placeholder: "Folder name";
+                    placeholder: @tr("Folder name");
                     value <=> root.new-name;
                     accepted(v) => { root.commit(); }
                     init => { self.focus-input(); }
@@ -1258,7 +1258,7 @@ component FolderPicker inherits Rectangle {
                 AccentButton {
                     width: 80px;
                     height: 44px;
-                    text: "Add";
+                    text: @tr("Add");
                     enabled: root.new-name != "";
                     clicked => { root.commit(); }
                 }
@@ -1393,6 +1393,12 @@ component SettingsPage inherits Rectangle {
     callback custom-save();
     callback custom-pick(int);
     callback custom-remove(int);
+    /// Chosen interface language: 0 = System, 1..=10 in the order of `language-names` (set from Rust).
+    in-out property <int> language: 0;
+    callback language-changed(int);
+    /// "System" (translated) and the ten languages, each in its own language (these names are never translated).
+    private property <[string]> language-names: [@tr("System"), "English", "Deutsch", "Русский", "Українська", "中文", "日本語", "Français", "Čeština", "Español", "Polski"];
+    private property <length> lang-h: 80px + 11 * 40px + 16px;
     /// Own colors the user saved as presets (set from Rust).
     in property <[color]> saved-colors;
     /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
@@ -1401,32 +1407,32 @@ component SettingsPage inherits Rectangle {
     in-out property <float> cu-v;
 
     // To add a section: extend the four lists below (same order), nothing else.
-    private property <[string]> names: ["Appearance", "Language", "Security", "AI & stems", "Library"];
-    private property <[string]> hints: ["Themes and colors", "Interface language", "App lock", "Stem separation", "Music folder"];
+    private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library")];
+    private property <[string]> hints: [@tr("Themes and colors"), @tr("Interface language"), @tr("App lock"), @tr("Stem separation"), @tr("Music folder")];
     private property <[string]> leads: [
-        "How Radiant looks.",
-        "The language of the interface.",
-        "Keep your music private.",
-        "Splitting tracks into vocals, drums, bass and the rest.",
-        "Where the music lives.",
+        @tr("How Radiant looks."),
+        @tr("The language of the interface."),
+        @tr("Keep your music private."),
+        @tr("Splitting tracks into vocals, drums, bass and the rest."),
+        @tr("Where the music lives."),
     ];
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
         ],
         [
-            { title: "Interface language", text: "10 languages plus System; switches on the fly without stopping the music." },
+            // Language: the picker card is drawn by hand below (it has controls).
         ],
         [
-            { title: "App lock", text: "4 digits, 6 digits or your own code, asked at start and when returning to the app." },
-            { title: "Recovery file", text: "A file of 12 words to get back in if the code is forgotten." },
+            { title: @tr("App lock"), text: @tr("4 digits, 6 digits or your own code, asked at start and when returning to the app.") },
+            { title: @tr("Recovery file"), text: @tr("A file of 12 words to get back in if the code is forgotten.") },
         ],
         [
-            { title: "Models", text: "Download the separation models or import them from files." },
-            { title: "Stems", text: "Choose which parts to keep and where they are saved." },
+            { title: @tr("Models"), text: @tr("Download the separation models or import them from files.") },
+            { title: @tr("Stems"), text: @tr("Choose which parts to keep and where they are saved.") },
         ],
         [
-            { title: "Music folder", text: "Choose and rescan the folder (for now these two buttons stay in the header)." },
+            { title: @tr("Music folder"), text: @tr("Choose and rescan the folder (for now these two buttons stay in the header).") },
         ],
     ];
 
@@ -1437,7 +1443,8 @@ component SettingsPage inherits Rectangle {
     private property <length> content-x: 320px;
     private property <length> content-w: max(0px, root.width - root.content-x - 40px);
     // Room taken by the hand-made card at the top of a section (Appearance: the theme switch).
-    private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px : 0px;
+    private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px
+        : root.section == 1 ? root.lang-h + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
     private property <int> pal-rows: Math.ceil(11.0 / root.pal-cols);
@@ -1524,7 +1531,7 @@ component SettingsPage inherits Rectangle {
         x: 70px;
         y: 20px;
         height: 34px;
-        text: "SETTINGS";
+        text: @tr("SETTINGS");
         color: Theme.muted;
         font-size: 12px;
         font-weight: 700;
@@ -1604,7 +1611,7 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 14px;
                 width: parent.width - 32px;
-                text: "Theme";
+                text: @tr("Theme");
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 600;
@@ -1614,7 +1621,7 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 38px;
                 width: parent.width - 32px;
-                text: "System follows the Windows light / dark setting. Black is pure black for OLED screens.";
+                text: @tr("System follows the Windows light / dark setting. Black is pure black for OLED screens.");
                 color: Theme.muted;
                 font-size: 13px;
                 wrap: word-wrap;
@@ -1623,7 +1630,7 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 80px;
                 width: min(parent.width - 32px, 380px);
-                labels: ["System", "Light", "Dark", "Black"];
+                labels: [@tr("System"), @tr("Light"), @tr("Dark"), @tr("Black")];
                 current: Theme.mode;
                 selected(k) => {
                     Theme.mode = k;
@@ -1645,7 +1652,7 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 14px;
                 width: parent.width - 32px;
-                text: "Color palette";
+                text: @tr("Color palette");
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 600;
@@ -1655,7 +1662,7 @@ component SettingsPage inherits Rectangle {
                 x: 16px;
                 y: 38px;
                 width: parent.width - 32px;
-                text: "Ten colors for every theme. The last circle is your own color.";
+                text: @tr("Ten colors for every theme. The last circle is your own color.");
                 color: Theme.muted;
                 font-size: 13px;
                 wrap: word-wrap;
@@ -1708,7 +1715,7 @@ component SettingsPage inherits Rectangle {
                     x: 16px;
                     y: 100px;
                     width: 112px;
-                    text: "Save color";
+                    text: @tr("Save color");
                     clicked => { root.custom-save(); }
                 }
                 Text {
@@ -1716,7 +1723,7 @@ component SettingsPage inherits Rectangle {
                     y: 100px;
                     width: max(0px, parent.width - 156px);
                     height: 34px;
-                    text: root.saved-colors.length == 0 ? "Save it to reuse it later" : "Right-click to remove";
+                    text: root.saved-colors.length == 0 ? @tr("Save it to reuse it later") : @tr("Right-click to remove");
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
@@ -1753,7 +1760,7 @@ component SettingsPage inherits Rectangle {
                         }
                     }
                 }
-                for lab[j] in ["Hue", "Saturation", "Brightness"] : Rectangle {
+                for lab[j] in [@tr("Hue"), @tr("Saturation"), @tr("Brightness")] : Rectangle {
                     x: 16px;
                     y: j * 32px;
                     width: parent.width - 32px;
@@ -1782,6 +1789,83 @@ component SettingsPage inherits Rectangle {
                             else { root.cu-v = v; }
                             root.custom-color-edited(root.cu-h, root.cu-s, root.cu-v);
                         }
+                    }
+                }
+            }
+        }
+        if root.section == 1 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.lang-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Interface language");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 38px;
+                width: parent.width - 32px;
+                text: @tr("10 languages plus System; switches on the fly without stopping the music.");
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            for lang-name[i] in root.language-names : Rectangle {
+                x: 8px;
+                y: 80px + i * 40px;
+                width: parent.width - 16px;
+                height: 36px;
+                border-radius: 10px;
+                background: lang-ta.has-hover && i != root.language ? Theme.surface-hover : transparent;
+
+                // Radio dot.
+                Rectangle {
+                    x: 12px;
+                    y: 10px;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 8px;
+                    border-width: 2px;
+                    border-color: i == root.language ? Theme.accent : Theme.muted;
+                    Rectangle {
+                        x: 5px;
+                        y: 5px;
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: Theme.accent;
+                        opacity: i == root.language ? 1 : 0;
+                        animate opacity { duration: 150ms; }
+                    }
+                }
+                Text {
+                    x: 40px;
+                    width: parent.width - 52px;
+                    height: parent.height;
+                    text: lang-name;
+                    color: Theme.text;
+                    font-size: 14px;
+                    font-weight: i == root.language ? 700 : 400;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                lang-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.language = i;
+                        root.language-changed(i);
                     }
                 }
             }
@@ -1822,7 +1906,7 @@ component SettingsPage inherits Rectangle {
                 border-radius: 11px;
                 background: Theme.accent.with-alpha(0.15);
                 Text {
-                    text: "Soon";
+                    text: @tr("Soon");
                     color: Theme.accent;
                     font-size: 11px;
                     font-weight: 600;
@@ -1895,9 +1979,9 @@ export component MainWindow inherits Window {
     /// The Sort button exists in Tracks, Albums (grid only) and Playlists, not in Queues.
     private property <bool> sort-available: root.section == 0 || root.section == 2 || (root.section == 1 && !root.album-open);
     private property <[string]> sort-labels: root.section == 2
-        ? ["Date created", "Name", "Date changed", "Tracks", "Manual order"]
-        : root.section == 1 ? ["Manual order", "Name", "Artist", "Duration"]
-        : ["Manual order", "Name", "Artist", "Album", "Duration", "File date"];
+        ? [@tr("Date created"), @tr("Name"), @tr("Date changed"), @tr("Tracks"), @tr("Manual order")]
+        : root.section == 1 ? [@tr("Manual order"), @tr("Name"), @tr("Artist"), @tr("Duration")]
+        : [@tr("Manual order"), @tr("Name"), @tr("Artist"), @tr("Album"), @tr("Duration"), @tr("File date")];
     function apply-sort(mode: int, desc: bool) {
         if (root.section == 2) {
             let d = mode == 4 ? false : desc;
@@ -1990,11 +2074,16 @@ export component MainWindow inherits Window {
     private property <length> open-extra: root.nav-items[root.section].extra + (root.section == 3 ? root.chips-extra : 0px);
     private property <length> lens-w: 4 * root.seg-w + 3 * root.seg-gap + root.open-extra + 6px;
     private property <float> wheel-acc: 0;
+    // Hidden labels that measure the translated names: the open segment unfolds to their width.
+    nav-m0 := Text { visible: false; text: @tr("Tracks"); font-size: 13px; font-weight: 600; }
+    nav-m1 := Text { visible: false; text: @tr("Albums"); font-size: 13px; font-weight: 600; }
+    nav-m2 := Text { visible: false; text: @tr("Playlists"); font-size: 13px; font-weight: 600; }
+    nav-m3 := Text { visible: false; text: @tr("Queues"); font-size: 13px; font-weight: 600; }
     private property <[NavItem]> nav-items: [
-        { label: "Tracks", icon: "M 8 3 L 17 1 V 12.5 A 2.5 2.5 0 1 1 15 10.5 V 5.2 L 10 6.2 V 14.5 A 2.5 2.5 0 1 1 8 12.5 Z", extra: 52px },
-        { label: "Albums", icon: "M 10 2 A 8 8 0 1 1 9.99 2 Z M 10 7.5 A 2.5 2.5 0 1 1 9.99 7.5 Z", extra: 58px },
-        { label: "Playlists", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 9 V 14 H 2 Z M 12 11.5 L 18 14.5 L 12 17.5 Z", extra: 66px },
-        { label: "Queues", icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 8 V 14 H 2 Z M 15.5 7 H 17.5 V 15 A 2 2 0 1 1 15.5 13 Z", extra: 58px },
+        { label: @tr("Tracks"), icon: "M 8 3 L 17 1 V 12.5 A 2.5 2.5 0 1 1 15 10.5 V 5.2 L 10 6.2 V 14.5 A 2.5 2.5 0 1 1 8 12.5 Z", extra: nav-m0.preferred-width + 14px },
+        { label: @tr("Albums"), icon: "M 10 2 A 8 8 0 1 1 9.99 2 Z M 10 7.5 A 2.5 2.5 0 1 1 9.99 7.5 Z", extra: nav-m1.preferred-width + 14px },
+        { label: @tr("Playlists"), icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 9 V 14 H 2 Z M 12 11.5 L 18 14.5 L 12 17.5 Z", extra: nav-m2.preferred-width + 14px },
+        { label: @tr("Queues"), icon: "M 2 4 H 14 V 6 H 2 Z M 2 8 H 14 V 10 H 2 Z M 2 12 H 8 V 14 H 2 Z M 15.5 7 H 17.5 V 15 A 2 2 0 1 1 15.5 13 Z", extra: nav-m3.preferred-width + 14px },
     ];
     // Left edge of segment `i`: segments after the open one are pushed right by its extra width.
     pure function seg-x(i: int, open: int, extra: length) -> length {
@@ -2263,6 +2352,9 @@ export component MainWindow inherits Window {
     callback custom-save();
     callback custom-pick(int);
     callback custom-remove(int);
+    /// Interface language: 0 = System, 1..=10 = en, de, ru, uk, zh, ja, fr, cs, es, pl (Rust applies and remembers it).
+    in-out property <int> language: 0;
+    callback language-changed(int);
     /// Own colors saved as presets (set from Rust).
     in property <[color]> saved-colors;
     in-out property <float> cu-h: 0.75;
@@ -2439,7 +2531,7 @@ export component MainWindow inherits Window {
                         x: 0px;
                         y: (parent.height - self.height) / 2;
                         width: 60px;
-                        text: "Sort";
+                        text: @tr("Sort");
                         active: root.show-sort;
                         opacity: root.sort-available ? 1 : 0;
                         animate opacity { duration: 200ms; }
@@ -2453,14 +2545,14 @@ export component MainWindow inherits Window {
                 }
                 HeaderItem {
                     PillButton {
-                        text: "Sound";
+                        text: @tr("Sound");
                         active: root.show-sound;
                         clicked => { root.show-sound = !root.show-sound; root.show-sort = false; }
                     }
                 }
                 HeaderItem {
                     PillButton {
-                        text: "Choose folder";
+                        text: @tr("Choose folder");
                         clicked => { root.choose-folder(); }
                     }
                 }
@@ -2606,10 +2698,10 @@ export component MainWindow inherits Window {
                     x: parent.width - 20px - self.width;
                     width: 260px;
                     height: parent.height;
-                    text: root.section == 0 ? "\{root.tracks.length} tracks"
-                        : root.section == 1 ? "\{root.albums.length} albums"
-                        : root.section == 2 ? "\{root.pl-total} playlists"
-                        : root.section == 3 ? "Queue \{root.queue-index + 1} · \{root.queue-counts[root.queue-index]} tracks" : "";
+                    text: root.section == 0 ? @tr("{n} track" | "{n} tracks" % root.tracks.length)
+                        : root.section == 1 ? @tr("{n} album" | "{n} albums" % root.albums.length)
+                        : root.section == 2 ? @tr("{n} playlist" | "{n} playlists" % root.pl-total)
+                        : root.section == 3 ? @tr("Queue {}", root.queue-index + 1) + " · " + @tr("{n} track" | "{n} tracks" % root.queue-counts[root.queue-index]) : "";
                     color: Theme.muted;
                     font-size: 13px;
                     horizontal-alignment: right;
@@ -2633,7 +2725,7 @@ export component MainWindow inherits Window {
                     if root.albums.length == 0 : Text {
                         width: parent.width;
                         height: parent.height;
-                        text: root.search-text == "" ? "No albums yet. Choose a music folder to start." : "No matching albums";
+                        text: root.search-text == "" ? @tr("No albums yet. Choose a music folder to start.") : @tr("No matching albums");
                         color: Theme.muted;
                         font-size: 16px;
                         horizontal-alignment: center;
@@ -2752,7 +2844,7 @@ export component MainWindow inherits Window {
                                     x: parent.width / 2 - self.width - 6px;
                                     y: 122px;
                                     width: 110px;
-                                    text: (root.album-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                    text: (root.album-current-index >= 0 && root.is-playing) ? @tr("Pause") : @tr("Play");
                                     active: root.album-current-index >= 0 && root.is-playing;
                                     clicked => {
                                         // A track of this album is loaded (started from anywhere): pause / resume it.
@@ -2764,7 +2856,7 @@ export component MainWindow inherits Window {
                                     x: parent.width / 2 + 6px;
                                     y: 122px;
                                     width: 110px;
-                                    text: "Shuffle";
+                                    text: @tr("Shuffle");
                                     active: root.shuffle;
                                     clicked => {
                                         if (root.shuffle) { root.shuffle-changed(false); }
@@ -2800,7 +2892,7 @@ export component MainWindow inherits Window {
                                     x: root.title-x;
                                     width: root.album-list-title-w;
                                     height: parent.height;
-                                    text: "Title";
+                                    text: @tr("Title");
                                     color: Theme.muted;
                                     font-size: 12px;
                                     vertical-alignment: center;
@@ -2809,7 +2901,7 @@ export component MainWindow inherits Window {
                                     x: root.dur-x;
                                     width: root.dur-w;
                                     height: parent.height;
-                                    text: "Time";
+                                    text: @tr("Time");
                                     color: Theme.muted;
                                     font-size: 12px;
                                     horizontal-alignment: right;
@@ -2924,7 +3016,7 @@ export component MainWindow inherits Window {
                             Text {
                                 x: 28px;
                                 height: parent.height;
-                                text: "Playlists";
+                                text: @tr("Playlists");
                                 color: Theme.text;
                                 font-size: 22px;
                                 font-weight: 700;
@@ -2934,7 +3026,7 @@ export component MainWindow inherits Window {
                                 x: parent.width - self.width - 28px;
                                 y: 9px;
                                 width: 140px;
-                                text: "New playlist";
+                                text: @tr("New playlist");
                                 clicked => { root.pl-open-create(); }
                             }
                         }
@@ -2944,7 +3036,7 @@ export component MainWindow inherits Window {
                                 x: 28px;
                                 width: parent.width - 56px;
                                 height: parent.height;
-                                text: "Add tracks from the three-dot menu of any track, or press New playlist.";
+                                text: @tr("Add tracks from the three-dot menu of any track, or press New playlist.");
                                 color: Theme.muted;
                                 font-size: 14px;
                                 wrap: word-wrap;
@@ -3238,7 +3330,7 @@ export component MainWindow inherits Window {
                                     x: root.pl-btn-x0;
                                     y: 122px;
                                     width: 104px;
-                                    text: (root.pl-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                    text: (root.pl-current-index >= 0 && root.is-playing) ? @tr("Pause") : @tr("Play");
                                     active: root.pl-current-index >= 0 && root.is-playing;
                                     clicked => {
                                         if (root.pl-current-index >= 0) { root.toggle-play(); }
@@ -3249,7 +3341,7 @@ export component MainWindow inherits Window {
                                     x: root.pl-btn-x0 + 114px;
                                     y: 122px;
                                     width: 104px;
-                                    text: "Shuffle";
+                                    text: @tr("Shuffle");
                                     active: root.shuffle;
                                     clicked => {
                                         if (root.shuffle) { root.shuffle-changed(false); }
@@ -3261,14 +3353,14 @@ export component MainWindow inherits Window {
                                     x: root.pl-btn-x0 + 228px;
                                     y: 122px;
                                     width: 104px;
-                                    text: "Rename";
+                                    text: @tr("Rename");
                                     clicked => { root.pl-open-rename-playlist(); }
                                 }
                                 if !root.pl-page-liked : PillButton {
                                     x: root.pl-btn-x0 + 342px;
                                     y: 122px;
                                     width: 104px;
-                                    text: "Delete";
+                                    text: @tr("Delete");
                                     clicked => { root.pl-open-delete-playlist(); }
                                 }
                             }
@@ -3278,7 +3370,7 @@ export component MainWindow inherits Window {
                                 Text {
                                     width: parent.width;
                                     height: parent.height;
-                                    text: "No tracks yet. Use \"Add to playlist\" in the menu of a track.";
+                                    text: @tr("No tracks yet. Use \"Add to playlist\" in the menu of a track.");
                                     color: Theme.muted;
                                     font-size: 15px;
                                     horizontal-alignment: center;
@@ -3301,7 +3393,7 @@ export component MainWindow inherits Window {
                                     x: root.title-x;
                                     width: root.album-list-title-w;
                                     height: parent.height;
-                                    text: "Title";
+                                    text: @tr("Title");
                                     color: Theme.muted;
                                     font-size: 12px;
                                     vertical-alignment: center;
@@ -3310,7 +3402,7 @@ export component MainWindow inherits Window {
                                     x: root.dur-x;
                                     width: root.dur-w;
                                     height: parent.height;
-                                    text: "Time";
+                                    text: @tr("Time");
                                     color: Theme.muted;
                                     font-size: 12px;
                                     horizontal-alignment: right;
@@ -3443,7 +3535,7 @@ export component MainWindow inherits Window {
                                 y: 16px;
                                 width: parent.width - 56px;
                                 height: 30px;
-                                text: "Queue \{root.queue-index + 1}";
+                                text: @tr("Queue {}", root.queue-index + 1);
                                 color: Theme.text;
                                 font-size: 22px;
                                 font-weight: 700;
@@ -3464,7 +3556,7 @@ export component MainWindow inherits Window {
                                 x: 28px;
                                 y: 78px;
                                 width: 104px;
-                                text: (root.queue-current-index >= 0 && root.is-playing) ? "Pause" : "Play";
+                                text: (root.queue-current-index >= 0 && root.is-playing) ? @tr("Pause") : @tr("Play");
                                 active: root.queue-current-index >= 0 && root.is-playing;
                                 clicked => {
                                     if (root.queue-current-index >= 0) { root.toggle-play(); }
@@ -3475,7 +3567,7 @@ export component MainWindow inherits Window {
                                 x: 142px;
                                 y: 78px;
                                 width: 104px;
-                                text: "Shuffle";
+                                text: @tr("Shuffle");
                                 active: root.shuffle;
                                 clicked => {
                                     if (root.shuffle) { root.shuffle-changed(false); }
@@ -3487,7 +3579,7 @@ export component MainWindow inherits Window {
                                 x: 256px;
                                 y: 78px;
                                 width: 104px;
-                                text: "Clear";
+                                text: @tr("Clear");
                                 clicked => { root.clear-confirm = true; root.queue-clear-ask(); }
                             }
                         }
@@ -3497,7 +3589,7 @@ export component MainWindow inherits Window {
                             Text {
                                 width: parent.width;
                                 height: parent.height;
-                                text: "Queue \{root.queue-index + 1} is empty. Use \"Add to queue\" in the menu of a track.";
+                                text: @tr("Queue {} is empty. Use \"Add to queue\" in the menu of a track.", root.queue-index + 1);
                                 color: Theme.muted;
                                 font-size: 15px;
                                 horizontal-alignment: center;
@@ -3520,7 +3612,7 @@ export component MainWindow inherits Window {
                                 x: root.title-x;
                                 width: root.album-list-title-w;
                                 height: parent.height;
-                                text: "Title";
+                                text: @tr("Title");
                                 color: Theme.muted;
                                 font-size: 12px;
                                 vertical-alignment: center;
@@ -3529,7 +3621,7 @@ export component MainWindow inherits Window {
                                 x: root.dur-x;
                                 width: root.dur-w;
                                 height: parent.height;
-                                text: "Time";
+                                text: @tr("Time");
                                 color: Theme.muted;
                                 font-size: 12px;
                                 horizontal-alignment: right;
@@ -3670,7 +3762,7 @@ export component MainWindow inherits Window {
                     x: root.title-x;
                     width: root.title-w;
                     height: parent.height;
-                    text: "Title";
+                    text: @tr("Title");
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
@@ -3679,7 +3771,7 @@ export component MainWindow inherits Window {
                     x: root.album-x;
                     width: root.album-w;
                     height: parent.height;
-                    text: "Album";
+                    text: @tr("Album");
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
@@ -3688,7 +3780,7 @@ export component MainWindow inherits Window {
                     x: root.year-x;
                     width: root.year-w;
                     height: parent.height;
-                    text: "Year";
+                    text: @tr("Year");
                     color: Theme.muted;
                     font-size: 12px;
                     vertical-alignment: center;
@@ -3697,7 +3789,7 @@ export component MainWindow inherits Window {
                     x: root.dur-x;
                     width: root.dur-w;
                     height: parent.height;
-                    text: "Time";
+                    text: @tr("Time");
                     color: Theme.muted;
                     font-size: 12px;
                     horizontal-alignment: right;
@@ -3717,7 +3809,7 @@ export component MainWindow inherits Window {
                 Text {
                     width: parent.width;
                     height: parent.height;
-                    text: root.search-text == "" ? "Choose a music folder to start" : "No matching tracks";
+                    text: root.search-text == "" ? @tr("Choose a music folder to start") : @tr("No matching tracks");
                     color: Theme.muted;
                     font-size: 16px;
                     horizontal-alignment: center;
@@ -3959,7 +4051,7 @@ export component MainWindow inherits Window {
                         y: 12px;
                         width: 84px;
                         height: 28px;
-                        text: "Shuffle";
+                        text: @tr("Shuffle");
                         active: root.shuffle;
                         clicked => { root.shuffle-changed(!root.shuffle); }
                     }
@@ -3998,8 +4090,8 @@ export component MainWindow inherits Window {
                         y: 12px;
                         width: 84px;
                         height: 28px;
-                        text: root.repeat-mode == 0 ? "Repeat"
-                            : root.repeat-mode == 1 ? "Repeat all" : "Repeat one";
+                        text: root.repeat-mode == 0 ? @tr("Repeat")
+                            : root.repeat-mode == 1 ? @tr("Repeat all") : @tr("Repeat one");
                         active: root.repeat-mode != 0;
                         clicked => { root.repeat-changed(root.repeat-mode >= 2 ? 0 : root.repeat-mode + 1); }
                     }
@@ -4331,7 +4423,7 @@ export component MainWindow inherits Window {
                     Text {
                         width: parent.width;
                         height: parent.height;
-                        text: root.np-quality-tier == 2 ? "Hi-Res" : "Lossless";
+                        text: root.np-quality-tier == 2 ? @tr("Hi-Res") : @tr("Lossless");
                         color: root.np-quality-tier == 2 ? #1a1405 : Theme.on-accent;
                         font-size: 9.5px;
                         font-weight: 800;
@@ -4366,7 +4458,7 @@ export component MainWindow inherits Window {
             if root.eff-tab == 0 && root.lyrics.length == 0 : Text {
                 width: parent.width;
                 height: parent.height;
-                text: "No lyrics for this track";
+                text: @tr("No lyrics for this track");
                 color: Theme.muted;
                 horizontal-alignment: center;
                 vertical-alignment: center;
@@ -4495,7 +4587,7 @@ export component MainWindow inherits Window {
                     drop-shadow-blur: 12px;
                     drop-shadow-color: #00000080;
                     Text {
-                        text: "Back to current line";
+                        text: @tr("Back to current line");
                         color: Theme.on-accent;
                         font-size: 12px;
                         font-weight: 700;
@@ -4538,7 +4630,7 @@ export component MainWindow inherits Window {
                     spacing: 10px;
                     alignment: start;
                     if root.np-info.length == 0 : Text {
-                        text: "No information";
+                        text: @tr("No information");
                         color: Theme.muted;
                         font-size: 13px;
                     }
@@ -4584,7 +4676,7 @@ export component MainWindow inherits Window {
                     }
                 }
                 Text {
-                    text: "Now playing";
+                    text: @tr("Now playing");
                     color: Theme.muted;
                     font-size: 13px;
                     horizontal-stretch: 1;
@@ -4592,21 +4684,21 @@ export component MainWindow inherits Window {
                 }
                 HeaderItem {
                     PillButton {
-                        text: "Lyrics";
+                        text: @tr("Lyrics");
                         active: root.side-open && root.eff-tab == 0;
                         clicked => { root.pick-tab(0); }
                     }
                 }
                 HeaderItem {
                     PillButton {
-                        text: "Sound";
+                        text: @tr("Sound");
                         active: root.side-open && root.eff-tab == 1;
                         clicked => { root.pick-tab(1); }
                     }
                 }
                 HeaderItem {
                     PillButton {
-                        text: "Info";
+                        text: @tr("Info");
                         active: root.side-open && root.eff-tab == 2;
                         clicked => { root.pick-tab(2); }
                     }
@@ -4637,7 +4729,7 @@ export component MainWindow inherits Window {
             padding: 16px;
             spacing: 2px;
             Text {
-                text: root.section == 2 ? "Sort playlists" : root.section == 1 ? "Sort albums" : "Sort tracks";
+                text: root.section == 2 ? @tr("Sort playlists") : root.section == 1 ? @tr("Sort albums") : @tr("Sort tracks");
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 700;
@@ -4664,12 +4756,12 @@ export component MainWindow inherits Window {
             HorizontalLayout {
                 spacing: 8px;
                 PillButton {
-                    text: "Ascending";
+                    text: @tr("Ascending");
                     active: !root.cur-sort-manual && !root.cur-sort-desc;
                     clicked => { root.apply-sort(root.cur-sort-mode, false); }
                 }
                 PillButton {
-                    text: "Descending";
+                    text: @tr("Descending");
                     active: !root.cur-sort-manual && root.cur-sort-desc;
                     clicked => { root.apply-sort(root.cur-sort-mode, true); }
                 }
@@ -4704,7 +4796,7 @@ export component MainWindow inherits Window {
             alignment: start;
 
             Text {
-                text: "Sound";
+                text: @tr("Sound");
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 700;
@@ -4718,7 +4810,7 @@ export component MainWindow inherits Window {
                     ToggleText {
                         width: 96px;
                         height: 28px;
-                        text: "Normalize";
+                        text: @tr("Normalize");
                         active: root.fx-normalize;
                         clicked => {
                             root.fx-normalize = !root.fx-normalize;
@@ -4728,7 +4820,7 @@ export component MainWindow inherits Window {
                     ToggleText {
                         width: 64px;
                         height: 28px;
-                        text: "Mono";
+                        text: @tr("Mono");
                         active: root.fx-mono;
                         clicked => {
                             root.fx-mono = !root.fx-mono;
@@ -4738,14 +4830,14 @@ export component MainWindow inherits Window {
                     ToggleText {
                         width: 64px;
                         height: 28px;
-                        text: "Reset";
+                        text: @tr("Reset");
                         active: false;
                         clicked => { root.fx-reset(); }
                     }
                 }
             }
             FxRow {
-                label: "Speed";
+                label: @tr("Speed");
                 lo: -2;
                 hi: 2;
                 wheel-step: 0.1;
@@ -4759,7 +4851,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
-                label: "Bass";
+                label: @tr("Bass");
                 lo: 0;
                 hi: 15;
                 value: root.fx-bass;
@@ -4770,7 +4862,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
-                label: "Treble";
+                label: @tr("Treble");
                 lo: 0;
                 hi: 15;
                 value: root.fx-treble;
@@ -4781,7 +4873,7 @@ export component MainWindow inherits Window {
                 }
             }
             FxRow {
-                label: "Subsonic";
+                label: @tr("Subsonic");
                 lo: 0;
                 hi: 100;
                 wheel-step: 1;
@@ -4793,7 +4885,7 @@ export component MainWindow inherits Window {
                 }
             }
             SegmentedControl {
-                labels: ["Off", "All tracks", "Per track"];
+                labels: [@tr("Off"), @tr("All tracks"), @tr("Per track")];
                 current: root.eq-mode;
                 selected(k) => {
                     root.eq-mode = k;
@@ -4824,7 +4916,7 @@ export component MainWindow inherits Window {
                         x: 12px;
                         width: 56px;
                         height: parent.height;
-                        text: "Preset";
+                        text: @tr("Preset");
                         color: Theme.muted;
                         font-size: 11px;
                         vertical-alignment: center;
@@ -4834,7 +4926,7 @@ export component MainWindow inherits Window {
                         width: parent.width - 68px - 36px;
                         height: parent.height;
                         text: (root.eq-active-preset >= 0 && root.eq-mode != 0)
-                            ? root.eq-preset-names[root.eq-active-preset] : "Custom";
+                            ? root.eq-preset-names[root.eq-active-preset] : @tr("Custom");
                         color: (root.eq-active-preset >= 0 && root.eq-mode != 0) ? Theme.accent : Theme.text;
                         font-size: 13px;
                         font-weight: 700;
@@ -4916,7 +5008,7 @@ export component MainWindow inherits Window {
                 y: 14px;
                 width: parent.width - 52px - 16px;
                 height: 32px;
-                text: "Equalizer presets";
+                text: @tr("Equalizer presets");
                 color: Theme.text;
                 font-size: 16px;
                 font-weight: 700;
@@ -4931,10 +5023,10 @@ export component MainWindow inherits Window {
                 color: Theme.muted;
                 overflow: elide;
                 vertical-alignment: center;
-                text: root.eq-mode == 0 ? "The equalizer is off \u{2014} picking a preset turns it on"
-                    : root.eq-mode == 2 ? (root.eq-track-name == "" ? "Play a track to give it a preset"
-                        : "Applies to \u{266A} " + root.eq-track-name)
-                    : "Applies to every track";
+                text: root.eq-mode == 0 ? @tr("The equalizer is off — picking a preset turns it on")
+                    : root.eq-mode == 2 ? (root.eq-track-name == "" ? @tr("Play a track to give it a preset")
+                        : @tr("Applies to {}", "\u{266A} " + root.eq-track-name))
+                    : @tr("Applies to every track");
             }
             for name[k] in root.eq-preset-names : PresetCard {
                 x: 16px + Math.mod(k, 2) * (parent.card-w + 8px);
@@ -4975,7 +5067,7 @@ export component MainWindow inherits Window {
         VerticalLayout {
             padding: 6px;
             MenuItem {
-                text: "Open album";
+                text: @tr("Open album");
                 clicked => {
                     root.show-menu = false;
                     if (root.menu-in-queue) {
@@ -5003,7 +5095,7 @@ export component MainWindow inherits Window {
                 }
             }
             MenuItem {
-                text: "Add to playlist";
+                text: @tr("Add to playlist");
                 clicked => {
                     root.show-menu = false;
                     if (root.menu-in-queue) { root.queue-page-add-to-playlist(root.menu-row); }
@@ -5012,7 +5104,7 @@ export component MainWindow inherits Window {
                 }
             }
             MenuItem {
-                text: "Add to queue";
+                text: @tr("Add to queue");
                 clicked => {
                     root.show-menu = false;
                     if (root.menu-in-queue) { root.queue-page-add-to-queue(root.menu-row); }
@@ -5021,14 +5113,14 @@ export component MainWindow inherits Window {
                 }
             }
             if root.menu-in-queue : MenuItem {
-                text: "Remove from queue";
+                text: @tr("Remove from queue");
                 clicked => {
                     root.show-menu = false;
                     root.queue-remove(root.menu-row);
                 }
             }
             MenuItem {
-                text: "Create stems";
+                text: @tr("Create stems");
                 clicked => {
                     root.show-menu = false;
                     if (!root.menu-in-pl && !root.menu-in-queue) { root.create-stems(root.menu-row, root.menu-in-album); }
@@ -5095,7 +5187,7 @@ export component MainWindow inherits Window {
                         y: 4px;
                         width: parent.width - 60px - 44px;
                         height: 14px;
-                        text: "ADD TO QUEUE";
+                        text: @tr("ADD TO QUEUE");
                         color: Theme.accent.brighter(0.5);
                         font-size: 11px;
                         font-weight: 700;
@@ -5161,7 +5253,7 @@ export component MainWindow inherits Window {
                         y: 10px;
                         width: parent.width - 62px - 56px;
                         height: 22px;
-                        text: "Queue \{q + 1}";
+                        text: @tr("Queue {}", q + 1);
                         color: root.q-added[q] ? Theme.accent : Theme.text;
                         font-size: 15px;
                         font-weight: 600;
@@ -5172,7 +5264,7 @@ export component MainWindow inherits Window {
                         y: 32px;
                         width: parent.width - 62px - 56px;
                         height: 18px;
-                        text: root.queue-counts[q] == 1 ? "1 track" : "\{root.queue-counts[q]} tracks";
+                        text: @tr("{n} track" | "{n} tracks" % root.queue-counts[q]);
                         color: Theme.muted;
                         font-size: 13px;
                     }
@@ -5198,7 +5290,7 @@ export component MainWindow inherits Window {
                         x: 2px;
                         width: parent.width - 120px;
                         height: parent.height;
-                        text: "Click a queue to add the track, click again to take it out.";
+                        text: @tr("Click a queue to add the track, click again to take it out.");
                         color: Theme.muted;
                         font-size: 12px;
                         vertical-alignment: center;
@@ -5208,7 +5300,7 @@ export component MainWindow inherits Window {
                         x: parent.width - self.width;
                         y: 2px;
                         width: 100px;
-                        text: "Done";
+                        text: @tr("Done");
                         clicked => { root.show-q-popup = false; }
                     }
                 }
@@ -5277,7 +5369,7 @@ export component MainWindow inherits Window {
                         y: 4px;
                         width: parent.width - 60px - 44px;
                         height: 14px;
-                        text: "ADD TO PLAYLIST";
+                        text: @tr("ADD TO PLAYLIST");
                         color: Theme.accent.brighter(0.5);
                         font-size: 11px;
                         font-weight: 700;
@@ -5350,7 +5442,7 @@ export component MainWindow inherits Window {
                         x: 2px;
                         width: parent.width - 120px;
                         height: parent.height;
-                        text: "Click a record to add the track, click again to take it out.";
+                        text: @tr("Click a record to add the track, click again to take it out.");
                         color: Theme.muted;
                         font-size: 12px;
                         vertical-alignment: center;
@@ -5360,7 +5452,7 @@ export component MainWindow inherits Window {
                         x: parent.width - self.width;
                         y: 2px;
                         width: 100px;
-                        text: "Done";
+                        text: @tr("Done");
                         clicked => { root.show-pl-popup = false; }
                     }
                 }
@@ -5384,21 +5476,21 @@ export component MainWindow inherits Window {
                     Text {
                         x: 48px;
                         height: parent.height;
-                        text: "New playlist";
+                        text: @tr("New playlist");
                         color: Theme.text;
                         font-size: 20px;
                         font-weight: 700;
                         vertical-alignment: center;
                     }
                 }
-                Text { text: "NAME"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                Text { text: @tr("NAME"); color: Theme.muted; font-size: 11px; font-weight: 700; }
                 NameField {
-                    placeholder: "Playlist name";
+                    placeholder: @tr("Playlist name");
                     value <=> root.pl-name;
                     accepted(v) => { root.pl-submit(); }
                     init => { self.focus-input(); }
                 }
-                Text { text: "FOLDER (optional)"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                Text { text: @tr("FOLDER (optional)"); color: Theme.muted; font-size: 11px; font-weight: 700; }
                 FolderPicker {
                     vertical-stretch: 1;
                     folders: root.pl-folders;
@@ -5408,9 +5500,9 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     spacing: 10px;
                     alignment: end;
-                    PillButton { text: "Cancel"; clicked => { root.pl-back(); } }
+                    PillButton { text: @tr("Cancel"); clicked => { root.pl-back(); } }
                     AccentButton {
-                        text: root.pl-has-track ? "Create and add" : "Create";
+                        text: root.pl-has-track ? @tr("Create and add") : @tr("Create");
                         width: 150px;
                         enabled: root.pl-name != "";
                         clicked => { root.pl-submit(); }
@@ -5429,7 +5521,7 @@ export component MainWindow inherits Window {
                         y: 2px;
                         width: parent.width - 44px;
                         height: 30px;
-                        text: "Move to folder";
+                        text: @tr("Move to folder");
                         color: Theme.text;
                         font-size: 20px;
                         font-weight: 700;
@@ -5465,9 +5557,9 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     spacing: 10px;
                     alignment: end;
-                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    PillButton { text: @tr("Cancel"); clicked => { root.show-pl-popup = false; } }
                     AccentButton {
-                        text: "Move";
+                        text: @tr("Move");
                         width: 110px;
                         clicked => { root.pl-move(root.pl-folder-sel); root.show-pl-popup = false; }
                     }
@@ -5502,9 +5594,9 @@ export component MainWindow inherits Window {
                         clicked => { root.show-pl-popup = false; }
                     }
                 }
-                Text { text: "NAME"; color: Theme.muted; font-size: 11px; font-weight: 700; }
+                Text { text: @tr("NAME"); color: Theme.muted; font-size: 11px; font-weight: 700; }
                 NameField {
-                    placeholder: "Name";
+                    placeholder: @tr("Name");
                     value <=> root.pl-name;
                     accepted(v) => { if (root.pl-rename(root.pl-name)) { root.show-pl-popup = false; } }
                     init => { self.focus-input(); }
@@ -5513,9 +5605,9 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     spacing: 10px;
                     alignment: end;
-                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    PillButton { text: @tr("Cancel"); clicked => { root.show-pl-popup = false; } }
                     AccentButton {
-                        text: "Save";
+                        text: @tr("Save");
                         width: 110px;
                         enabled: root.pl-name != "";
                         clicked => { if (root.pl-rename(root.pl-name)) { root.show-pl-popup = false; } }
@@ -5544,9 +5636,9 @@ export component MainWindow inherits Window {
                 HorizontalLayout {
                     spacing: 10px;
                     alignment: end;
-                    PillButton { text: "Cancel"; clicked => { root.show-pl-popup = false; } }
+                    PillButton { text: @tr("Cancel"); clicked => { root.show-pl-popup = false; } }
                     AccentButton {
-                        text: root.clear-confirm ? "Clear" : "Delete";
+                        text: root.clear-confirm ? @tr("Clear") : @tr("Delete");
                         tone: #d64550;
                         width: 110px;
                         clicked => {
@@ -5576,6 +5668,8 @@ export component MainWindow inherits Window {
         custom-pick(i) => { root.custom-pick(i); }
         custom-remove(i) => { root.custom-remove(i); }
         saved-colors: root.saved-colors;
+        language <=> root.language;
+        language-changed(i) => { root.language-changed(i); }
         cu-h <=> root.cu-h;
         cu-s <=> root.cu-s;
         cu-v <=> root.cu-v;

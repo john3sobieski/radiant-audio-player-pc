@@ -1,0 +1,565 @@
+# Radiant interface translation: ja. Keys are the English texts of the interface.
+msgid ""
+msgstr ""
+"Project-Id-Version: radiant-ui\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "{n} track"
+msgid_plural "{n} tracks"
+msgstr[0] "{n} 曲"
+
+msgid "{n} album"
+msgid_plural "{n} albums"
+msgstr[0] "{n} 枚のアルバム"
+
+msgid "{n} playlist"
+msgid_plural "{n} playlists"
+msgstr[0] "{n} 件のプレイリスト"
+
+msgid "Bypassed — your curves are kept"
+msgstr "バイパス中 — カーブは保持されます"
+
+msgid "One curve for every track"
+msgstr "全曲で1つのカーブ"
+
+msgid "Play a track to give it its own curve"
+msgstr "曲を再生すると専用カーブを設定できます"
+
+msgid "own curve"
+msgstr "専用カーブ"
+
+msgid "flat"
+msgstr "フラット"
+
+msgid "New playlist"
+msgstr "新しいプレイリスト"
+
+msgid "Name it, pick a folder"
+msgstr "名前とフォルダを選択"
+
+msgid "No folder"
+msgstr "フォルダなし"
+
+msgid "New folder..."
+msgstr "新しいフォルダ..."
+
+msgid "Folder name"
+msgstr "フォルダ名"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "System"
+msgstr "システム"
+
+msgid "Appearance"
+msgstr "外観"
+
+msgid "Language"
+msgstr "言語"
+
+msgid "Security"
+msgstr "セキュリティ"
+
+msgid "AI & stems"
+msgstr "AI とステム"
+
+msgid "Library"
+msgstr "ライブラリ"
+
+msgid "Themes and colors"
+msgstr "テーマとカラー"
+
+msgid "Interface language"
+msgstr "表示言語"
+
+msgid "App lock"
+msgstr "アプリロック"
+
+msgid "Stem separation"
+msgstr "ステム分離"
+
+msgid "Music folder"
+msgstr "音楽フォルダ"
+
+msgid "How Radiant looks."
+msgstr "Radiant の見た目を設定します。"
+
+msgid "The language of the interface."
+msgstr "インターフェースの言語です。"
+
+msgid "Keep your music private."
+msgstr "音楽をプライベートに保ちます。"
+
+msgid "Splitting tracks into vocals, drums, bass and the rest."
+msgstr "曲をボーカル、ドラム、ベースなどに分離します。"
+
+msgid "Where the music lives."
+msgstr "音楽の保存場所です。"
+
+msgid "4 digits, 6 digits or your own code, asked at start and when returning to the app."
+msgstr "4桁、6桁、または任意のコード。起動時とアプリに戻る際に求められます。"
+
+msgid "Recovery file"
+msgstr "リカバリーファイル"
+
+msgid "A file of 12 words to get back in if the code is forgotten."
+msgstr "コードを忘れた場合に再びアクセスするための12語のファイルです。"
+
+msgid "Models"
+msgstr "モデル"
+
+msgid "Download the separation models or import them from files."
+msgstr "分離モデルをダウンロードするか、ファイルからインポートします。"
+
+msgid "Stems"
+msgstr "ステム"
+
+msgid "Choose which parts to keep and where they are saved."
+msgstr "保持するパートと保存先を選びます。"
+
+msgid "Choose and rescan the folder (for now these two buttons stay in the header)."
+msgstr "フォルダの選択と再スキャン（現在この2つのボタンはヘッダーに残ります）。"
+
+msgid "SETTINGS"
+msgstr "設定"
+
+msgid "Theme"
+msgstr "テーマ"
+
+msgid "System follows the Windows light / dark setting. Black is pure black for OLED screens."
+msgstr "「システム」は Windows のライト/ダーク設定に従います。「ブラック」は OLED 画面向けの純黒です。"
+
+msgid "Light"
+msgstr "ライト"
+
+msgid "Dark"
+msgstr "ダーク"
+
+msgid "Black"
+msgstr "ブラック"
+
+msgid "Color palette"
+msgstr "カラーパレット"
+
+msgid "Ten colors for every theme. The last circle is your own color."
+msgstr "各テーマ10色。最後の円は自分で選んだ色です。"
+
+msgid "Save color"
+msgstr "色を保存"
+
+msgid "Save it to reuse it later"
+msgstr "保存して後で再利用できます"
+
+msgid "Right-click to remove"
+msgstr "右クリックで削除"
+
+msgid "Hue"
+msgstr "色相"
+
+msgid "Saturation"
+msgstr "彩度"
+
+msgid "Brightness"
+msgstr "明度"
+
+msgid "10 languages plus System; switches on the fly without stopping the music."
+msgstr "10言語とシステム設定。音楽を止めずにその場で切り替わります。"
+
+msgid "Soon"
+msgstr "近日公開"
+
+msgid "Date created"
+msgstr "作成日"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "Date changed"
+msgstr "変更日"
+
+msgid "Tracks"
+msgstr "曲"
+
+msgid "Manual order"
+msgstr "手動順"
+
+msgid "Artist"
+msgstr "アーティスト"
+
+msgid "Duration"
+msgstr "再生時間"
+
+msgid "Album"
+msgstr "アルバム"
+
+msgid "File date"
+msgstr "ファイル日付"
+
+msgid "Albums"
+msgstr "アルバム"
+
+msgid "Playlists"
+msgstr "プレイリスト"
+
+msgid "Queues"
+msgstr "キュー"
+
+msgid "Sort"
+msgstr "並べ替え"
+
+msgid "Sound"
+msgstr "サウンド"
+
+msgid "Choose folder"
+msgstr "フォルダを選択"
+
+msgid "Queue {}"
+msgstr "キュー {}"
+
+msgid "No albums yet. Choose a music folder to start."
+msgstr "アルバムはまだありません。音楽フォルダを選択してください。"
+
+msgid "No matching albums"
+msgstr "一致するアルバムがありません"
+
+msgid "Pause"
+msgstr "一時停止"
+
+msgid "Play"
+msgstr "再生"
+
+msgid "Shuffle"
+msgstr "シャッフル"
+
+msgid "Title"
+msgstr "タイトル"
+
+msgid "Time"
+msgstr "時間"
+
+msgid "Add tracks from the three-dot menu of any track, or press New playlist."
+msgstr "曲の「…」メニューから曲を追加するか、「新しいプレイリスト」を押してください。"
+
+msgid "Rename"
+msgstr "名前を変更"
+
+msgid "Delete"
+msgstr "削除"
+
+msgid "No tracks yet. Use \"Add to playlist\" in the menu of a track."
+msgstr "曲はまだありません。曲のメニューの「プレイリストに追加」を使ってください。"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Queue {} is empty. Use \"Add to queue\" in the menu of a track."
+msgstr "キュー {} は空です。曲のメニューの「キューに追加」を使ってください。"
+
+msgid "Year"
+msgstr "年"
+
+msgid "Choose a music folder to start"
+msgstr "音楽フォルダを選択してください"
+
+msgid "No matching tracks"
+msgstr "一致する曲がありません"
+
+msgid "Repeat"
+msgstr "リピート"
+
+msgid "Repeat all"
+msgstr "全曲リピート"
+
+msgid "Repeat one"
+msgstr "1曲リピート"
+
+msgid "Hi-Res"
+msgstr "Hi-Res"
+
+msgid "Lossless"
+msgstr "Lossless"
+
+msgid "No lyrics for this track"
+msgstr "この曲の歌詞はありません"
+
+msgid "Back to current line"
+msgstr "現在の行に戻る"
+
+msgid "No information"
+msgstr "情報なし"
+
+msgid "Now playing"
+msgstr "再生中"
+
+msgid "Lyrics"
+msgstr "歌詞"
+
+msgid "Info"
+msgstr "情報"
+
+msgid "Sort playlists"
+msgstr "プレイリストの並べ替え"
+
+msgid "Sort albums"
+msgstr "アルバムの並べ替え"
+
+msgid "Sort tracks"
+msgstr "曲の並べ替え"
+
+msgid "Ascending"
+msgstr "昇順"
+
+msgid "Descending"
+msgstr "降順"
+
+msgid "Normalize"
+msgstr "ノーマライズ"
+
+msgid "Mono"
+msgstr "モノラル"
+
+msgid "Reset"
+msgstr "リセット"
+
+msgid "Speed"
+msgstr "速度"
+
+msgid "Bass"
+msgstr "ベース"
+
+msgid "Treble"
+msgstr "高音"
+
+msgid "Subsonic"
+msgstr "サブソニック"
+
+msgid "Off"
+msgstr "オフ"
+
+msgid "All tracks"
+msgstr "全曲"
+
+msgid "Per track"
+msgstr "曲ごと"
+
+msgid "Preset"
+msgstr "プリセット"
+
+msgid "Custom"
+msgstr "カスタム"
+
+msgid "Equalizer presets"
+msgstr "イコライザープリセット"
+
+msgid "The equalizer is off — picking a preset turns it on"
+msgstr "イコライザーはオフです — プリセットを選ぶとオンになります"
+
+msgid "Play a track to give it a preset"
+msgstr "曲を再生するとプリセットを設定できます"
+
+msgid "Applies to {}"
+msgstr "{} に適用"
+
+msgid "Applies to every track"
+msgstr "全曲に適用"
+
+msgid "Open album"
+msgstr "アルバムを開く"
+
+msgid "Add to playlist"
+msgstr "プレイリストに追加"
+
+msgid "Add to queue"
+msgstr "キューに追加"
+
+msgid "Remove from queue"
+msgstr "キューから削除"
+
+msgid "Create stems"
+msgstr "ステムを作成"
+
+msgid "ADD TO QUEUE"
+msgstr "キューに追加"
+
+msgid "Click a queue to add the track, click again to take it out."
+msgstr "キューをクリックして曲を追加し、もう一度クリックすると削除します。"
+
+msgid "Done"
+msgstr "完了"
+
+msgid "ADD TO PLAYLIST"
+msgstr "プレイリストに追加"
+
+msgid "Click a record to add the track, click again to take it out."
+msgstr "プレイリストをクリックして曲を追加し、もう一度クリックすると削除します。"
+
+msgid "NAME"
+msgstr "名前"
+
+msgid "Playlist name"
+msgstr "プレイリスト名"
+
+msgid "FOLDER (optional)"
+msgstr "フォルダ（任意）"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Create and add"
+msgstr "作成して追加"
+
+msgid "Create"
+msgstr "作成"
+
+msgid "Move to folder"
+msgstr "フォルダに移動"
+
+msgid "Move"
+msgstr "移動"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Could not save settings: {}"
+msgstr "設定を保存できませんでした: {}"
+
+msgid "Album artist"
+msgstr "アルバムアーティスト"
+
+msgid "Track no."
+msgstr "トラック番号"
+
+msgid "Format"
+msgstr "フォーマット"
+
+msgid "Bitrate"
+msgstr "ビットレート"
+
+msgid "Sample rate"
+msgstr "サンプルレート"
+
+msgid "Channels"
+msgstr "チャンネル"
+
+msgid "Stereo"
+msgstr "ステレオ"
+
+msgid "Size"
+msgstr "サイズ"
+
+msgid "File next to the track"
+msgstr "曲と同じ場所のファイル"
+
+msgid "Embedded in tags"
+msgstr "タグに埋め込み"
+
+msgid "File"
+msgstr "ファイル"
+
+msgid "Folder"
+msgstr "フォルダ"
+
+msgid "Scanning..."
+msgstr "スキャン中..."
+
+msgid "Unknown album"
+msgstr "不明なアルバム"
+
+msgid "Unknown artist"
+msgstr "不明なアーティスト"
+
+msgid "Disc {}"
+msgstr "ディスク {}"
+
+msgid "Liked tracks"
+msgstr "お気に入りの曲"
+
+msgid "Could not save playlists: {}"
+msgstr "プレイリストを保存できませんでした: {}"
+
+msgid "File not found"
+msgstr "ファイルが見つかりません"
+
+msgid "Could not save queues: {}"
+msgstr "キューを保存できませんでした: {}"
+
+msgid "Could not read settings: {}"
+msgstr "設定を読み込めませんでした: {}"
+
+msgid "Could not read playlists: {}"
+msgstr "プレイリストを読み込めませんでした: {}"
+
+msgid "Could not read queues: {}"
+msgstr "キューを読み込めませんでした: {}"
+
+msgid "This file is not in the library"
+msgstr "このファイルはライブラリにありません"
+
+msgid "This queue has no playable tracks yet"
+msgstr "このキューには再生できる曲がまだありません"
+
+msgid "Clear queue {}?"
+msgstr "キュー {} をクリアしますか？"
+
+msgid "All tracks will be removed from this queue. The files stay in your library."
+msgstr "このキューからすべての曲が削除されます。ファイルはライブラリに残ります。"
+
+msgid "This playlist has no playable tracks yet"
+msgstr "このプレイリストには再生できる曲がまだありません"
+
+msgid "Rename playlist"
+msgstr "プレイリスト名を変更"
+
+msgid "Delete playlist?"
+msgstr "プレイリストを削除しますか？"
+
+msgid "\"{}\" will be deleted. The tracks stay in your library."
+msgstr "「{}」が削除されます。曲はライブラリに残ります。"
+
+msgid "Rename folder"
+msgstr "フォルダ名を変更"
+
+msgid "Delete folder?"
+msgstr "フォルダを削除しますか？"
+
+msgid "The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder."
+msgstr "フォルダ「{}」が削除されます。中のプレイリストは残り、フォルダの外に移動します。"
+
+msgid "Choose a music folder first"
+msgstr "先に音楽フォルダを選択してください"
+
+msgid "{n} channel"
+msgid_plural "{n} channels"
+msgstr[0] "{n} チャンネル"
+
+msgid "Rock"
+msgstr "ロック"
+
+msgid "Pop"
+msgstr "ポップ"
+
+msgid "Hip-Hop"
+msgstr "ヒップホップ"
+
+msgid "Electronic"
+msgstr "エレクトロニック"
+
+msgid "Jazz"
+msgstr "ジャズ"
+
+msgid "Classical"
+msgstr "クラシック"
+
+msgid "Metal"
+msgstr "メタル"
+
+msgid "Acoustic"
+msgstr "アコースティック"
+
+msgid "Vocal"
+msgstr "ボーカル"

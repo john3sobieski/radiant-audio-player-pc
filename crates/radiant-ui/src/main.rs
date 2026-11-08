@@ -15,6 +15,7 @@ use radiant_audio::{
 };
 use radiant_core::settings::{self, AppSettings, EqMode, RepeatModeSetting};
 mod eq_curve;
+mod i18n;
 mod rays;
 
 use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
@@ -58,11 +59,26 @@ fn repeat_mode_to_engine(mode: RepeatModeSetting) -> RepeatMode {
     }
 }
 
+/// Switches the interface language: the Rust-side texts (`i18n`) and the bundled Slint translation of `@tr`
+/// texts. `setting` is "system" or a language code. Returns the language code that is active now.
+fn apply_language(setting: &str) -> &'static str {
+    let code = i18n::set_language(setting);
+    // Every language has a .po file (English too), so this only fails when the files are missing.
+    let _ = slint::select_bundled_translation(code);
+    code
+}
+
+/// The Rust-made texts that stay on screen: the names of the equalizer presets.
+fn refresh_translated_texts(ui: &MainWindow) {
+    let names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| i18n::tr(p.name).into()).collect();
+    ui.set_eq_preset_names(ModelRc::new(VecModel::from(names)));
+}
+
 fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>) {
     let snapshot = settings.borrow().clone();
     if let Err(e) = settings::save(&snapshot) {
         if let Some(ui) = weak.upgrade() {
-            ui.set_status(format!("Could not save settings: {e}").into());
+            ui.set_status(i18n::tr_fmt("Could not save settings: {}", &[&e]).into());
         }
     }
 }
@@ -392,29 +408,30 @@ fn fmt_size(bytes: u64) -> String {
 }
 
 fn info_rows(t: &Track) -> Vec<InfoRow> {
-    let mut rows: Vec<(&str, String)> = Vec::new();
+    use i18n::tr;
+    let mut rows: Vec<(String, String)> = Vec::new();
     // Tags first, then technical data, then the file itself.
-    rows.push(("Title", t.title.clone()));
-    rows.push(("Artist", t.artist.clone().unwrap_or_default()));
-    rows.push(("Album artist", t.album_artist.clone().unwrap_or_default()));
-    rows.push(("Album", t.album.clone().unwrap_or_default()));
-    rows.push(("Track no.", t.track_no.filter(|n| *n > 0).map(|n| n.to_string()).unwrap_or_default()));
-    rows.push(("Year", t.year.map(|y| y.to_string()).unwrap_or_default()));
-    rows.push(("Format", t.info.format.clone()));
-    rows.push(("Bitrate", t.info.bitrate_kbps.filter(|k| *k > 0).map(|k| format!("{k} kbps")).unwrap_or_default()));
-    rows.push(("Sample rate", t.info.sample_rate.map(|r| format!("{} kHz", r as f32 / 1000.0)).unwrap_or_default()));
-    rows.push(("Channels", match t.info.channels {
-        Some(1) => "Mono".to_string(),
-        Some(2) => "Stereo".to_string(),
-        Some(n) if n > 0 => format!("{n} channels"),
+    rows.push((tr("Title"), t.title.clone()));
+    rows.push((tr("Artist"), t.artist.clone().unwrap_or_default()));
+    rows.push((tr("Album artist"), t.album_artist.clone().unwrap_or_default()));
+    rows.push((tr("Album"), t.album.clone().unwrap_or_default()));
+    rows.push((tr("Track no."), t.track_no.filter(|n| *n > 0).map(|n| n.to_string()).unwrap_or_default()));
+    rows.push((tr("Year"), t.year.map(|y| y.to_string()).unwrap_or_default()));
+    rows.push((tr("Format"), t.info.format.clone()));
+    rows.push((tr("Bitrate"), t.info.bitrate_kbps.filter(|k| *k > 0).map(|k| format!("{k} kbps")).unwrap_or_default()));
+    rows.push((tr("Sample rate"), t.info.sample_rate.map(|r| format!("{} kHz", r as f32 / 1000.0)).unwrap_or_default()));
+    rows.push((tr("Channels"), match t.info.channels {
+        Some(1) => tr("Mono"),
+        Some(2) => tr("Stereo"),
+        Some(n) if n > 0 => i18n::tr_n("{n} channel", "{n} channels", n as usize),
         _ => String::new(),
     }));
-    rows.push(("Duration", t.duration_ms.filter(|d| *d > 0).map(fmt_time).unwrap_or_default()));
-    rows.push(("Size", if t.info.size_bytes > 0 { fmt_size(t.info.size_bytes) } else { String::new() }));
-    rows.push(("Lyrics", if t.lyrics_path.is_some() { "File next to the track".to_string() }
-        else if t.tag_lyrics { "Embedded in tags".to_string() } else { String::new() }));
-    rows.push(("File", t.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
-    rows.push(("Folder", t.path.parent().map(|p| p.display().to_string()).unwrap_or_default()));
+    rows.push((tr("Duration"), t.duration_ms.filter(|d| *d > 0).map(fmt_time).unwrap_or_default()));
+    rows.push((tr("Size"), if t.info.size_bytes > 0 { fmt_size(t.info.size_bytes) } else { String::new() }));
+    rows.push((tr("Lyrics"), if t.lyrics_path.is_some() { tr("File next to the track") }
+        else if t.tag_lyrics { tr("Embedded in tags") } else { String::new() }));
+    rows.push((tr("File"), t.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    rows.push((tr("Folder"), t.path.parent().map(|p| p.display().to_string()).unwrap_or_default()));
     rows.into_iter()
         .filter(|(_, v)| !v.is_empty())
         .map(|(label, value)| InfoRow { label: label.into(), value: value.into() })
@@ -492,7 +509,7 @@ fn scan_folder(
     // A slower scan must not overwrite the list from a newer one.
     let ticket = scan_gen.fetch_add(1, Ordering::AcqRel) + 1;
     if let Some(ui) = weak.upgrade() {
-        ui.set_status("Scanning...".into());
+        ui.set_status(i18n::tr("Scanning...").into());
         ui.set_scanning(true);
     }
     std::thread::spawn(move || {
@@ -704,7 +721,7 @@ fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>
                 t.map(|t| t.title.to_lowercase()).unwrap_or_default(),
             )
         });
-        let title = a.name.clone().unwrap_or_else(|| "Unknown album".to_string());
+        let title = a.name.clone().unwrap_or_else(|| i18n::tr("Unknown album"));
         let (cover, has_cover) = match cache.get(&a.key) {
             Some(Some(px)) => (px.to_image(), true),
             _ => (slint::Image::default(), false),
@@ -712,7 +729,7 @@ fn refresh_albums(weak: &slint::Weak<MainWindow>, library: &Arc<Mutex<Vec<Track>
         rows.push(AlbumRow {
             letter: title.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into(),
             title: title.into(),
-            artist: a.artist.clone().unwrap_or_else(|| "Unknown artist".to_string()).into(),
+            artist: a.artist.clone().unwrap_or_else(|| i18n::tr("Unknown artist")).into(),
             cover,
             has_cover,
         });
@@ -755,7 +772,7 @@ fn open_album(ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>, index: usize) {
         let t = by_path.get(p.as_path()).copied();
         let disc = t.and_then(|t| t.disc_no).unwrap_or(1);
         if multi_disc && last_disc != Some(disc) {
-            rows.push(AlbumTrackRow { header: format!("Disc {disc}").into(), ..Default::default() });
+            rows.push(AlbumTrackRow { header: i18n::tr_fmt("Disc {}", &[&disc]).into(), ..Default::default() });
             row_paths.push(None);
             last_disc = Some(disc);
             seq = 0;
@@ -777,7 +794,7 @@ fn open_album(ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>, index: usize) {
     }
 
     let count = paths.len();
-    let mut meta = format!("{} {}", count, if count == 1 { "track" } else { "tracks" });
+    let mut meta = i18n::tr_n("{n} track", "{n} tracks", count);
     if total_ms > 0 {
         meta.push_str(&format!(" · {}", fmt_total(total_ms)));
     }
@@ -910,11 +927,11 @@ fn playlist_colors(id: &str) -> (slint::Color, slint::Color) {
 }
 
 fn pl_name(p: &Playlist) -> String {
-    if p.id == FAVORITES_ID { "Liked tracks".to_string() } else { p.name.clone() }
+    if p.id == FAVORITES_ID { i18n::tr("Liked tracks") } else { p.name.clone() }
 }
 
 fn tracks_text(n: usize) -> String {
-    format!("{n} {}", if n == 1 { "track" } else { "tracks" })
+    i18n::tr_n("{n} track", "{n} tracks", n)
 }
 
 fn first_letter(text: &str) -> SharedString {
@@ -965,7 +982,7 @@ fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
                 PlaylistListRow {
                     is_folder: true,
                     name: f.name.clone().into(),
-                    sub: format!("{n} {}", if n == 1 { "playlist" } else { "playlists" }).into(),
+                    sub: i18n::tr_n("{n} playlist", "{n} playlists", n).into(),
                     collapsed: f.collapsed,
                     ..Default::default()
                 }
@@ -994,7 +1011,7 @@ fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
 
 fn save_playlists(ui: &MainWindow, store: &PlaylistStore) {
     if let Err(e) = playlists::save(store) {
-        ui.set_status(format!("Could not save playlists: {e}").into());
+        ui.set_status(i18n::tr_fmt("Could not save playlists: {}", &[&e]).into());
     }
 }
 
@@ -1026,7 +1043,7 @@ fn fill_playlist_page(ui: &MainWindow, st: &PlState, library: &Arc<Mutex<Vec<Tra
             None => rows.push(PlTrackRow {
                 no,
                 title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().into(),
-                artist: "File not found".into(),
+                artist: i18n::tr("File not found").into(),
                 duration: SharedString::default(),
                 missing: true,
             }),
@@ -1116,7 +1133,7 @@ fn refresh_queues(ui: &MainWindow, st: &QState) {
 
 fn save_queues(ui: &MainWindow, store: &QueueStore) {
     if let Err(e) = queues::save(store) {
-        ui.set_status(format!("Could not save queues: {e}").into());
+        ui.set_status(i18n::tr_fmt("Could not save queues: {}", &[&e]).into());
     }
 }
 
@@ -1154,7 +1171,7 @@ fn fill_queue_page(ui: &MainWindow, st: &QState, library: &Arc<Mutex<Vec<Track>>
             None => rows.push(PlTrackRow {
                 no,
                 title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().into(),
-                artist: "File not found".into(),
+                artist: i18n::tr("File not found").into(),
                 duration: SharedString::default(),
                 missing: true,
             }),
@@ -1308,18 +1325,23 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }));
 
+    // Language first, so that every text made below is already translated. Until the settings are read
+    // (and when they cannot be) the language of Windows is used.
+    apply_language(settings::LANGUAGE_SYSTEM);
     let settings = match settings::load() {
         Ok(s) => Rc::new(RefCell::new(s)),
         Err(e) => {
-            ui.set_status(format!("Could not read settings: {e}").into());
+            ui.set_status(i18n::tr_fmt("Could not read settings: {}", &[&e]).into());
             Rc::new(RefCell::new(AppSettings::default()))
         }
     };
+    apply_language(&settings.borrow().language);
+    ui.set_language(i18n::setting_to_index(&settings.borrow().language));
     let pl: PlRef = {
         let store = match playlists::load() {
             Ok(store) => store,
             Err(e) => {
-                ui.set_status(format!("Could not read playlists: {e}").into());
+                ui.set_status(i18n::tr_fmt("Could not read playlists: {}", &[&e]).into());
                 let mut store = PlaylistStore::default();
                 store.normalize();
                 store
@@ -1336,7 +1358,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let store = match queues::load() {
             Ok(store) => store,
             Err(e) => {
-                ui.set_status(format!("Could not read queues: {e}").into());
+                ui.set_status(i18n::tr_fmt("Could not read queues: {}", &[&e]).into());
                 let mut store = QueueStore::default();
                 store.normalize();
                 store
@@ -1668,7 +1690,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let queue = queue_playable(&qs.borrow(), &ui, &library);
             match queue.iter().position(|p| *p == clicked) {
                 Some(start) => player.send(Command::SetQueue { queue, start }),
-                None => ui.set_status("This file is not in the library".into()),
+                None => ui.set_status(i18n::tr("This file is not in the library").into()),
             }
         });
     }
@@ -1678,7 +1700,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let queue = queue_playable(&qs.borrow(), &ui, &library);
             if queue.is_empty() {
-                ui.set_status("This queue has no playable tracks yet".into());
+                ui.set_status(i18n::tr("This queue has no playable tracks yet").into());
                 return;
             }
             player.send(Command::SetQueue { queue, start: 0 });
@@ -1691,7 +1713,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let queue = queue_playable(&qs.borrow(), &ui, &library);
             if queue.is_empty() {
-                ui.set_status("This queue has no playable tracks yet".into());
+                ui.set_status(i18n::tr("This queue has no playable tracks yet").into());
                 return;
             }
             let nanos = std::time::SystemTime::now()
@@ -1746,8 +1768,8 @@ fn main() -> Result<(), slint::PlatformError> {
             st.target = None;
             st.moving = None;
             st.edit = None;
-            ui.set_pl_dialog_title(format!("Clear queue {}?", q + 1).into());
-            ui.set_pl_dialog_text("All tracks will be removed from this queue. The files stay in your library.".into());
+            ui.set_pl_dialog_title(i18n::tr_fmt("Clear queue {}?", &[&(q + 1)]).into());
+            ui.set_pl_dialog_text(i18n::tr("All tracks will be removed from this queue. The files stay in your library.").into());
             show_pl_popup(&ui, &mut st, 4);
         });
     }
@@ -1941,7 +1963,7 @@ fn main() -> Result<(), slint::PlatformError> {
             match queue.iter().position(|p| *p == clicked) {
                 Some(start) => player.send(Command::SetQueue { queue, start }),
                 None => {
-                    if let Some(ui) = weak.upgrade() { ui.set_status("This file is not in the library".into()); }
+                    if let Some(ui) = weak.upgrade() { ui.set_status(i18n::tr("This file is not in the library").into()); }
                 }
             }
         });
@@ -1951,7 +1973,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_pl_play_all(move || {
             let queue = playable_queue(&pl.borrow(), &library);
             if queue.is_empty() {
-                if let Some(ui) = weak.upgrade() { ui.set_status("This playlist has no playable tracks yet".into()); }
+                if let Some(ui) = weak.upgrade() { ui.set_status(i18n::tr("This playlist has no playable tracks yet").into()); }
                 return;
             }
             player.send(Command::SetQueue { queue, start: 0 });
@@ -1963,7 +1985,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.on_pl_shuffle_all(move || {
             let queue = playable_queue(&pl.borrow(), &library);
             if queue.is_empty() {
-                if let Some(ui) = weak.upgrade() { ui.set_status("This playlist has no playable tracks yet".into()); }
+                if let Some(ui) = weak.upgrade() { ui.set_status(i18n::tr("This playlist has no playable tracks yet").into()); }
                 return;
             }
             let nanos = std::time::SystemTime::now()
@@ -2004,7 +2026,7 @@ fn main() -> Result<(), slint::PlatformError> {
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Playlist(id));
-            ui.set_pl_dialog_title("Rename playlist".into());
+            ui.set_pl_dialog_title(i18n::tr("Rename playlist").into());
             show_pl_popup(&ui, &mut st, 3);
             ui.set_pl_name(name.into());
         });
@@ -2021,8 +2043,8 @@ fn main() -> Result<(), slint::PlatformError> {
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Playlist(id));
-            ui.set_pl_dialog_title("Delete playlist?".into());
-            ui.set_pl_dialog_text(format!("\"{name}\" will be deleted. The tracks stay in your library.").into());
+            ui.set_pl_dialog_title(i18n::tr("Delete playlist?").into());
+            ui.set_pl_dialog_text(i18n::tr_fmt("\"{}\" will be deleted. The tracks stay in your library.", &[&name]).into());
             show_pl_popup(&ui, &mut st, 4);
         });
     }
@@ -2037,7 +2059,7 @@ fn main() -> Result<(), slint::PlatformError> {
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Folder(id));
-            ui.set_pl_dialog_title("Rename folder".into());
+            ui.set_pl_dialog_title(i18n::tr("Rename folder").into());
             show_pl_popup(&ui, &mut st, 3);
             ui.set_pl_name(name.into());
         });
@@ -2053,8 +2075,8 @@ fn main() -> Result<(), slint::PlatformError> {
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Folder(id));
-            ui.set_pl_dialog_title("Delete folder?".into());
-            ui.set_pl_dialog_text(format!("The folder \"{name}\" will be deleted. Its playlists are kept and move out of the folder.").into());
+            ui.set_pl_dialog_title(i18n::tr("Delete folder?").into());
+            ui.set_pl_dialog_text(i18n::tr_fmt("The folder \"{}\" will be deleted. Its playlists are kept and move out of the folder.", &[&name]).into());
             show_pl_popup(&ui, &mut st, 4);
         });
     }
@@ -2236,6 +2258,26 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
+        // Interface language (System + 10): switches on the fly; playback is not touched. `@tr` texts in the
+        // .slint file follow by themselves, the texts made in Rust are rebuilt here.
+        let (settings, weak, library, query, pl, qs) =
+            (settings.clone(), ui_weak.clone(), library.clone(), query.clone(), pl.clone(), queues_state.clone());
+        ui.on_language_changed(move |index| {
+            let setting = i18n::index_to_setting(index);
+            settings.borrow_mut().language = setting.to_string();
+            save_settings(&weak, &settings);
+            apply_language(setting);
+            let Some(ui) = weak.upgrade() else { return };
+            ui.set_language(index.clamp(0, 10));
+            ui.set_status(SharedString::default());
+            refresh_translated_texts(&ui);
+            refresh_albums(&weak, &library, &query);
+            refresh_playlists(&ui, &mut pl.borrow_mut());
+            refresh_queues(&ui, &qs.borrow());
+            fill_queue_page(&ui, &qs.borrow(), &library);
+        });
+    }
+    {
         // Theme (System / Light / Dark / Black): the UI already switched itself, here it is only remembered.
         let (settings, weak) = (settings.clone(), ui_weak.clone());
         ui.on_theme_changed(move |mode| {
@@ -2379,8 +2421,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     // Preset buttons: names for the UI, and applying a curve replaces all 12 gains at once.
-    let preset_names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| p.name.into()).collect();
-    ui.set_eq_preset_names(ModelRc::new(VecModel::from(preset_names)));
+    refresh_translated_texts(&ui);
     let (preset_lines, preset_fills): (Vec<SharedString>, Vec<SharedString>) = EQ_PRESETS
         .iter()
         .map(|p| {
@@ -2461,7 +2502,7 @@ fn main() -> Result<(), slint::PlatformError> {
             match dir {
                 Some(dir) => scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true),
                 None => {
-                    if let Some(ui) = weak.upgrade() { ui.set_status("Choose a music folder first".into()); }
+                    if let Some(ui) = weak.upgrade() { ui.set_status(i18n::tr("Choose a music folder first").into()); }
                 }
             }
         });
