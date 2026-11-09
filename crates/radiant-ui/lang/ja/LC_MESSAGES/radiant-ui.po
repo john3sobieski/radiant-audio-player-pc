@@ -639,9 +639,6 @@ msgstr "12 語をスペースで区切って入力"
 msgid "Recover"
 msgstr "回復"
 
-msgid "Code type"
-msgstr "コードの種類"
-
 msgid "4 digits"
 msgstr "4 桁"
 
@@ -683,9 +680,6 @@ msgstr "ファイルを保存"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "Radiant の起動時とウィンドウを最小化したときにコードを求めます。ロック中も音楽は再生され続けます。"
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "次に設定するコードの種類です。独自コードは英字と数字で、4～64 文字です。"
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "新しいコードと新しい復元ファイルを作成します。古いファイルは使えなくなります。"

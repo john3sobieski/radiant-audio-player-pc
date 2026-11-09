@@ -647,9 +647,6 @@ msgstr "12 słów oddzielonych spacjami"
 msgid "Recover"
 msgstr "Odzyskaj"
 
-msgid "Code type"
-msgstr "Rodzaj kodu"
-
 msgid "4 digits"
 msgstr "4 cyfry"
 
@@ -691,9 +688,6 @@ msgstr "Zapisz plik"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "Prosi o kod przy uruchomieniu Radianta i po zminimalizowaniu okna. Muzyka gra dalej, gdy aplikacja jest zablokowana."
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "Rodzaj następnego kodu, który ustawisz. Własny kod składa się z łacińskich liter i cyfr, od 4 do 64 znaków."
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "Ustawia nowy kod i tworzy nowy plik odzyskiwania; stary plik przestaje działać."

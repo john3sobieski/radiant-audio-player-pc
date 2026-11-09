@@ -647,9 +647,6 @@ msgstr "12 слов через пробел"
 msgid "Recover"
 msgstr "Восстановить"
 
-msgid "Code type"
-msgstr "Вид кода"
-
 msgid "4 digits"
 msgstr "4 цифры"
 
@@ -691,9 +688,6 @@ msgstr "Сохранить файл"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "Запрашивает код при запуске Radiant и при сворачивании окна. Музыка продолжает играть, пока приложение заблокировано."
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "Вид следующего кода, который вы зададите. Свой код состоит из латинских букв и цифр, от 4 до 64 символов."
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "Задаёт новый код и создаёт новый файл восстановления; старый файл перестаёт работать."

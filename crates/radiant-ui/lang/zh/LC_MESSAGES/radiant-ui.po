@@ -639,9 +639,6 @@ msgstr "12 个单词，以空格分隔"
 msgid "Recover"
 msgstr "恢复"
 
-msgid "Code type"
-msgstr "密码类型"
-
 msgid "4 digits"
 msgstr "4 位数字"
 
@@ -683,9 +680,6 @@ msgstr "保存文件"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "在 Radiant 启动和窗口最小化时要求输入密码。锁定期间音乐会继续播放。"
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "你接下来设置的密码类型。自定义密码由拉丁字母和数字组成，长度为 4 到 64 个字符。"
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "设置新密码并生成新的恢复文件；旧文件将失效。"

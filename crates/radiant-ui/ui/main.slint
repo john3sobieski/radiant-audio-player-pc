@@ -1332,10 +1332,16 @@ component LockScreen inherits Rectangle {
         HorizontalLayout {
             spacing: 10px;
             alignment: center;
-            PillButton { text: @tr("Choose file"); clicked => { root.recover-file(); } }
+            PillButton {
+                text: @tr("Choose file");
+                width: 150px;
+                height: 40px;
+                border-radius: 20px;
+                clicked => { root.recover-file(); }
+            }
             AccentButton {
                 text: @tr("Recover");
-                width: 120px;
+                width: 150px;
                 enabled: root.phrase != "";
                 clicked => { root.recover-text(root.phrase); }
             }
@@ -1779,9 +1785,8 @@ component SettingsPage inherits Rectangle {
     /// "System" (translated) and the ten languages, each in its own language (these names are never translated).
     private property <[string]> language-names: [@tr("System"), "English", "Deutsch", "Русский", "Українська", "中文", "日本語", "Français", "Čeština", "Español", "Polski"];
     private property <length> lang-h: 80px + 11 * 40px + 16px;
-    /// Security: the app lock is on (set from Rust), the kind of the NEXT code (0 = 4 digits, 1 = 6 digits, 2 = custom).
+    /// Security: the app lock is on (set from Rust).
     in property <bool> lock-enabled: false;
-    in-out property <int> sec-kind: 0;
     /// Opens the code dialog: 0 = turn on, 1 = change code, 2 = turn off.
     callback sec-open(int);
     callback lock-now();
@@ -1822,19 +1827,16 @@ component SettingsPage inherits Rectangle {
     private property <length> pow-list-h: pow-probe.preferred-height + 4px;
     // Security cards: invisible copies of the texts measure how tall each card has to be at the current width.
     private property <string> sec-t1: @tr("Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked.");
-    private property <string> sec-t2: @tr("The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters.");
     private property <string> sec-t3: @tr("Sets a new code and makes a new recovery file; the old file stops working.");
     private property <string> sec-t4: @tr("A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code.");
     sec-p1 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t1; font-size: 13px; wrap: word-wrap; }
-    sec-p2 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t2; font-size: 13px; wrap: word-wrap; }
     sec-p3 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t3; font-size: 13px; wrap: word-wrap; }
     sec-p4 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t4; font-size: 13px; wrap: word-wrap; }
     // Card = title row (42) + text + gap (12) + controls + bottom padding (16).
     private property <length> sec-h1: 42px + sec-p1.preferred-height + 12px + 32px + 16px;
-    private property <length> sec-h2: 42px + sec-p2.preferred-height + 12px + 32px + 16px;
     private property <length> sec-h3: 42px + sec-p3.preferred-height + 12px + 40px + 16px;
     private property <length> sec-h4: 42px + sec-p4.preferred-height + 16px;
-    private property <length> sec-total: root.sec-h1 + root.sec-h2 + root.sec-h3 + root.sec-h4 + 36px;
+    private property <length> sec-total: root.sec-h1 + root.sec-h3 + root.sec-h4 + 24px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -2354,45 +2356,6 @@ component SettingsPage inherits Rectangle {
             x: 0px;
             y: root.sec-h1 + 12px;
             width: parent.width;
-            height: root.sec-h2;
-            border-radius: 14px;
-            background: Theme.surface;
-            border-width: 1px;
-            border-color: Theme.surface-hover;
-
-            Text {
-                x: 16px;
-                y: 14px;
-                width: parent.width - 32px;
-                text: @tr("Code type");
-                color: Theme.text;
-                font-size: 16px;
-                font-weight: 600;
-                overflow: elide;
-            }
-            Text {
-                x: 16px;
-                y: 42px;
-                width: parent.width - 32px;
-                height: sec-p2.preferred-height;
-                text: root.sec-t2;
-                color: Theme.muted;
-                font-size: 13px;
-                wrap: word-wrap;
-            }
-            SegmentedControl {
-                x: 16px;
-                y: 42px + sec-p2.preferred-height + 12px;
-                width: min(parent.width - 32px, 380px);
-                labels: [@tr("4 digits"), @tr("6 digits"), @tr("Custom")];
-                current: root.sec-kind;
-                selected(k) => { root.sec-kind = k; }
-            }
-        }
-        if root.section == 2 : Rectangle {
-            x: 0px;
-            y: root.sec-h1 + root.sec-h2 + 24px;
-            width: parent.width;
             height: root.sec-h3;
             border-radius: 14px;
             background: Theme.surface;
@@ -2430,7 +2393,7 @@ component SettingsPage inherits Rectangle {
         }
         if root.section == 2 : Rectangle {
             x: 0px;
-            y: root.sec-h1 + root.sec-h2 + root.sec-h3 + 36px;
+            y: root.sec-h1 + root.sec-h3 + 24px;
             width: parent.width;
             height: root.sec-h4;
             border-radius: 14px;
@@ -3037,7 +3000,7 @@ export component MainWindow inherits Window {
     in-out property <bool> show-sec-popup: false;
     in-out property <int> sec-mode: 0;
     in-out property <int> sec-step: 0;
-    /// Kind of the next code (chosen in the Security page); 0 = 4 digits, 1 = 6 digits, 2 = custom.
+    /// Kind of the new code (chosen in the dialog while a code is made); 0 = 4 digits, 1 = 6 digits, 2 = custom.
     in-out property <int> sec-kind: 0;
     in-out property <string> sec-code: "";
     in property <string> sec-error;
@@ -3049,7 +3012,7 @@ export component MainWindow inherits Window {
     private property <int> sec-cur-kind: root.sec-step == 0 ? root.lock-kind : root.sec-kind;
     private property <bool> sec-pad: root.height >= 600px;
     private property <length> sec-entry-h: root.sec-cur-kind == 2 ? 100px : (root.sec-pad ? 38px + 4 * 46px + 30px : 20px);
-    private property <length> sec-h: root.sec-step == 3 ? 380px : 44px + 40px + root.sec-entry-h + 36px + 40px + 44px + 4px;
+    private property <length> sec-h: root.sec-step == 3 ? 380px : 44px + 40px + root.sec-entry-h + 36px + 40px + 44px + 4px + (root.sec-step == 1 ? 42px : 0px);
     /// The settings page section that is open (0 = first); Rust remembers it between launches.
     in-out property <int> settings-section: 0;
     callback settings-section-changed(int);
@@ -6450,7 +6413,6 @@ export component MainWindow inherits Window {
         cu-s <=> root.cu-s;
         cu-v <=> root.cu-v;
         lock-enabled: root.lock-enabled;
-        sec-kind <=> root.sec-kind;
         sec-open(m) => { root.sec-open(m); }
         lock-now() => { root.lock-now(); }
     }
@@ -6521,6 +6483,15 @@ export component MainWindow inherits Window {
                     font-size: 14px;
                     wrap: word-wrap;
                 }
+                // Step 1: the kind of the new code is chosen here.
+                if root.sec-step == 1 : SegmentedControl {
+                    labels: [@tr("4 digits"), @tr("6 digits"), @tr("Custom")];
+                    current: root.sec-kind;
+                    selected(k) => {
+                        root.sec-kind = k;
+                        root.sec-code = "";
+                    }
+                }
                 if root.sec-step < 3 : CodeEntry {
                     kind: root.sec-cur-kind;
                     keypad: root.sec-pad;
@@ -6580,7 +6551,13 @@ export component MainWindow inherits Window {
                 if root.sec-step == 3 : HorizontalLayout {
                     spacing: 10px;
                     alignment: end;
-                    PillButton { text: @tr("Cancel"); clicked => { root.show-sec-popup = false; root.sec-cancel(); } }
+                    PillButton {
+                        text: @tr("Cancel");
+                        width: 130px;
+                        height: 40px;
+                        border-radius: 20px;
+                        clicked => { root.show-sec-popup = false; root.sec-cancel(); }
+                    }
                     AccentButton {
                         text: @tr("Save file");
                         width: 130px;

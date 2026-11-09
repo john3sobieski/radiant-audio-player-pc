@@ -647,9 +647,6 @@ msgstr "12 slov oddělených mezerami"
 msgid "Recover"
 msgstr "Obnovit"
 
-msgid "Code type"
-msgstr "Typ kódu"
-
 msgid "4 digits"
 msgstr "4 číslice"
 
@@ -691,9 +688,6 @@ msgstr "Uložit soubor"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "Vyžaduje kód při spuštění Radiantu a při minimalizaci okna. Hudba hraje dál, i když je aplikace zamčená."
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "Typ příštího kódu, který nastavíte. Vlastní kód tvoří latinská písmena a číslice, 4 až 64 znaků."
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "Nastaví nový kód a vytvoří nový soubor pro obnovení; starý soubor přestane fungovat."

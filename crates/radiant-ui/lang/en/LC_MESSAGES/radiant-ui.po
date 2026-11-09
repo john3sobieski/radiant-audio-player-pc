@@ -643,9 +643,6 @@ msgstr "12 words separated by spaces"
 msgid "Recover"
 msgstr "Recover"
 
-msgid "Code type"
-msgstr "Code type"
-
 msgid "4 digits"
 msgstr "4 digits"
 
@@ -687,9 +684,6 @@ msgstr "Save file"
 
 msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
 msgstr "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
-
-msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
-msgstr "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
 
 msgid "Sets a new code and makes a new recovery file; the old file stops working."
 msgstr "Sets a new code and makes a new recovery file; the old file stops working."

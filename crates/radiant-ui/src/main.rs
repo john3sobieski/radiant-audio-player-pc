@@ -1319,9 +1319,6 @@ fn save_lock(ui: &MainWindow, store: &LockStore) {
 fn sync_lock_flags(ui: &MainWindow, store: &LockStore) {
     ui.set_lock_enabled(store.is_enabled());
     ui.set_lock_kind(store.kind.map_or(0, |k| k.to_index()));
-    if let Some(k) = store.kind {
-        ui.set_sec_kind(k.to_index());
-    }
 }
 
 /// Lock screen: waiting after too many wrong codes (entry disabled, countdown in the message) or free to try.
@@ -1493,6 +1490,8 @@ fn wire_app_lock(ui: &MainWindow, ctl: &Rc<LockCtl>) {
             ctl.pending.borrow_mut().take();
             ctl.new_code.borrow_mut().take();
             ui.set_sec_mode(mode);
+            // The kind of the new code is chosen in the dialog; changing starts from the kind in use.
+            ui.set_sec_kind(if mode == 1 { ui.get_lock_kind() } else { 0 });
             // Turning on starts with the new code; changing / turning off first asks for the current one.
             ui.set_sec_step(if mode == 0 { 1 } else { 0 });
             ui.set_sec_code(SharedString::default());
