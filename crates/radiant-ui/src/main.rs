@@ -13,6 +13,7 @@ slint::include_modules!();
 use radiant_audio::{
     slider_to_speed, AudioFxSettings, Command, PlayState, Player, RepeatMode, SpectrumTap, EQ_PRESETS, SPECTRUM_BANDS,
 };
+use radiant_core::applock::{self, CodeError, CodeKind, LockStore, RecoverResult, UnlockResult};
 use radiant_core::settings::{self, AppSettings, EqMode, RepeatModeSetting};
 mod eq_curve;
 mod i18n;
@@ -22,7 +23,7 @@ use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVOR
 use radiant_core::playlists::{self, ListEntry, PlaylistSort, PlaylistSortKey, PlaylistStore};
 use radiant_core::queues::{self, QueueStore};
 use slint::{Model, ModelRc, SharedString, VecModel};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -1272,6 +1273,350 @@ fn show_pl_popup(ui: &MainWindow, st: &mut PlState, view: i32) {
     ui.set_pl_name("".into());
     ui.set_pl_view(view);
     ui.set_show_pl_popup(true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// App lock (stage 10). The logic is in `radiant-core/src/applock.rs`; here are the screens' glue.
+// "Background" on a PC = the window is minimized: it locks at that moment, so the code is asked on return.
+// (Losing focus does not count: file dialogs and other windows take the focus all the time.)
+// ---------------------------------------------------------------------------------------------
+
+struct LockCtl {
+    store: RefCell<LockStore>,
+    /// A new code + recovery phrase being set up: becomes the real store only after the recovery file is saved.
+    pending: RefCell<Option<(LockStore, String)>>,
+    /// The first entry of a new code, waiting for the repeat.
+    new_code: RefCell<Option<String>>,
+    /// One-second countdown while the lock screen waits after too many wrong codes.
+    tick: slint::Timer,
+    /// Watches for the window being minimized (runs only while the lock is on).
+    watch: slint::Timer,
+    was_min: Cell<bool>,
+}
+
+fn fmt_wait(secs: u64) -> String {
+    format!("{}:{:02}", secs / 60, secs % 60)
+}
+
+fn code_error_text(kind: CodeKind, e: CodeError) -> String {
+    match e {
+        CodeError::NotDigits => i18n::tr("Digits only."),
+        CodeError::WrongLength => {
+            if kind == CodeKind::Pin6 { i18n::tr("The code must be 6 digits.") } else { i18n::tr("The code must be 4 digits.") }
+        }
+        CodeError::CustomLength => i18n::tr("The code must be 4 to 64 characters."),
+        CodeError::CustomChars => i18n::tr("Use Latin letters and digits only, no spaces."),
+    }
+}
+
+fn save_lock(ui: &MainWindow, store: &LockStore) {
+    if let Err(e) = applock::save(store) {
+        ui.set_status(i18n::tr_fmt("Could not save the lock settings: {}", &[&e]).into());
+    }
+}
+
+/// Shows the stored state in the UI: lock on / off and the kind of the code in use.
+fn sync_lock_flags(ui: &MainWindow, store: &LockStore) {
+    ui.set_lock_enabled(store.is_enabled());
+    ui.set_lock_kind(store.kind.map_or(0, |k| k.to_index()));
+    if let Some(k) = store.kind {
+        ui.set_sec_kind(k.to_index());
+    }
+}
+
+/// Lock screen: waiting after too many wrong codes (entry disabled, countdown in the message) or free to try.
+fn update_lock_wait(ctl: &Rc<LockCtl>, weak: &slint::Weak<MainWindow>, ui: &MainWindow) {
+    let left = ctl.store.borrow().lock_remaining(applock::unix_now());
+    if left > 0 {
+        ui.set_lock_blocked(true);
+        ui.set_lock_message(i18n::tr_fmt("Too many wrong codes. Try again in {}", &[&fmt_wait(left)]).into());
+        if !ctl.tick.running() {
+            let (ctl2, weak2) = (ctl.clone(), weak.clone());
+            ctl.tick.start(slint::TimerMode::Repeated, std::time::Duration::from_secs(1), move || {
+                if let Some(ui) = weak2.upgrade() {
+                    update_lock_wait(&ctl2, &weak2, &ui);
+                }
+            });
+        }
+    } else {
+        ctl.tick.stop();
+        if ui.get_lock_blocked() {
+            ui.set_lock_blocked(false);
+            ui.set_lock_message(SharedString::default());
+        }
+    }
+}
+
+/// Shows the lock screen (only if a code is set).
+fn lock_now(ctl: &Rc<LockCtl>, weak: &slint::Weak<MainWindow>, ui: &MainWindow) {
+    if !ctl.store.borrow().is_enabled() || ui.get_locked() {
+        return;
+    }
+    // A half-made code is thrown away.
+    ctl.pending.borrow_mut().take();
+    ctl.new_code.borrow_mut().take();
+    ui.set_show_sec_popup(false);
+    ui.set_sec_code(SharedString::default());
+    ui.set_sec_phrase(SharedString::default());
+    ui.set_lock_code(SharedString::default());
+    ui.set_lock_phrase(SharedString::default());
+    ui.set_lock_message(SharedString::default());
+    ui.set_lock_recovering(false);
+    ui.set_locked(true);
+    update_lock_wait(ctl, weak, ui);
+}
+
+/// Starts watching the window: minimizing it locks the app.
+fn start_lock_watch(ctl: &Rc<LockCtl>, weak: &slint::Weak<MainWindow>) {
+    if ctl.watch.running() {
+        return;
+    }
+    ctl.was_min.set(false);
+    let (ctl2, weak2) = (ctl.clone(), weak.clone());
+    ctl.watch.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(500), move || {
+        let Some(ui) = weak2.upgrade() else { return };
+        let minimized = slint::ComponentHandle::window(&ui).is_minimized();
+        if minimized && !ctl2.was_min.get() {
+            lock_now(&ctl2, &weak2, &ui);
+        }
+        ctl2.was_min.set(minimized);
+    });
+}
+
+/// "Forgot code?": checks the typed words or the text of the recovery file. On success the lock is turned off
+/// completely (the owner can turn it on again with a new code and a new file).
+fn do_recover(ctl: &Rc<LockCtl>, ui: &MainWindow, typed: &str) {
+    let result = {
+        let mut st = ctl.store.borrow_mut();
+        let r = st.recover(typed);
+        if r == RecoverResult::Ok {
+            st.clear();
+            save_lock(ui, &st);
+        }
+        r
+    };
+    match result {
+        RecoverResult::Ok => {
+            ctl.tick.stop();
+            ctl.watch.stop();
+            sync_lock_flags(ui, &ctl.store.borrow());
+            ui.set_lock_blocked(false);
+            ui.set_lock_message(SharedString::default());
+            ui.set_lock_phrase(SharedString::default());
+            ui.set_lock_code(SharedString::default());
+            ui.set_lock_recovering(false);
+            ui.set_locked(false);
+        }
+        RecoverResult::Wrong => ui.set_lock_message(i18n::tr("That recovery file or phrase does not work.").into()),
+        RecoverResult::NotSet => ui.set_lock_message(i18n::tr("There is no recovery file for this lock.").into()),
+    }
+}
+
+/// Connects the lock screen and the Security dialog. `ctl` is also what `main` uses at start.
+fn wire_app_lock(ui: &MainWindow, ctl: &Rc<LockCtl>) {
+    let ui_weak = ui.as_weak();
+
+    // The helper that Slint cannot do itself: drop the last character of a code.
+    ui.global::<CodeTools>().on_trim_last(|text| {
+        let mut t = text.to_string();
+        t.pop();
+        t.into()
+    });
+
+    // ---- lock screen ----
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_lock_submit(move |code| {
+            let Some(ui) = weak.upgrade() else { return };
+            let result = {
+                let mut st = ctl.store.borrow_mut();
+                let r = st.try_unlock(code.as_str(), applock::unix_now());
+                // Every try is saved: a wrong code has to survive a crash or a restart.
+                save_lock(&ui, &st);
+                r
+            };
+            ui.set_lock_code(SharedString::default());
+            match result {
+                UnlockResult::Ok | UnlockResult::NotSet => {
+                    ctl.tick.stop();
+                    ui.set_lock_blocked(false);
+                    ui.set_lock_message(SharedString::default());
+                    ui.set_locked(false);
+                }
+                UnlockResult::Wrong { left } => {
+                    ui.set_lock_message(i18n::tr_fmt("Wrong code. Tries left before a delay: {}", &[&left]).into());
+                }
+                UnlockResult::WrongLocked { .. } | UnlockResult::Locked { .. } => update_lock_wait(&ctl, &weak, &ui),
+            }
+        });
+    }
+    {
+        let weak = ui_weak.clone();
+        ui.on_lock_view_changed(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            if !ui.get_lock_blocked() {
+                ui.set_lock_message(SharedString::default());
+            }
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_lock_recover_text(move |text| {
+            let Some(ui) = weak.upgrade() else { return };
+            do_recover(&ctl, &ui, text.as_str());
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_lock_recover_file(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(path) = rfd::FileDialog::new().add_filter("Text", &["txt"]).pick_file() else { return };
+            match applock::read_recovery_file(&path) {
+                Some(phrase) => do_recover(&ctl, &ui, &phrase),
+                None => ui.set_lock_message(i18n::tr("That recovery file or phrase does not work.").into()),
+            }
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_lock_now(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            lock_now(&ctl, &weak, &ui);
+        });
+    }
+
+    // ---- Settings -> Security dialog ----
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_sec_open(move |mode| {
+            let Some(ui) = weak.upgrade() else { return };
+            ctl.pending.borrow_mut().take();
+            ctl.new_code.borrow_mut().take();
+            ui.set_sec_mode(mode);
+            // Turning on starts with the new code; changing / turning off first asks for the current one.
+            ui.set_sec_step(if mode == 0 { 1 } else { 0 });
+            ui.set_sec_code(SharedString::default());
+            ui.set_sec_error(SharedString::default());
+            ui.set_sec_phrase(SharedString::default());
+            ui.set_show_sec_popup(true);
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_sec_cancel(move || {
+            ctl.pending.borrow_mut().take();
+            ctl.new_code.borrow_mut().take();
+            if let Some(ui) = weak.upgrade() {
+                ui.set_sec_phrase(SharedString::default());
+                ui.set_sec_code(SharedString::default());
+                ui.set_sec_error(SharedString::default());
+            }
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_sec_submit(move |code| {
+            let Some(ui) = weak.upgrade() else { return };
+            let code = code.to_string();
+            let (step, mode) = (ui.get_sec_step(), ui.get_sec_mode());
+            ui.set_sec_code(SharedString::default());
+            match step {
+                // The current code.
+                0 => {
+                    let result = {
+                        let mut st = ctl.store.borrow_mut();
+                        let r = st.try_unlock(&code, applock::unix_now());
+                        save_lock(&ui, &st);
+                        r
+                    };
+                    match result {
+                        UnlockResult::Ok | UnlockResult::NotSet => {
+                            ui.set_sec_error(SharedString::default());
+                            if mode == 2 {
+                                // Turn off: code, recovery phrase and counters are gone.
+                                ctl.store.borrow_mut().clear();
+                                save_lock(&ui, &ctl.store.borrow());
+                                ctl.watch.stop();
+                                sync_lock_flags(&ui, &ctl.store.borrow());
+                                ui.set_show_sec_popup(false);
+                            } else {
+                                ui.set_sec_step(1);
+                            }
+                        }
+                        UnlockResult::Wrong { left } => {
+                            ui.set_sec_error(i18n::tr_fmt("Wrong code. Tries left before a delay: {}", &[&left]).into());
+                        }
+                        UnlockResult::WrongLocked { secs } | UnlockResult::Locked { secs } => {
+                            ui.set_sec_error(i18n::tr_fmt("Too many wrong codes. Try again in {}", &[&fmt_wait(secs)]).into());
+                        }
+                    }
+                }
+                // A new code.
+                1 => {
+                    let kind = CodeKind::from_index(ui.get_sec_kind());
+                    match applock::validate_code(kind, &code) {
+                        Ok(()) => {
+                            *ctl.new_code.borrow_mut() = Some(code);
+                            ui.set_sec_error(SharedString::default());
+                            ui.set_sec_step(2);
+                        }
+                        Err(e) => ui.set_sec_error(code_error_text(kind, e).into()),
+                    }
+                }
+                // The same code again; then the recovery phrase is made (the lock is not on yet).
+                2 => {
+                    let first = ctl.new_code.borrow_mut().take();
+                    if first.as_deref() != Some(code.as_str()) {
+                        ui.set_sec_error(i18n::tr("The codes do not match. Enter a new code.").into());
+                        ui.set_sec_step(1);
+                        return;
+                    }
+                    let kind = CodeKind::from_index(ui.get_sec_kind());
+                    let mut candidate = ctl.store.borrow().clone();
+                    let made = candidate.set_code(kind, &code).and_then(|_| candidate.create_recovery());
+                    match made {
+                        Ok(phrase) => {
+                            ui.set_sec_phrase(phrase.clone().into());
+                            *ctl.pending.borrow_mut() = Some((candidate, phrase));
+                            ui.set_sec_error(SharedString::default());
+                            ui.set_sec_step(3);
+                        }
+                        Err(e) => {
+                            ui.set_sec_error(e.into());
+                            ui.set_sec_step(1);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        });
+    }
+    {
+        let (ctl, weak) = (ctl.clone(), ui_weak.clone());
+        ui.on_sec_save_file(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let phrase = match ctl.pending.borrow().as_ref() {
+                Some((_, p)) => p.clone(),
+                None => return,
+            };
+            let Some(path) = rfd::FileDialog::new().set_file_name("radiant-recovery.txt").add_filter("Text", &["txt"]).save_file() else {
+                return;
+            };
+            if let Err(e) = applock::write_recovery_file(&path, &phrase) {
+                ui.set_sec_error(i18n::tr_fmt("Could not save the file: {}", &[&e]).into());
+                return;
+            }
+            // The file is on disk: only now the new code (and its phrase) replaces the old one and the lock is on.
+            let Some((candidate, _)) = ctl.pending.borrow_mut().take() else { return };
+            *ctl.store.borrow_mut() = candidate;
+            save_lock(&ui, &ctl.store.borrow());
+            sync_lock_flags(&ui, &ctl.store.borrow());
+            ui.set_sec_phrase(SharedString::default());
+            ui.set_sec_error(SharedString::default());
+            ui.set_show_sec_popup(false);
+            start_lock_watch(&ctl, &weak);
+        });
+    }
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -2608,6 +2953,29 @@ fn main() -> Result<(), slint::PlatformError> {
         save_settings(&weak, &settings);
         scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true);
     });
+
+    // App lock: the lock screen shows at start when a code is set, and again when the window is minimized.
+    let lock = Rc::new(LockCtl {
+        store: RefCell::new(match applock::load() {
+            Ok(store) => store,
+            Err(e) => {
+                ui.set_status(i18n::tr_fmt("Could not read the lock settings: {}", &[&e]).into());
+                LockStore::default()
+            }
+        }),
+        pending: RefCell::new(None),
+        new_code: RefCell::new(None),
+        tick: slint::Timer::default(),
+        watch: slint::Timer::default(),
+        was_min: Cell::new(false),
+    });
+    wire_app_lock(&ui, &lock);
+    sync_lock_flags(&ui, &lock.store.borrow());
+    if lock.store.borrow().is_enabled() {
+        ui.set_locked(true);
+        update_lock_wait(&lock, &ui_weak, &ui);
+        start_lock_watch(&lock, &ui_weak);
+    }
 
     // Spectrum rays: live (a timer, see `start_rays_timer`) or, in low-power mode, one still picture and no timer.
     apply_low_power_visuals(&ui_weak, &rays_timer, &player, low_power_start);

@@ -1002,6 +1002,8 @@ component AccentButton inherits Rectangle {
 component NameField inherits Rectangle {
     in-out property <string> value;
     in property <string> placeholder;
+    /// Shows dots instead of the typed text (codes).
+    in property <bool> password: false;
     callback accepted(string);
     public function focus-input() { ti.focus(); }
 
@@ -1026,11 +1028,339 @@ component NameField inherits Rectangle {
         width: parent.width - 28px;
         height: parent.height;
         text <=> root.value;
+        input-type: root.password ? InputType.password : InputType.text;
         color: Theme.text;
         font-size: 15px;
         vertical-alignment: center;
         single-line: true;
         accepted => { root.accepted(self.text); }
+    }
+}
+
+// Small helper implemented in Rust (Slint has no string slicing): the text without its last character.
+export global CodeTools {
+    callback trim-last(string) -> string;
+}
+
+// Code entry for the lock screen and the Security dialogs. The PIN kinds (4 / 6 digits) show dots and an optional
+// number pad (the keyboard works as well, a full PIN is submitted at once); the custom kind is a password field
+// with a button.
+component CodeEntry inherits Rectangle {
+    /// 0 = 4 digits, 1 = 6 digits, 2 = custom code.
+    in property <int> kind: 0;
+    in property <bool> enabled: true;
+    in property <bool> keypad: true;
+    in property <length> key-size: 52px;
+    in property <string> placeholder;
+    in property <string> submit-text;
+    in-out property <string> value;
+    callback submit(string);
+    public function focus-input() {
+        if (root.kind == 2) { nf.focus-input(); } else { fs.focus(); }
+    }
+    changed kind => { root.focus-input(); }
+
+    private property <int> len: root.kind == 1 ? 6 : 4;
+    private property <int> filled: root.value.character-count;
+    private property <length> pad-w: 3 * root.key-size + 2 * 10px;
+
+    height: root.kind == 2 ? 100px : (root.keypad ? 38px + 4 * root.key-size + 3 * 10px : 20px);
+
+    pure function is-digit(t: string) -> bool {
+        return t == "0" || t == "1" || t == "2" || t == "3" || t == "4"
+            || t == "5" || t == "6" || t == "7" || t == "8" || t == "9";
+    }
+    function push(d: string) {
+        if (root.enabled && root.value.character-count < root.len) {
+            root.value = root.value + d;
+            if (root.value.character-count == root.len) { root.submit(root.value); }
+        }
+    }
+    function pop() {
+        if (root.enabled && root.value.character-count > 0) {
+            root.value = CodeTools.trim-last(root.value);
+        }
+    }
+
+    fs := FocusScope {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        enabled: root.kind != 2;
+        key-pressed(e) => {
+            if (root.kind == 2) { return reject; }
+            if (root.is-digit(e.text)) { root.push(e.text); return accept; }
+            if (e.text == Key.Backspace) { root.pop(); return accept; }
+            return reject;
+        }
+    }
+
+    // PIN: one dot per digit.
+    for i in (root.kind == 2 ? 0 : root.len) : Rectangle {
+        x: (root.width - (root.len * 14px + (root.len - 1) * 14px)) / 2 + i * 28px;
+        y: 3px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        border-width: 2px;
+        border-color: i < root.filled ? Theme.accent : Theme.muted;
+        background: i < root.filled ? Theme.accent : transparent;
+    }
+    // PIN: number pad (1-9, empty, 0, backspace).
+    for k in ((root.kind == 2 || !root.keypad) ? 0 : 12) : Rectangle {
+        x: (root.width - root.pad-w) / 2 + Math.mod(k, 3) * (root.key-size + 10px);
+        y: 38px + Math.floor(k / 3) * (root.key-size + 10px);
+        width: root.key-size;
+        height: root.key-size;
+        border-radius: root.key-size / 2;
+        visible: k != 9;
+        background: key-ta.has-hover && root.enabled ? Theme.surface-hover : Theme.surface;
+        opacity: root.enabled ? 1 : 0.5;
+        if k != 11 : Text {
+            width: parent.width;
+            height: parent.height;
+            text: k == 10 ? "0" : "\{k + 1}";
+            color: Theme.text;
+            font-size: 20px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        // Backspace: a chevron pointing left.
+        if k == 11 : Path {
+            x: (parent.width - 20px) / 2;
+            y: (parent.height - 20px) / 2;
+            width: 20px;
+            height: 20px;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            commands: "M15 5L8 12L15 19";
+            stroke: Theme.muted;
+            stroke-width: 2.4px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+        }
+        key-ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                if (k == 11) { root.pop(); }
+                else if (k == 10) { root.push("0"); }
+                else { root.push("\{k + 1}"); }
+            }
+        }
+    }
+    // Custom code: password field + button.
+    nf := NameField {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: 44px;
+        visible: root.kind == 2;
+        password: true;
+        placeholder: root.placeholder;
+        value <=> root.value;
+        accepted(v) => { if (root.enabled && root.value != "") { root.submit(root.value); } }
+    }
+    AccentButton {
+        visible: root.kind == 2;
+        x: (root.width - self.width) / 2;
+        y: 56px;
+        width: 160px;
+        text: root.submit-text;
+        enabled: root.enabled && root.value != "";
+        clicked => { root.submit(root.value); }
+    }
+}
+
+// The lock screen: covers the whole window. Music keeps playing underneath; only the interface is locked.
+// A second view ("Forgot code?") takes the recovery file or the 12 words.
+component LockScreen inherits Rectangle {
+    in property <int> kind: 0;
+    in property <string> message;
+    in property <bool> blocked: false;
+    in-out property <string> code;
+    in-out property <string> phrase;
+    in-out property <bool> recovering: false;
+    callback submit(string);
+    callback recover-text(string);
+    callback recover-file();
+    /// The view was switched (Rust clears an old error message).
+    callback view-changed();
+
+    private property <length> box-w: min(340px, root.width - 32px);
+    private property <bool> tall: root.height >= 560px;
+
+    background: Theme.bg;
+    clip: true;
+
+    GlowBlob { tint: Theme.accent; strength: 0.22; cx: root.width * 0.8; cy: root.height * 0.25; size: 520px; }
+    GlowBlob { tint: #3aa6ff; strength: 0.12; cx: root.width * 0.15; cy: root.height * 0.85; size: 460px; }
+
+    // Swallows clicks and the wheel so nothing below reacts.
+    TouchArea { scroll-event(e) => { return accept; } }
+
+    if !root.recovering : VerticalLayout {
+        x: (root.width - root.box-w) / 2;
+        y: 0px;
+        width: root.box-w;
+        height: root.height;
+        spacing: 10px;
+        alignment: center;
+
+        // Padlock (only when there is room).
+        Rectangle {
+            height: root.height >= 420px ? 64px : 0px;
+            visible: root.height >= 420px;
+            Rectangle {
+                x: (parent.width - 20px) / 2;
+                y: 8px;
+                width: 20px;
+                height: 28px;
+                border-radius: 10px;
+                border-width: 3px;
+                border-color: Theme.accent;
+            }
+            Rectangle {
+                x: (parent.width - 32px) / 2;
+                y: 26px;
+                width: 32px;
+                height: 26px;
+                border-radius: 6px;
+                background: Theme.accent;
+            }
+        }
+        Text {
+            text: @tr("Radiant is locked");
+            color: Theme.text;
+            font-size: 22px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: @tr("Enter your code to continue.");
+            color: Theme.muted;
+            font-size: 14px;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        CodeEntry {
+            kind: root.kind;
+            keypad: root.tall;
+            key-size: 56px;
+            enabled: !root.blocked;
+            placeholder: @tr("Code");
+            submit-text: @tr("Unlock");
+            value <=> root.code;
+            submit(c) => { root.submit(c); }
+            init => { self.focus-input(); }
+        }
+        Text {
+            height: 40px;
+            text: root.message;
+            color: #d64550;
+            font-size: 13px;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Rectangle {
+            height: 30px;
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: @tr("Forgot code?");
+                color: forgot-ta.has-hover ? Theme.text : Theme.accent;
+                font-size: 13px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            forgot-ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.code = "";
+                    root.recovering = true;
+                    root.view-changed();
+                }
+            }
+        }
+    }
+
+    if root.recovering : VerticalLayout {
+        x: (root.width - root.box-w) / 2;
+        y: 0px;
+        width: root.box-w;
+        height: root.height;
+        spacing: 10px;
+        alignment: center;
+
+        Text {
+            text: @tr("Recover access");
+            color: Theme.text;
+            font-size: 22px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            height: 64px;
+            text: @tr("Choose your recovery file or type its 12 words. The app lock will be turned off.");
+            color: Theme.muted;
+            font-size: 14px;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        NameField {
+            placeholder: @tr("12 words separated by spaces");
+            value <=> root.phrase;
+            accepted(v) => { root.recover-text(root.phrase); }
+            init => { self.focus-input(); }
+        }
+        Text {
+            height: 40px;
+            text: root.message;
+            color: #d64550;
+            font-size: 13px;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: center;
+            PillButton { text: @tr("Choose file"); clicked => { root.recover-file(); } }
+            AccentButton {
+                text: @tr("Recover");
+                width: 120px;
+                enabled: root.phrase != "";
+                clicked => { root.recover-text(root.phrase); }
+            }
+        }
+        Rectangle {
+            height: 30px;
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: @tr("Back");
+                color: back-ta.has-hover ? Theme.text : Theme.accent;
+                font-size: 13px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            back-ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.phrase = "";
+                    root.recovering = false;
+                    root.view-changed();
+                }
+            }
+        }
     }
 }
 
@@ -1449,6 +1779,12 @@ component SettingsPage inherits Rectangle {
     /// "System" (translated) and the ten languages, each in its own language (these names are never translated).
     private property <[string]> language-names: [@tr("System"), "English", "Deutsch", "Русский", "Українська", "中文", "日本語", "Français", "Čeština", "Español", "Polski"];
     private property <length> lang-h: 80px + 11 * 40px + 16px;
+    /// Security: the app lock is on (set from Rust), the kind of the NEXT code (0 = 4 digits, 1 = 6 digits, 2 = custom).
+    in property <bool> lock-enabled: false;
+    in-out property <int> sec-kind: 0;
+    /// Opens the code dialog: 0 = turn on, 1 = change code, 2 = turn off.
+    callback sec-open(int);
+    callback lock-now();
     /// Own colors the user saved as presets (set from Rust).
     in property <[color]> saved-colors;
     /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
@@ -1484,6 +1820,21 @@ component SettingsPage inherits Rectangle {
         wrap: word-wrap;
     }
     private property <length> pow-list-h: pow-probe.preferred-height + 4px;
+    // Security cards: invisible copies of the texts measure how tall each card has to be at the current width.
+    private property <string> sec-t1: @tr("Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked.");
+    private property <string> sec-t2: @tr("The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters.");
+    private property <string> sec-t3: @tr("Sets a new code and makes a new recovery file; the old file stops working.");
+    private property <string> sec-t4: @tr("A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code.");
+    sec-p1 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t1; font-size: 13px; wrap: word-wrap; }
+    sec-p2 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t2; font-size: 13px; wrap: word-wrap; }
+    sec-p3 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t3; font-size: 13px; wrap: word-wrap; }
+    sec-p4 := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.sec-t4; font-size: 13px; wrap: word-wrap; }
+    // Card = title row (42) + text + gap (12) + controls + bottom padding (16).
+    private property <length> sec-h1: 42px + sec-p1.preferred-height + 12px + 32px + 16px;
+    private property <length> sec-h2: 42px + sec-p2.preferred-height + 12px + 32px + 16px;
+    private property <length> sec-h3: 42px + sec-p3.preferred-height + 12px + 40px + 16px;
+    private property <length> sec-h4: 42px + sec-p4.preferred-height + 16px;
+    private property <length> sec-total: root.sec-h1 + root.sec-h2 + root.sec-h3 + root.sec-h4 + 36px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -1492,8 +1843,7 @@ component SettingsPage inherits Rectangle {
             // Language: the picker card is drawn by hand below (it has controls).
         ],
         [
-            { title: @tr("App lock"), text: @tr("4 digits, 6 digits or your own code, asked at start and when returning to the app.") },
-            { title: @tr("Recovery file"), text: @tr("A file of 12 words to get back in if the code is forgotten.") },
+            // Security: the four cards are drawn by hand below (they have controls).
         ],
         [
             { title: @tr("Models"), text: @tr("Download the separation models or import them from files.") },
@@ -1516,6 +1866,7 @@ component SettingsPage inherits Rectangle {
     // Room taken by the hand-made card at the top of a section (Appearance: the theme switch).
     private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px
         : root.section == 1 ? root.lang-h + 12px
+        : root.section == 2 ? root.sec-total + 12px
         : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
@@ -1946,6 +2297,166 @@ component SettingsPage inherits Rectangle {
                         root.language-changed(i);
                     }
                 }
+            }
+        }
+        // ---- Security ----
+        if root.section == 2 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.sec-h1;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("App lock");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: sec-p1.preferred-height;
+                text: root.sec-t1;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            SegmentedControl {
+                x: 16px;
+                y: 42px + sec-p1.preferred-height + 12px;
+                width: 120px;
+                labels: [@tr("Off"), @tr("On")];
+                current: root.lock-enabled ? 1 : 0;
+                selected(k) => {
+                    if (k == 1 && !root.lock-enabled) { root.sec-open(0); }
+                    else if (k == 0 && root.lock-enabled) { root.sec-open(2); }
+                }
+            }
+            PillButton {
+                x: 16px + 120px + 10px;
+                y: 42px + sec-p1.preferred-height + 12px - 1px;
+                width: 110px;
+                visible: root.lock-enabled;
+                text: @tr("Lock now");
+                clicked => { root.lock-now(); }
+            }
+        }
+        if root.section == 2 : Rectangle {
+            x: 0px;
+            y: root.sec-h1 + 12px;
+            width: parent.width;
+            height: root.sec-h2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Code type");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: sec-p2.preferred-height;
+                text: root.sec-t2;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            SegmentedControl {
+                x: 16px;
+                y: 42px + sec-p2.preferred-height + 12px;
+                width: min(parent.width - 32px, 380px);
+                labels: [@tr("4 digits"), @tr("6 digits"), @tr("Custom")];
+                current: root.sec-kind;
+                selected(k) => { root.sec-kind = k; }
+            }
+        }
+        if root.section == 2 : Rectangle {
+            x: 0px;
+            y: root.sec-h1 + root.sec-h2 + 24px;
+            width: parent.width;
+            height: root.sec-h3;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Change code");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: sec-p3.preferred-height;
+                text: root.sec-t3;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            AccentButton {
+                x: 16px;
+                y: 42px + sec-p3.preferred-height + 12px;
+                width: min(parent.width - 32px, 170px);
+                enabled: root.lock-enabled;
+                text: @tr("Change code");
+                clicked => { root.sec-open(1); }
+            }
+        }
+        if root.section == 2 : Rectangle {
+            x: 0px;
+            y: root.sec-h1 + root.sec-h2 + root.sec-h3 + 36px;
+            width: parent.width;
+            height: root.sec-h4;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Recovery file");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: sec-p4.preferred-height;
+                text: root.sec-t4;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
             }
         }
         if root.section == 5 : Rectangle {
@@ -2504,6 +3015,41 @@ export component MainWindow inherits Window {
     callback theme-changed(int);
     /// Low-power switch of the settings page; `Theme.low-power` is already flipped when this fires.
     callback low-power-changed(bool);
+    // ---- App lock (stage 10). Rust owns the logic (`radiant-core/src/applock.rs`); these are the screens. ----
+    /// The app lock is on (a code exists) and the kind of the code in use (0 = 4 digits, 1 = 6 digits, 2 = custom).
+    in property <bool> lock-enabled: false;
+    in property <int> lock-kind: 0;
+    /// The lock screen is shown now (at start, when the window is minimized, or after the "Lock now" button).
+    in-out property <bool> locked: false;
+    in property <string> lock-message;
+    /// Waiting after too many wrong codes (the entry is disabled, `lock-message` counts down).
+    in property <bool> lock-blocked: false;
+    in-out property <string> lock-code: "";
+    in-out property <string> lock-phrase: "";
+    in-out property <bool> lock-recovering: false;
+    callback lock-submit(string);
+    callback lock-recover-text(string);
+    callback lock-recover-file();
+    callback lock-view-changed();
+    callback lock-now();
+    /// Code dialog of Settings -> Security. Rust drives it: `sec-mode` 0 = turn on, 1 = change code, 2 = turn off;
+    /// `sec-step` 0 = current code, 1 = new code, 2 = repeat it, 3 = save the recovery file.
+    in-out property <bool> show-sec-popup: false;
+    in-out property <int> sec-mode: 0;
+    in-out property <int> sec-step: 0;
+    /// Kind of the next code (chosen in the Security page); 0 = 4 digits, 1 = 6 digits, 2 = custom.
+    in-out property <int> sec-kind: 0;
+    in-out property <string> sec-code: "";
+    in property <string> sec-error;
+    in property <string> sec-phrase;
+    callback sec-open(int);
+    callback sec-submit(string);
+    callback sec-save-file();
+    callback sec-cancel();
+    private property <int> sec-cur-kind: root.sec-step == 0 ? root.lock-kind : root.sec-kind;
+    private property <bool> sec-pad: root.height >= 600px;
+    private property <length> sec-entry-h: root.sec-cur-kind == 2 ? 100px : (root.sec-pad ? 38px + 4 * 46px + 30px : 20px);
+    private property <length> sec-h: root.sec-step == 3 ? 380px : 44px + 40px + root.sec-entry-h + 36px + 40px + 44px + 4px;
     /// The settings page section that is open (0 = first); Rust remembers it between launches.
     in-out property <int> settings-section: 0;
     callback settings-section-changed(int);
@@ -5903,5 +6449,163 @@ export component MainWindow inherits Window {
         cu-h <=> root.cu-h;
         cu-s <=> root.cu-s;
         cu-v <=> root.cu-v;
+        lock-enabled: root.lock-enabled;
+        sec-kind <=> root.sec-kind;
+        sec-open(m) => { root.sec-open(m); }
+        lock-now() => { root.lock-now(); }
+    }
+
+    // ---- Security dialog: turn the lock on / change the code / turn it off (above the settings page) ----
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #000000b0;
+        opacity: root.show-sec-popup ? 1 : 0;
+        visible: self.opacity > 0.01;
+        animate opacity { duration: Theme.low-power ? 0ms : 180ms; }
+
+        // The backdrop does not close the dialog: a stray click must not throw a half-typed code away.
+        TouchArea { scroll-event(e) => { return accept; } }
+
+        Rectangle {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            width: min(380px, root.width - 32px);
+            height: min(root.sec-h, root.height - 32px);
+            background: Theme.surface;
+            border-radius: 18px;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: #000000a0;
+            drop-shadow-offset-y: 8px;
+
+            if root.show-sec-popup : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Rectangle {
+                    height: 44px;
+                    Text {
+                        x: 0px;
+                        width: parent.width - 44px;
+                        height: parent.height;
+                        text: root.sec-step == 3 ? @tr("Recovery file")
+                            : root.sec-mode == 0 ? @tr("Turn on app lock")
+                            : root.sec-mode == 1 ? @tr("Change code") : @tr("Turn off app lock");
+                        color: Theme.text;
+                        font-size: 20px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    IconButton {
+                        x: parent.width - self.width;
+                        y: 4px;
+                        width: 36px;
+                        height: 36px;
+                        icon-size: 16px;
+                        icon-color: Theme.muted;
+                        commands: "M 5 3.6 L 10 8.6 L 15 3.6 L 16.4 5 L 11.4 10 L 16.4 15 L 15 16.4 L 10 11.4 L 5 16.4 L 3.6 15 L 8.6 10 L 3.6 5 Z";
+                        clicked => { root.show-sec-popup = false; root.sec-cancel(); }
+                    }
+                }
+
+                // Steps 0-2: a code.
+                if root.sec-step < 3 : Text {
+                    height: 40px;
+                    text: root.sec-step == 0 ? @tr("Enter your current code.")
+                        : root.sec-step == 1 ? @tr("Enter a new code.") : @tr("Enter the new code again.");
+                    color: Theme.muted;
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+                if root.sec-step < 3 : CodeEntry {
+                    kind: root.sec-cur-kind;
+                    keypad: root.sec-pad;
+                    key-size: 46px;
+                    placeholder: @tr("Code");
+                    submit-text: (root.sec-step == 0 && root.sec-mode == 2) ? @tr("Turn off") : @tr("Next");
+                    value <=> root.sec-code;
+                    submit(c) => { root.sec-submit(c); }
+                    init => { self.focus-input(); }
+                }
+                if root.sec-step < 3 : Text {
+                    height: 36px;
+                    text: root.sec-error;
+                    color: #d64550;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                // Step 3: the 12 words and the file.
+                if root.sec-step == 3 : Text {
+                    height: 76px;
+                    text: @tr("These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved.");
+                    color: Theme.muted;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+                if root.sec-step == 3 : Rectangle {
+                    height: 92px;
+                    border-radius: 10px;
+                    background: Theme.bg;
+                    Text {
+                        x: 12px;
+                        y: 8px;
+                        width: parent.width - 24px;
+                        height: parent.height - 16px;
+                        text: root.sec-phrase;
+                        color: Theme.text;
+                        font-size: 15px;
+                        font-weight: 600;
+                        wrap: word-wrap;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                }
+                if root.sec-step == 3 : Text {
+                    height: 30px;
+                    text: root.sec-error;
+                    color: #d64550;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                Rectangle { vertical-stretch: 1; }
+                if root.sec-step == 3 : HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton { text: @tr("Cancel"); clicked => { root.show-sec-popup = false; root.sec-cancel(); } }
+                    AccentButton {
+                        text: @tr("Save file");
+                        width: 130px;
+                        clicked => { root.sec-save-file(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- lock screen (very top: covers everything, including the player bar) ----
+    if root.locked : LockScreen {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        kind: root.lock-kind;
+        message: root.lock-message;
+        blocked: root.lock-blocked;
+        code <=> root.lock-code;
+        phrase <=> root.lock-phrase;
+        recovering <=> root.lock-recovering;
+        submit(c) => { root.lock-submit(c); }
+        recover-text(t) => { root.lock-recover-text(t); }
+        recover-file() => { root.lock-recover-file(); }
+        view-changed() => { root.lock-view-changed(); }
     }
 }

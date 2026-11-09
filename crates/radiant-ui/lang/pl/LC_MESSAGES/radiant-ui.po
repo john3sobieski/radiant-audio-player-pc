@@ -612,3 +612,130 @@ msgstr "Tryb oszczędzania energii — dotknij, aby wyłączyć"
 
 msgid "Stems are not available in low-power mode"
 msgstr "Stemy nie są dostępne w trybie oszczędzania energii"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant jest zablokowany"
+
+msgid "Enter your code to continue."
+msgstr "Wpisz kod, aby kontynuować."
+
+msgid "Unlock"
+msgstr "Odblokuj"
+
+msgid "Code"
+msgstr "Kod"
+
+msgid "Forgot code?"
+msgstr "Nie pamiętasz kodu?"
+
+msgid "Back"
+msgstr "Wstecz"
+
+msgid "Recover access"
+msgstr "Odzyskiwanie dostępu"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "Wybierz plik odzyskiwania lub wpisz jego 12 słów. Blokada aplikacji zostanie wyłączona."
+
+msgid "Choose file"
+msgstr "Wybierz plik"
+
+msgid "12 words separated by spaces"
+msgstr "12 słów oddzielonych spacjami"
+
+msgid "Recover"
+msgstr "Odzyskaj"
+
+msgid "Code type"
+msgstr "Rodzaj kodu"
+
+msgid "4 digits"
+msgstr "4 cyfry"
+
+msgid "6 digits"
+msgstr "6 cyfr"
+
+msgid "Change code"
+msgstr "Zmień kod"
+
+msgid "Lock now"
+msgstr "Zablokuj teraz"
+
+msgid "Turn on app lock"
+msgstr "Włącz blokadę aplikacji"
+
+msgid "Turn off app lock"
+msgstr "Wyłącz blokadę aplikacji"
+
+msgid "Enter your current code."
+msgstr "Wpisz obecny kod."
+
+msgid "Enter a new code."
+msgstr "Wpisz nowy kod."
+
+msgid "Enter the new code again."
+msgstr "Wpisz nowy kod jeszcze raz."
+
+msgid "Next"
+msgstr "Dalej"
+
+msgid "Turn off"
+msgstr "Wyłącz"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "Te 12 słów pozwala wrócić, gdy zapomnisz kodu. Zapisz je w pliku i trzymaj go w tajemnicy. Blokada włączy się dopiero po zapisaniu pliku."
+
+msgid "Save file"
+msgstr "Zapisz plik"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Prosi o kod przy uruchomieniu Radianta i po zminimalizowaniu okna. Muzyka gra dalej, gdy aplikacja jest zablokowana."
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "Rodzaj następnego kodu, który ustawisz. Własny kod składa się z łacińskich liter i cyfr, od 4 do 64 znaków."
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "Ustawia nowy kod i tworzy nowy plik odzyskiwania; stary plik przestaje działać."
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "Plik tekstowy z 12 losowymi słowami, tworzony przy ustawianiu kodu. Jeśli zapomnisz kodu, wybierz ten plik na ekranie blokady: blokada zostanie wyłączona i możesz ustawić nowy kod."
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "Zły kod. Prób do przerwy: {}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "Zbyt wiele złych kodów. Spróbuj ponownie za {}"
+
+msgid "Digits only."
+msgstr "Tylko cyfry."
+
+msgid "The code must be 4 digits."
+msgstr "Kod musi mieć 4 cyfry."
+
+msgid "The code must be 6 digits."
+msgstr "Kod musi mieć 6 cyfr."
+
+msgid "The code must be 4 to 64 characters."
+msgstr "Kod musi mieć od 4 do 64 znaków."
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "Tylko łacińskie litery i cyfry, bez spacji."
+
+msgid "The codes do not match. Enter a new code."
+msgstr "Kody nie są zgodne. Wpisz nowy kod."
+
+msgid "Could not save the lock settings: {}"
+msgstr "Nie udało się zapisać ustawień blokady: {}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "Nie udało się odczytać ustawień blokady: {}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "Ten plik lub te słowa nie działają."
+
+msgid "Could not save the file: {}"
+msgstr "Nie udało się zapisać pliku: {}"
+
+msgid "There is no recovery file for this lock."
+msgstr "Dla tej blokady nie ma pliku odzyskiwania."

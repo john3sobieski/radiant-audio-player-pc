@@ -608,3 +608,130 @@ msgstr "Mode économie d'énergie — touchez pour désactiver"
 
 msgid "Stems are not available in low-power mode"
 msgstr "Les stems ne sont pas disponibles en mode économie d'énergie"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant est verrouillé"
+
+msgid "Enter your code to continue."
+msgstr "Saisissez votre code pour continuer."
+
+msgid "Unlock"
+msgstr "Déverrouiller"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Forgot code?"
+msgstr "Code oublié ?"
+
+msgid "Back"
+msgstr "Retour"
+
+msgid "Recover access"
+msgstr "Récupérer l'accès"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "Choisissez votre fichier de récupération ou saisissez ses 12 mots. Le verrouillage de l'application sera désactivé."
+
+msgid "Choose file"
+msgstr "Choisir un fichier"
+
+msgid "12 words separated by spaces"
+msgstr "12 mots séparés par des espaces"
+
+msgid "Recover"
+msgstr "Récupérer"
+
+msgid "Code type"
+msgstr "Type de code"
+
+msgid "4 digits"
+msgstr "4 chiffres"
+
+msgid "6 digits"
+msgstr "6 chiffres"
+
+msgid "Change code"
+msgstr "Changer le code"
+
+msgid "Lock now"
+msgstr "Verrouiller maintenant"
+
+msgid "Turn on app lock"
+msgstr "Activer le verrouillage"
+
+msgid "Turn off app lock"
+msgstr "Désactiver le verrouillage"
+
+msgid "Enter your current code."
+msgstr "Saisissez votre code actuel."
+
+msgid "Enter a new code."
+msgstr "Saisissez un nouveau code."
+
+msgid "Enter the new code again."
+msgstr "Saisissez de nouveau le nouveau code."
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Turn off"
+msgstr "Désactiver"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "Ces 12 mots vous permettent de rentrer si vous oubliez le code. Enregistrez-les dans un fichier et gardez-le privé. Le verrouillage ne s'active qu'une fois le fichier enregistré."
+
+msgid "Save file"
+msgstr "Enregistrer le fichier"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Demande un code au démarrage de Radiant et quand sa fenêtre est réduite. La musique continue pendant le verrouillage."
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "Le type du prochain code que vous définirez. Un code personnalisé comporte des lettres latines et des chiffres, de 4 à 64 caractères."
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "Définit un nouveau code et crée un nouveau fichier de récupération ; l'ancien fichier ne fonctionne plus."
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "Un fichier texte de 12 mots aléatoires, créé quand vous définissez un code. Si vous oubliez le code, choisissez ce fichier sur l'écran de verrouillage : le verrouillage est désactivé et vous pouvez définir un nouveau code."
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "Code incorrect. Essais avant une pause : {}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "Trop de codes incorrects. Réessayez dans {}"
+
+msgid "Digits only."
+msgstr "Chiffres uniquement."
+
+msgid "The code must be 4 digits."
+msgstr "Le code doit comporter 4 chiffres."
+
+msgid "The code must be 6 digits."
+msgstr "Le code doit comporter 6 chiffres."
+
+msgid "The code must be 4 to 64 characters."
+msgstr "Le code doit comporter de 4 à 64 caractères."
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "Lettres latines et chiffres uniquement, sans espaces."
+
+msgid "The codes do not match. Enter a new code."
+msgstr "Les codes ne correspondent pas. Saisissez un nouveau code."
+
+msgid "Could not save the lock settings: {}"
+msgstr "Impossible d'enregistrer les réglages de verrouillage : {}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "Impossible de lire les réglages de verrouillage : {}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "Ce fichier ou cette phrase de récupération ne fonctionne pas."
+
+msgid "Could not save the file: {}"
+msgstr "Impossible d'enregistrer le fichier : {}"
+
+msgid "There is no recovery file for this lock."
+msgstr "Il n'existe pas de fichier de récupération pour ce verrouillage."

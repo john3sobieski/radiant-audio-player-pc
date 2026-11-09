@@ -608,3 +608,130 @@ msgstr "Modo de bajo consumo — toca para desactivarlo"
 
 msgid "Stems are not available in low-power mode"
 msgstr "Los stems no están disponibles en el modo de bajo consumo"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant está bloqueado"
+
+msgid "Enter your code to continue."
+msgstr "Introduce tu código para continuar."
+
+msgid "Unlock"
+msgstr "Desbloquear"
+
+msgid "Code"
+msgstr "Código"
+
+msgid "Forgot code?"
+msgstr "¿Olvidaste el código?"
+
+msgid "Back"
+msgstr "Atrás"
+
+msgid "Recover access"
+msgstr "Recuperar el acceso"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "Elige tu archivo de recuperación o escribe sus 12 palabras. El bloqueo de la aplicación se desactivará."
+
+msgid "Choose file"
+msgstr "Elegir archivo"
+
+msgid "12 words separated by spaces"
+msgstr "12 palabras separadas por espacios"
+
+msgid "Recover"
+msgstr "Recuperar"
+
+msgid "Code type"
+msgstr "Tipo de código"
+
+msgid "4 digits"
+msgstr "4 dígitos"
+
+msgid "6 digits"
+msgstr "6 dígitos"
+
+msgid "Change code"
+msgstr "Cambiar código"
+
+msgid "Lock now"
+msgstr "Bloquear ahora"
+
+msgid "Turn on app lock"
+msgstr "Activar bloqueo de la app"
+
+msgid "Turn off app lock"
+msgstr "Desactivar bloqueo de la app"
+
+msgid "Enter your current code."
+msgstr "Introduce tu código actual."
+
+msgid "Enter a new code."
+msgstr "Introduce un código nuevo."
+
+msgid "Enter the new code again."
+msgstr "Introduce el código nuevo otra vez."
+
+msgid "Next"
+msgstr "Siguiente"
+
+msgid "Turn off"
+msgstr "Desactivar"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "Estas 12 palabras te permiten volver a entrar si olvidas el código. Guárdalas en un archivo y mantenlo en privado. El bloqueo se activa solo después de guardar el archivo."
+
+msgid "Save file"
+msgstr "Guardar archivo"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Pide un código al iniciar Radiant y al minimizar su ventana. La música sigue sonando mientras está bloqueado."
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "El tipo del próximo código que establezcas. Un código personalizado tiene letras latinas y dígitos, de 4 a 64 caracteres."
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "Establece un código nuevo y crea un archivo de recuperación nuevo; el archivo anterior deja de funcionar."
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "Un archivo de texto con 12 palabras aleatorias, creado al establecer un código. Si olvidas el código, elige este archivo en la pantalla de bloqueo: el bloqueo se desactiva y puedes establecer un código nuevo."
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "Código incorrecto. Intentos antes de una espera: {}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "Demasiados códigos incorrectos. Inténtalo de nuevo en {}"
+
+msgid "Digits only."
+msgstr "Solo dígitos."
+
+msgid "The code must be 4 digits."
+msgstr "El código debe tener 4 dígitos."
+
+msgid "The code must be 6 digits."
+msgstr "El código debe tener 6 dígitos."
+
+msgid "The code must be 4 to 64 characters."
+msgstr "El código debe tener de 4 a 64 caracteres."
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "Solo letras latinas y dígitos, sin espacios."
+
+msgid "The codes do not match. Enter a new code."
+msgstr "Los códigos no coinciden. Introduce un código nuevo."
+
+msgid "Could not save the lock settings: {}"
+msgstr "No se pudo guardar la configuración del bloqueo: {}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "No se pudo leer la configuración del bloqueo: {}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "Este archivo o esta frase de recuperación no funciona."
+
+msgid "Could not save the file: {}"
+msgstr "No se pudo guardar el archivo: {}"
+
+msgid "There is no recovery file for this lock."
+msgstr "No hay archivo de recuperación para este bloqueo."

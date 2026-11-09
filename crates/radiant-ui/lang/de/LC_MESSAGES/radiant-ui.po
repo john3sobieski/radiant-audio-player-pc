@@ -608,3 +608,130 @@ msgstr "Energiesparmodus — zum Ausschalten tippen"
 
 msgid "Stems are not available in low-power mode"
 msgstr "Stems sind im Energiesparmodus nicht verfügbar"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant ist gesperrt"
+
+msgid "Enter your code to continue."
+msgstr "Gib deinen Code ein, um fortzufahren."
+
+msgid "Unlock"
+msgstr "Entsperren"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Forgot code?"
+msgstr "Code vergessen?"
+
+msgid "Back"
+msgstr "Zurück"
+
+msgid "Recover access"
+msgstr "Zugang wiederherstellen"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "Wähle deine Wiederherstellungsdatei oder tippe die 12 Wörter ein. Die App-Sperre wird ausgeschaltet."
+
+msgid "Choose file"
+msgstr "Datei wählen"
+
+msgid "12 words separated by spaces"
+msgstr "12 Wörter, durch Leerzeichen getrennt"
+
+msgid "Recover"
+msgstr "Wiederherstellen"
+
+msgid "Code type"
+msgstr "Code-Art"
+
+msgid "4 digits"
+msgstr "4 Ziffern"
+
+msgid "6 digits"
+msgstr "6 Ziffern"
+
+msgid "Change code"
+msgstr "Code ändern"
+
+msgid "Lock now"
+msgstr "Jetzt sperren"
+
+msgid "Turn on app lock"
+msgstr "App-Sperre einschalten"
+
+msgid "Turn off app lock"
+msgstr "App-Sperre ausschalten"
+
+msgid "Enter your current code."
+msgstr "Gib deinen aktuellen Code ein."
+
+msgid "Enter a new code."
+msgstr "Gib einen neuen Code ein."
+
+msgid "Enter the new code again."
+msgstr "Gib den neuen Code noch einmal ein."
+
+msgid "Next"
+msgstr "Weiter"
+
+msgid "Turn off"
+msgstr "Ausschalten"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "Mit diesen 12 Wörtern kommst du wieder hinein, wenn du den Code vergisst. Speichere sie in einer Datei und bewahre sie privat auf. Die Sperre wird erst nach dem Speichern der Datei aktiv."
+
+msgid "Save file"
+msgstr "Datei speichern"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Fragt nach einem Code, wenn Radiant startet und wenn das Fenster minimiert wird. Die Musik läuft während der Sperre weiter."
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "Die Art des nächsten Codes, den du festlegst. Ein eigener Code besteht aus lateinischen Buchstaben und Ziffern, 4 bis 64 Zeichen."
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "Legt einen neuen Code fest und erstellt eine neue Wiederherstellungsdatei; die alte Datei wird ungültig."
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "Eine Textdatei mit 12 zufälligen Wörtern, die beim Festlegen eines Codes erstellt wird. Wenn du den Code vergisst, wähle diese Datei auf dem Sperrbildschirm: Die Sperre wird ausgeschaltet und du kannst einen neuen Code festlegen."
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "Falscher Code. Versuche bis zur Wartezeit: {}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "Zu viele falsche Codes. Versuche es in {} erneut"
+
+msgid "Digits only."
+msgstr "Nur Ziffern."
+
+msgid "The code must be 4 digits."
+msgstr "Der Code muss aus 4 Ziffern bestehen."
+
+msgid "The code must be 6 digits."
+msgstr "Der Code muss aus 6 Ziffern bestehen."
+
+msgid "The code must be 4 to 64 characters."
+msgstr "Der Code muss 4 bis 64 Zeichen lang sein."
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "Nur lateinische Buchstaben und Ziffern, keine Leerzeichen."
+
+msgid "The codes do not match. Enter a new code."
+msgstr "Die Codes stimmen nicht überein. Gib einen neuen Code ein."
+
+msgid "Could not save the lock settings: {}"
+msgstr "Die Sperreinstellungen konnten nicht gespeichert werden: {}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "Die Sperreinstellungen konnten nicht gelesen werden: {}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "Diese Wiederherstellungsdatei oder Wortfolge funktioniert nicht."
+
+msgid "Could not save the file: {}"
+msgstr "Die Datei konnte nicht gespeichert werden: {}"
+
+msgid "There is no recovery file for this lock."
+msgstr "Für diese Sperre gibt es keine Wiederherstellungsdatei."

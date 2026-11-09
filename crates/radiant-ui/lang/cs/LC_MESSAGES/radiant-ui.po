@@ -612,3 +612,130 @@ msgstr "Úsporný režim — klepnutím vypnete"
 
 msgid "Stems are not available in low-power mode"
 msgstr "Stopy nejsou v úsporném režimu k dispozici"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant je zamčený"
+
+msgid "Enter your code to continue."
+msgstr "Pro pokračování zadejte kód."
+
+msgid "Unlock"
+msgstr "Odemknout"
+
+msgid "Code"
+msgstr "Kód"
+
+msgid "Forgot code?"
+msgstr "Zapomněli jste kód?"
+
+msgid "Back"
+msgstr "Zpět"
+
+msgid "Recover access"
+msgstr "Obnovení přístupu"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "Vyberte soubor pro obnovení nebo zadejte jeho 12 slov. Zámek aplikace bude vypnut."
+
+msgid "Choose file"
+msgstr "Vybrat soubor"
+
+msgid "12 words separated by spaces"
+msgstr "12 slov oddělených mezerami"
+
+msgid "Recover"
+msgstr "Obnovit"
+
+msgid "Code type"
+msgstr "Typ kódu"
+
+msgid "4 digits"
+msgstr "4 číslice"
+
+msgid "6 digits"
+msgstr "6 číslic"
+
+msgid "Change code"
+msgstr "Změnit kód"
+
+msgid "Lock now"
+msgstr "Zamknout hned"
+
+msgid "Turn on app lock"
+msgstr "Zapnout zámek aplikace"
+
+msgid "Turn off app lock"
+msgstr "Vypnout zámek aplikace"
+
+msgid "Enter your current code."
+msgstr "Zadejte aktuální kód."
+
+msgid "Enter a new code."
+msgstr "Zadejte nový kód."
+
+msgid "Enter the new code again."
+msgstr "Zadejte nový kód znovu."
+
+msgid "Next"
+msgstr "Další"
+
+msgid "Turn off"
+msgstr "Vypnout"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "Těchto 12 slov vás pustí zpět, pokud kód zapomenete. Uložte je do souboru a uchovejte jej v soukromí. Zámek se zapne až po uložení souboru."
+
+msgid "Save file"
+msgstr "Uložit soubor"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Vyžaduje kód při spuštění Radiantu a při minimalizaci okna. Hudba hraje dál, i když je aplikace zamčená."
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "Typ příštího kódu, který nastavíte. Vlastní kód tvoří latinská písmena a číslice, 4 až 64 znaků."
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "Nastaví nový kód a vytvoří nový soubor pro obnovení; starý soubor přestane fungovat."
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "Textový soubor s 12 náhodnými slovy, vytvořený při nastavení kódu. Pokud kód zapomenete, vyberte tento soubor na zamykací obrazovce: zámek se vypne a můžete nastavit nový kód."
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "Špatný kód. Pokusů do pauzy: {}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "Příliš mnoho špatných kódů. Zkuste to znovu za {}"
+
+msgid "Digits only."
+msgstr "Pouze číslice."
+
+msgid "The code must be 4 digits."
+msgstr "Kód musí mít 4 číslice."
+
+msgid "The code must be 6 digits."
+msgstr "Kód musí mít 6 číslic."
+
+msgid "The code must be 4 to 64 characters."
+msgstr "Kód musí mít 4 až 64 znaků."
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "Pouze latinská písmena a číslice, bez mezer."
+
+msgid "The codes do not match. Enter a new code."
+msgstr "Kódy se neshodují. Zadejte nový kód."
+
+msgid "Could not save the lock settings: {}"
+msgstr "Nastavení zámku se nepodařilo uložit: {}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "Nastavení zámku se nepodařilo přečíst: {}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "Tento soubor ani tato slova nefungují."
+
+msgid "Could not save the file: {}"
+msgstr "Soubor se nepodařilo uložit: {}"
+
+msgid "There is no recovery file for this lock."
+msgstr "Pro tento zámek neexistuje soubor pro obnovení."

@@ -604,3 +604,130 @@ msgstr "低消費電力モード — タップしてオフにする"
 
 msgid "Stems are not available in low-power mode"
 msgstr "低消費電力モードではステムを利用できません"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant はロックされています"
+
+msgid "Enter your code to continue."
+msgstr "続行するにはコードを入力してください。"
+
+msgid "Unlock"
+msgstr "ロック解除"
+
+msgid "Code"
+msgstr "コード"
+
+msgid "Forgot code?"
+msgstr "コードを忘れた場合"
+
+msgid "Back"
+msgstr "戻る"
+
+msgid "Recover access"
+msgstr "アクセスの回復"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "復元ファイルを選ぶか、12 語を入力してください。アプリロックはオフになります。"
+
+msgid "Choose file"
+msgstr "ファイルを選択"
+
+msgid "12 words separated by spaces"
+msgstr "12 語をスペースで区切って入力"
+
+msgid "Recover"
+msgstr "回復"
+
+msgid "Code type"
+msgstr "コードの種類"
+
+msgid "4 digits"
+msgstr "4 桁"
+
+msgid "6 digits"
+msgstr "6 桁"
+
+msgid "Change code"
+msgstr "コードを変更"
+
+msgid "Lock now"
+msgstr "今すぐロック"
+
+msgid "Turn on app lock"
+msgstr "アプリロックをオンにする"
+
+msgid "Turn off app lock"
+msgstr "アプリロックをオフにする"
+
+msgid "Enter your current code."
+msgstr "現在のコードを入力してください。"
+
+msgid "Enter a new code."
+msgstr "新しいコードを入力してください。"
+
+msgid "Enter the new code again."
+msgstr "新しいコードをもう一度入力してください。"
+
+msgid "Next"
+msgstr "次へ"
+
+msgid "Turn off"
+msgstr "オフにする"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "コードを忘れたときは、この 12 語で再びアクセスできます。ファイルに保存して、安全に保管してください。ファイルを保存した後にだけロックがオンになります。"
+
+msgid "Save file"
+msgstr "ファイルを保存"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "Radiant の起動時とウィンドウを最小化したときにコードを求めます。ロック中も音楽は再生され続けます。"
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "次に設定するコードの種類です。独自コードは英字と数字で、4～64 文字です。"
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "新しいコードと新しい復元ファイルを作成します。古いファイルは使えなくなります。"
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "コード設定時に作られる、ランダムな 12 語のテキストファイルです。コードを忘れたら、ロック画面でこのファイルを選んでください。ロックがオフになり、新しいコードを設定できます。"
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "コードが違います。待機までの残り回数：{}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "間違いが多すぎます。{} 後にもう一度お試しください"
+
+msgid "Digits only."
+msgstr "数字のみです。"
+
+msgid "The code must be 4 digits."
+msgstr "コードは 4 桁の数字にしてください。"
+
+msgid "The code must be 6 digits."
+msgstr "コードは 6 桁の数字にしてください。"
+
+msgid "The code must be 4 to 64 characters."
+msgstr "コードは 4～64 文字にしてください。"
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "英字と数字のみ使えます（スペース不可）。"
+
+msgid "The codes do not match. Enter a new code."
+msgstr "コードが一致しません。新しいコードを入力してください。"
+
+msgid "Could not save the lock settings: {}"
+msgstr "ロック設定を保存できませんでした：{}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "ロック設定を読み込めませんでした：{}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "この復元ファイルまたは語句は使えません。"
+
+msgid "Could not save the file: {}"
+msgstr "ファイルを保存できませんでした：{}"
+
+msgid "There is no recovery file for this lock."
+msgstr "このロックには復元ファイルがありません。"

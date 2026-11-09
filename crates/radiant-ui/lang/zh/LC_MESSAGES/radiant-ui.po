@@ -604,3 +604,130 @@ msgstr "低功耗模式 — 点击关闭"
 
 msgid "Stems are not available in low-power mode"
 msgstr "低功耗模式下无法使用音轨分离"
+
+# App lock (stage 10)
+msgid "Radiant is locked"
+msgstr "Radiant 已锁定"
+
+msgid "Enter your code to continue."
+msgstr "请输入密码以继续。"
+
+msgid "Unlock"
+msgstr "解锁"
+
+msgid "Code"
+msgstr "密码"
+
+msgid "Forgot code?"
+msgstr "忘记密码？"
+
+msgid "Back"
+msgstr "返回"
+
+msgid "Recover access"
+msgstr "恢复访问"
+
+msgid "Choose your recovery file or type its 12 words. The app lock will be turned off."
+msgstr "请选择恢复文件，或输入其中的 12 个单词。应用锁将被关闭。"
+
+msgid "Choose file"
+msgstr "选择文件"
+
+msgid "12 words separated by spaces"
+msgstr "12 个单词，以空格分隔"
+
+msgid "Recover"
+msgstr "恢复"
+
+msgid "Code type"
+msgstr "密码类型"
+
+msgid "4 digits"
+msgstr "4 位数字"
+
+msgid "6 digits"
+msgstr "6 位数字"
+
+msgid "Change code"
+msgstr "更改密码"
+
+msgid "Lock now"
+msgstr "立即锁定"
+
+msgid "Turn on app lock"
+msgstr "开启应用锁"
+
+msgid "Turn off app lock"
+msgstr "关闭应用锁"
+
+msgid "Enter your current code."
+msgstr "请输入当前密码。"
+
+msgid "Enter a new code."
+msgstr "请输入新密码。"
+
+msgid "Enter the new code again."
+msgstr "请再次输入新密码。"
+
+msgid "Next"
+msgstr "下一步"
+
+msgid "Turn off"
+msgstr "关闭"
+
+msgid "These 12 words let you back in if you forget the code. Save them to a file and keep it private. The lock turns on only after the file is saved."
+msgstr "忘记密码时，这 12 个单词可以帮你重新进入。请将它们保存到文件并妥善保管。只有在文件保存后，应用锁才会开启。"
+
+msgid "Save file"
+msgstr "保存文件"
+
+msgid "Asks for a code when Radiant starts and when its window is minimized. Music keeps playing while it is locked."
+msgstr "在 Radiant 启动和窗口最小化时要求输入密码。锁定期间音乐会继续播放。"
+
+msgid "The kind of the next code you set. A custom code has Latin letters and digits, 4 to 64 characters."
+msgstr "你接下来设置的密码类型。自定义密码由拉丁字母和数字组成，长度为 4 到 64 个字符。"
+
+msgid "Sets a new code and makes a new recovery file; the old file stops working."
+msgstr "设置新密码并生成新的恢复文件；旧文件将失效。"
+
+msgid "A text file with 12 random words, made when you set a code. If you forget the code, choose this file on the lock screen: the lock is turned off and you can set a new code."
+msgstr "设置密码时生成的文本文件，内含 12 个随机单词。如果忘记密码，请在锁定界面选择此文件：应用锁将被关闭，然后可以设置新密码。"
+
+msgid "Wrong code. Tries left before a delay: {}"
+msgstr "密码错误。距离等待还剩尝试次数：{}"
+
+msgid "Too many wrong codes. Try again in {}"
+msgstr "错误次数过多。请在 {} 后重试"
+
+msgid "Digits only."
+msgstr "仅限数字。"
+
+msgid "The code must be 4 digits."
+msgstr "密码必须为 4 位数字。"
+
+msgid "The code must be 6 digits."
+msgstr "密码必须为 6 位数字。"
+
+msgid "The code must be 4 to 64 characters."
+msgstr "密码长度必须为 4 到 64 个字符。"
+
+msgid "Use Latin letters and digits only, no spaces."
+msgstr "仅限拉丁字母和数字，不能含空格。"
+
+msgid "The codes do not match. Enter a new code."
+msgstr "两次输入的密码不一致。请重新输入新密码。"
+
+msgid "Could not save the lock settings: {}"
+msgstr "无法保存锁定设置：{}"
+
+msgid "Could not read the lock settings: {}"
+msgstr "无法读取锁定设置：{}"
+
+msgid "That recovery file or phrase does not work."
+msgstr "此恢复文件或单词无效。"
+
+msgid "Could not save the file: {}"
+msgstr "无法保存文件：{}"
+
+msgid "There is no recovery file for this lock."
+msgstr "此锁没有恢复文件。"
