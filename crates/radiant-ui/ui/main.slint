@@ -2881,6 +2881,7 @@ export component MainWindow inherits Window {
     private property <float> settings-t: root.show-settings ? 1 : 0;
     animate settings-t { duration: Theme.low-power ? 0ms : 260ms; easing: ease-out; }
     in-out property <bool> show-sort: false;
+    private property <length> sort-panel-w: min(300px, root.width - 40px);
     in-out property <bool> fx-normalize: false;
     in-out property <bool> fx-mono: false;
     in-out property <float> fx-bass: 0;
@@ -3196,13 +3197,16 @@ export component MainWindow inherits Window {
                 }
                 // Sort lives only in Tracks / Playlists: in Queues it folds away and the search field grows into its place.
                 Rectangle {
-                    width: root.sort-available ? 60px : 0px;
+                    // As wide as the translated word needs (a long translation needs more than the English word).
+                    private property <length> sort-w: max(60px, sort-probe.preferred-width + 28px);
+                    width: root.sort-available ? self.sort-w : 0px;
                     clip: true;
                     animate width { duration: Theme.low-power ? 0ms : 280ms; easing: ease-in-out; }
+                    sort-probe := Text { x: 0px; y: 0px; visible: false; text: @tr("Sort"); font-size: 14px; }
                     PillButton {
                         x: 0px;
                         y: (parent.height - self.height) / 2;
-                        width: 60px;
+                        width: parent.sort-w;
                         text: @tr("Sort");
                         active: root.show-sort;
                         opacity: root.sort-available ? 1 : 0;
@@ -5407,7 +5411,7 @@ export component MainWindow inherits Window {
     if root.show-sort : Rectangle {
         x: root.width - self.width - 20px;
         y: 68px;
-        width: 260px;
+        width: root.sort-panel-w;
         height: min(root.height - 78px, root.section == 1 ? 226px : root.section == 2 ? 256px : 290px);
         background: Theme.surface;
         border-radius: 12px;
@@ -5444,14 +5448,17 @@ export component MainWindow inherits Window {
                     clicked => { root.apply-sort(i, root.cur-sort-desc); }
                 }
             }
+            // Two equal halves of the panel: a long translation shrinks inside its button instead of leaving the panel.
             HorizontalLayout {
                 spacing: 8px;
                 PillButton {
+                    width: (root.sort-panel-w - 32px - 8px) / 2;
                     text: @tr("Ascending");
                     active: !root.cur-sort-manual && !root.cur-sort-desc;
                     clicked => { root.apply-sort(root.cur-sort-mode, false); }
                 }
                 PillButton {
+                    width: (root.sort-panel-w - 32px - 8px) / 2;
                     text: @tr("Descending");
                     active: !root.cur-sort-manual && root.cur-sort-desc;
                     clicked => { root.apply-sort(root.cur-sort-mode, true); }
