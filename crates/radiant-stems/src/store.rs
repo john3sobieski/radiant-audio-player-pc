@@ -54,7 +54,7 @@ pub const MODEL: ModelSpec = ModelSpec {
     id: "htdemucs-dml",
     file_name: "htdemucs-dml.onnx",
     url: "https://huggingface.co/ferrite-stems/htdemucs-onnx-dml/resolve/main/htdemucs-dml.onnx",
-    bytes: 371_576_554,
+    bytes: Some(371_576_554),
     sha256: Some("9e06fef2b23e0f772c6a0cedc4da3aeacb066fa2fa7b6bf70ba08bb1db6220ab"),
     approx_bytes: 370_000_000,
 };
