@@ -26,3 +26,5 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 
 [build-dependencies]
 slint-build = "1"
+# Puts assets/icon.ico into radiant.exe (Windows only, see build.rs).
+winresource = "0.1"

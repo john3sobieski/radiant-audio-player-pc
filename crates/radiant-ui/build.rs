@@ -9,4 +9,12 @@ fn main() {
         .with_bundled_translations("lang")
         .with_default_translation_context(slint_build::DefaultTranslationContext::None);
     slint_build::compile_with_config("ui/main.slint", config).unwrap();
+
+    // Icon of radiant.exe (Explorer, taskbar, shortcuts): assets/icon.ico, only when building for Windows.
+    println!("cargo:rerun-if-changed=assets/icon.ico");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("assets/icon.ico");
+        res.compile().unwrap();
+    }
 }

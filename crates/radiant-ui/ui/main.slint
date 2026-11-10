@@ -2898,6 +2898,7 @@ component SettingsPage inherits Rectangle {
 
 export component MainWindow inherits Window {
     title: "Radiant";
+    icon: @image-url("../assets/logo.png");
     preferred-width: 900px;
     preferred-height: 640px;
     min-width: 640px;
@@ -3564,6 +3565,12 @@ export component MainWindow inherits Window {
                 padding-left: 20px;
                 padding-right: 20px;
                 spacing: 16px;
+                Image {
+                    source: @image-url("../assets/logo.png");
+                    width: 36px;
+                    height: 36px;
+                    y: (parent.height - self.height) / 2;
+                }
                 Text {
                     text: "Radiant";
                     color: Theme.text;
@@ -3613,12 +3620,6 @@ export component MainWindow inherits Window {
                         text: @tr("Sound");
                         active: root.show-sound;
                         clicked => { root.show-sound = !root.show-sound; root.show-sort = false; }
-                    }
-                }
-                HeaderItem {
-                    PillButton {
-                        text: @tr("Choose folder");
-                        clicked => { root.choose-folder(); }
                     }
                 }
                 HeaderItem {
