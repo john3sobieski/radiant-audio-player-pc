@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="crates/radiant-ui/assets/logo.png" width="140" alt="Radiant logo">
+  <img src="Radiant.png" width="800" alt="Radiant">
 </p>
 
 <h1 align="center">Radiant for PC</h1>
@@ -12,7 +12,7 @@
 <p align="center">
   <a href="../../releases/latest"><b>Download the latest release</b></a> ·
   <a href="README_ru.md">Русский</a> ·
-  <a href="https://github.com/john3sobieski/radiant-audio-player">Android version</a>
+  <a href="README.md">Android version</a>
 </p>
 
 ---
@@ -72,8 +72,7 @@ Then right-click a track → **Create stems**, or use the **Stems** tab in the p
 
 ## Mobile version
 
-Radiant also exists for Android, with the same ideas (local files, no ads, no tracking, equalizer, stems, app lock):
-**<https://github.com/john3sobieski/radiant-audio-player>**
+Radiant is also available for Android, with local music, offline playback, an equalizer, AI stem separation and app lock: **[Radiant for Android](README.md)**.
 
 ## What's next
 
@@ -95,7 +94,11 @@ Ideas and bug reports are welcome in the [Issues](../../issues).
 ## Support the project
 
 If Radiant is useful to you, you can support its development:
-[Ko-fi](https://ko-fi.com/radiant_player) · [Buy Me a Coffee](https://buymeacoffee.com/radiant_player) · [GitHub Sponsors](https://github.com/sponsors/john3sobieski)
+
+<p align="center">
+  <a href="https://ko-fi.com/radiant_player"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi"></a>
+  <a href="https://buymeacoffee.com/radiant_player"><img src="https://img.shields.io/badge/Support%20the%20project-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+</p>
 
 ## License
 
