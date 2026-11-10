@@ -20,7 +20,7 @@ radiant-stems = { path = "../radiant-stems" }
 # TODO: check the Slint license option (royalty-free needs attribution) and add the notice.
 slint = "1"
 # Native folder dialog.
-rfd = "0.15"
+rfd = "0.18"
 # Decodes cover art (embedded or cover.jpg/png) into small thumbnails for the track list.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
