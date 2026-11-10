@@ -110,12 +110,6 @@ msgstr "リカバリーファイル"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "コードを忘れた場合に再びアクセスするための12語のファイルです。"
 
-msgid "Models"
-msgstr "モデル"
-
-msgid "Download the separation models or import them from files."
-msgstr "分離モデルをダウンロードするか、ファイルからインポートします。"
-
 msgid "Stems"
 msgstr "ステム"
 
@@ -725,3 +719,54 @@ msgstr "ファイルを保存できませんでした：{}"
 
 msgid "There is no recovery file for this lock."
 msgstr "このロックには復元ファイルがありません。"
+
+msgid "Demucs model"
+msgstr "Demucs モデル"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "曲を4つのパート（ボーカル、ドラム、ベース、その他）に分けます。モデルはプログラムに含まれていません。インターネットから一度だけダウンロードされ、このパソコンに保存されます。"
+
+msgid "Download"
+msgstr "ダウンロード"
+
+msgid "Import from file"
+msgstr "ファイルから読み込む"
+
+msgid "Not downloaded"
+msgstr "未ダウンロード"
+
+msgid "Downloading… {} of {} MB"
+msgstr "ダウンロード中… {} / {} MB"
+
+msgid "Checking the file…"
+msgstr "ファイルを確認中…"
+
+msgid "Ready · {} MB"
+msgstr "準備完了 · {} MB"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "まだ利用できません：このビルドには検証済みのモデルの場所がありません"
+
+msgid "Download cancelled"
+msgstr "ダウンロードをキャンセルしました"
+
+msgid "Model download failed: {}"
+msgstr "モデルのダウンロードに失敗しました：{}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "ファイルがチェックサムと一致しなかったため削除しました"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "このファイルは想定されたモデルではありません（チェックサム不一致）"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "先に分離モデルをダウンロードしてください (設定 → AI とステム)"
+
+msgid "The model was deleted"
+msgstr "モデルを削除しました"
+
+msgid "The model is ready"
+msgstr "モデルの準備ができました"
+
+msgid "Could not delete the model: {}"
+msgstr "モデルを削除できませんでした：{}"

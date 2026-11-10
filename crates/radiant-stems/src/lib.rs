@@ -1,65 +1,77 @@
-//! radiant-stems: AI stem separation (Open-Unmix umxhq via ONNX).
+//! radiant-stems: AI stem separation with Demucs (htdemucs, 4 stems: drums, bass, other, vocals) via ONNX Runtime.
 //!
-//! DONE: constants (model files, sizes, SHA-256 from README 5.3).
-//! TODO: model store (download, verify, import by checksum), decode to 44.1 kHz stereo,
-//!       STFT (N_FFT 4096, HOP 1024, centered/reflect), block processing (512 hops + 86 context),
-//!       ONNX passes for all four stems, soft mask v^2/sum(v^2), 16-bit WAV writer,
-//!       progress/cancel, runs in a worker thread. Keep this crate optional for the UI.
+//! DONE (stage 11, base): the contract of the network and the segment planner (`demucs`), the stems and the output
+//! file names (`stem`), the model file manager: download with resume + SHA-256, import, delete (`store`), the
+//! check for the ONNX Runtime library.
+//! TODO: the ONNX Runtime wrapper that implements `demucs::Backend`, decode + resample to 44.1 kHz stereo, STFT /
+//!       iSTFT (4096 / 1024), per-track normalization, overlap-add, 16-bit WAV writer, progress / cancel / worker
+//!       thread (see PROGRESS.md, stage 11).
 //!
 //! Low-power mode (Settings -> Power): stem separation is the heaviest job of the app, so it must never start
-//! (and no model may be downloaded) while the mode is on. Every entry point asks [`allowed`] first. The UI already
-//! dims "Create stems" in the track menu and says why; wire this function in when the pipeline exists.
+//! (and no model may be downloaded) while the mode is on. Every entry point asks [`allowed`] first.
 
-pub const N_FFT: usize = 4096;
-pub const HOP: usize = 1024;
-pub const BINS: usize = N_FFT / 2 + 1; // 2049
-pub const CORE_HOPS: usize = 512;
-pub const CONTEXT_HOPS: usize = 86;
+pub mod demucs;
+pub mod stem;
+pub mod store;
+
+pub use stem::{Stem, StemSet};
+pub use store::{hash_file, ModelSpec, ModelState, ModelStore, Progress, MODEL};
+
+use std::fmt;
+use std::path::PathBuf;
 
 /// Stem separation may run only when low-power mode is off.
 pub fn allowed(low_power: bool) -> bool {
     !low_power
 }
 
-pub struct StemModel {
-    pub name: &'static str,
-    pub hf_repo: &'static str,
-    pub bytes: u64,
-    pub sha256: &'static str,
+/// Everything that can go wrong in this crate. The texts are for logs; the interface shows its own translated
+/// messages chosen by the variant.
+#[derive(Debug)]
+pub enum StemError {
+    /// The model's exact size / SHA-256 are not set in this build (`store::MODEL`), so nothing can be verified.
+    NotPinned,
+    /// The user cancelled.
+    Cancelled,
+    /// Disk error (the text names the path).
+    Io(String),
+    /// Network error.
+    Http(String),
+    /// The file has the wrong size or SHA-256 (it is not the expected model).
+    Mismatch,
+    /// The network loaded fine but is not the htdemucs 4-stem contract (see `demucs::check_io`).
+    BadModel(String),
 }
 
-impl StemModel {
-    pub fn url(&self) -> String {
-        format!("https://huggingface.co/{}/resolve/main/model.onnx", self.hf_repo)
+impl fmt::Display for StemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StemError::NotPinned => write!(f, "the model size and checksum are not set in this build"),
+            StemError::Cancelled => write!(f, "cancelled"),
+            StemError::Io(e) | StemError::Http(e) | StemError::BadModel(e) => write!(f, "{e}"),
+            StemError::Mismatch => write!(f, "the file does not match the expected size or checksum"),
+        }
     }
 }
 
-pub const MODELS: [StemModel; 4] = [
-    StemModel {
-        name: "vocals",
-        hf_repo: "MixDirective/open-unmix-umxhq-vocals-onnx",
-        bytes: 35_623_512,
-        sha256: "f27742bb52b24cb039614dc76d0764e279df3eb2a9d6daa82c6daee3369ec747",
-    },
-    StemModel {
-        name: "drums",
-        hf_repo: "MixDirective/open-unmix-umxhq-drums-onnx",
-        bytes: 35_623_507,
-        sha256: "471628e1e48138a634f962a89f622929980cf5485ed0a4e6e648e9dfcd1145d9",
-    },
-    StemModel {
-        name: "bass",
-        hf_repo: "MixDirective/open-unmix-umxhq-bass-onnx",
-        bytes: 35_623_502,
-        sha256: "8931033f04666fdcf300d610579351d74275a6c55dd4346009290c844033726f",
-    },
-    StemModel {
-        name: "other",
-        hf_repo: "MixDirective/open-unmix-umxhq-other-onnx",
-        bytes: 35_623_507,
-        sha256: "fe62c1d8fb8326c7e68540a675dfa186a2b131f763fb41050ea5e9a9859eb76e",
-    },
-];
+impl std::error::Error for StemError {}
+
+/// Name of the ONNX Runtime library that must lie next to the exe (the `ort` crate is used with `load-dynamic`,
+/// so the runtime is not linked into the exe and the exe stays small).
+#[cfg(windows)]
+pub const RUNTIME_LIBRARY: &str = "onnxruntime.dll";
+#[cfg(not(windows))]
+pub const RUNTIME_LIBRARY: &str = "libonnxruntime.so";
+
+/// Full path where the program looks for the runtime library (next to the exe).
+pub fn runtime_library_path() -> Option<PathBuf> {
+    Some(std::env::current_exe().ok()?.parent()?.join(RUNTIME_LIBRARY))
+}
+
+/// The runtime library is there.
+pub fn runtime_present() -> bool {
+    runtime_library_path().map_or(false, |p| p.is_file())
+}
 
 #[cfg(test)]
 mod tests {
@@ -72,8 +84,8 @@ mod tests {
     }
 
     #[test]
-    fn bins_match_model_input() {
-        assert_eq!(BINS, 2049);
-        assert_eq!(MODELS[0].url(), "https://huggingface.co/MixDirective/open-unmix-umxhq-vocals-onnx/resolve/main/model.onnx");
+    fn errors_have_readable_texts() {
+        assert!(!StemError::NotPinned.to_string().is_empty());
+        assert_eq!(StemError::Io("disk full".into()).to_string(), "disk full");
     }
 }

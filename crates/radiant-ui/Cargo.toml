@@ -12,7 +12,8 @@ path = "src/main.rs"
 [dependencies]
 radiant-core = { path = "../radiant-core" }
 radiant-audio = { path = "../radiant-audio" }
-# TODO: wire radiant-dsp settings (then radiant-stems, radiant-cloud) here.
+radiant-stems = { path = "../radiant-stems" }
+# TODO: wire radiant-dsp settings (then radiant-cloud) here.
 
 # Slint with default features for now.
 # TODO: test the software renderer / lightest backend and pick by measuring RAM and CPU (README 2).

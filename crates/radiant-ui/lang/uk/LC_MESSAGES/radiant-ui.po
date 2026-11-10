@@ -116,12 +116,6 @@ msgstr "Файл відновлення"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "Файл із 12 слів для входу, якщо код забуто."
 
-msgid "Models"
-msgstr "Моделі"
-
-msgid "Download the separation models or import them from files."
-msgstr "Завантажте моделі розділення або імпортуйте їх із файлів."
-
 msgid "Stems"
 msgstr "Стеми"
 
@@ -733,3 +727,54 @@ msgstr "Не вдалося зберегти файл: {}"
 
 msgid "There is no recovery file for this lock."
 msgstr "Для цього блокування немає файлу відновлення."
+
+msgid "Demucs model"
+msgstr "Модель Demucs"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "Розділяє трек на чотири частини: вокал, ударні, бас та решту. Модель не входить до програми: вона завантажується один раз з інтернету і залишається на цьому комп’ютері."
+
+msgid "Download"
+msgstr "Завантажити"
+
+msgid "Import from file"
+msgstr "Імпорт із файлу"
+
+msgid "Not downloaded"
+msgstr "Не завантажено"
+
+msgid "Downloading… {} of {} MB"
+msgstr "Завантаження… {} з {} МБ"
+
+msgid "Checking the file…"
+msgstr "Перевірка файлу…"
+
+msgid "Ready · {} MB"
+msgstr "Готово · {} МБ"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "Поки недоступно: у цій збірці немає перевіреної адреси моделі"
+
+msgid "Download cancelled"
+msgstr "Завантаження скасовано"
+
+msgid "Model download failed: {}"
+msgstr "Не вдалося завантажити модель: {}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "Файл не збігся з контрольною сумою і був видалений"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "Цей файл не є потрібною моделлю (контрольна сума не збіглася)"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "Спочатку завантажте модель розділення (Налаштування → ШІ та стеми)"
+
+msgid "The model was deleted"
+msgstr "Модель видалено"
+
+msgid "The model is ready"
+msgstr "Модель готова"
+
+msgid "Could not delete the model: {}"
+msgstr "Не вдалося видалити модель: {}"

@@ -113,12 +113,6 @@ msgstr "Recovery file"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "A file of 12 words to get back in if the code is forgotten."
 
-msgid "Models"
-msgstr "Models"
-
-msgid "Download the separation models or import them from files."
-msgstr "Download the separation models or import them from files."
-
 msgid "Stems"
 msgstr "Stems"
 
@@ -729,3 +723,54 @@ msgstr "Could not save the file: {}"
 
 msgid "There is no recovery file for this lock."
 msgstr "There is no recovery file for this lock."
+
+msgid "Demucs model"
+msgstr "Demucs model"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+
+msgid "Download"
+msgstr "Download"
+
+msgid "Import from file"
+msgstr "Import from file"
+
+msgid "Not downloaded"
+msgstr "Not downloaded"
+
+msgid "Downloading… {} of {} MB"
+msgstr "Downloading… {} of {} MB"
+
+msgid "Checking the file…"
+msgstr "Checking the file…"
+
+msgid "Ready · {} MB"
+msgstr "Ready · {} MB"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "Not available yet: this build has no verified model address"
+
+msgid "Download cancelled"
+msgstr "Download cancelled"
+
+msgid "Model download failed: {}"
+msgstr "Model download failed: {}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "The file did not match its checksum and was removed"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "This file is not the expected model (checksum mismatch)"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "Download the separation model first (Settings → AI & stems)"
+
+msgid "The model was deleted"
+msgstr "The model was deleted"
+
+msgid "The model is ready"
+msgstr "The model is ready"
+
+msgid "Could not delete the model: {}"
+msgstr "Could not delete the model: {}"

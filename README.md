@@ -50,7 +50,7 @@ technically possible**. Primary architecture: **x86_64**; ARM64 Windows is optio
 | Decoding | **`symphonia`** | MP3, FLAC, OGG/Vorbis, AAC, ALAC, WAV, tags. See the codec caveat below. |
 | DSP | **Self-written** | Port of Android's `AudioFx.kt` and the phase vocoder in `TimeStretch.kt`. Do not replace it with a third-party effect library. |
 | FFT | **`realfft` / `rustfft`** or **`rubato`** (free choice) | `rubato` is also handy for resampling (stems need 44.1 kHz). |
-| AI stems | **`ort`** (ONNX Runtime) | Same four Open-Unmix (umxhq) ONNX models as on Android. |
+| AI stems | **`ort`** (ONNX Runtime) | One htdemucs (Demucs v4) ONNX model, downloaded in Settings (the Android app uses Open-Unmix; see PROGRESS.md stage 11). |
 | UI | **Slint** | Keep it light: no web view, no heavy animation. |
 
 Caveats to verify at the start (crate versions and capabilities change, check the current docs, do not trust this list blindly):
@@ -206,6 +206,8 @@ vocoder with identity phase locking**.
 - Read `PhaseVocoder.Group.process` for the exact phase-locking code before porting.
 
 ### 5.3 Stem separation (AI)
+
+> **Superseded on PC (owner's decision):** the PC version uses Demucs (htdemucs, 4 stems, one ONNX network) instead of Open-Unmix. The requirements, the contract of the network and the status are in PROGRESS.md, stage 11. What follows describes the Android version; the output file names, the 16-bit WAV output, the temp-file idea and the progress / cancel behavior still apply.
 
 - **Models.** Open-Unmix `umxhq` exported to ONNX (MIT, © 2019 Inria), one network per stem, four total, about 34 MB each. Not bundled: downloaded
   in Settings (SHA-256 verified) or imported from files (recognized by checksum, the file name does not matter).

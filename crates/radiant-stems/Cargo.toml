@@ -4,5 +4,11 @@ version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 
-# TODO: add `ort` (optional feature, keeps the base app small), `realfft`, `rubato`, a SHA-256 crate.
 [dependencies]
+# Streaming SHA-256 for the model file (the whole file never sits in memory).
+sha2 = "0.10"
+# Blocking HTTPS client for the one-time model download (rustls, no system TLS needed).
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+# TODO (pipeline stage): `ort` with the `load-dynamic` feature (onnxruntime.dll next to the exe, so the base exe
+# stays small and the static CRT is not an issue), `realfft` for the STFT / iSTFT.

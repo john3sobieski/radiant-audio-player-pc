@@ -110,12 +110,6 @@ msgstr "恢复文件"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "包含 12 个单词的文件，忘记密码时可用它恢复访问。"
 
-msgid "Models"
-msgstr "模型"
-
-msgid "Download the separation models or import them from files."
-msgstr "下载分轨模型，或从文件导入。"
-
 msgid "Stems"
 msgstr "分轨"
 
@@ -725,3 +719,54 @@ msgstr "无法保存文件：{}"
 
 msgid "There is no recovery file for this lock."
 msgstr "此锁没有恢复文件。"
+
+msgid "Demucs model"
+msgstr "Demucs 模型"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "将曲目分成四部分：人声、鼓、贝斯和其余部分。模型不包含在程序中：它只需从互联网下载一次，并保存在这台电脑上。"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Import from file"
+msgstr "从文件导入"
+
+msgid "Not downloaded"
+msgstr "尚未下载"
+
+msgid "Downloading… {} of {} MB"
+msgstr "正在下载… {} / {} MB"
+
+msgid "Checking the file…"
+msgstr "正在校验文件…"
+
+msgid "Ready · {} MB"
+msgstr "就绪 · {} MB"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "暂不可用：此版本没有经过验证的模型地址"
+
+msgid "Download cancelled"
+msgstr "下载已取消"
+
+msgid "Model download failed: {}"
+msgstr "模型下载失败：{}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "文件与校验和不符，已被删除"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "此文件不是所需的模型（校验和不符）"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "请先下载分离模型 (设置 → AI 与分轨)"
+
+msgid "The model was deleted"
+msgstr "模型已删除"
+
+msgid "The model is ready"
+msgstr "模型已就绪"
+
+msgid "Could not delete the model: {}"
+msgstr "无法删除模型：{}"

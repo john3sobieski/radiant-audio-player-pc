@@ -1790,6 +1790,17 @@ component SettingsPage inherits Rectangle {
     /// Opens the code dialog: 0 = turn on, 1 = change code, 2 = turn off.
     callback sec-open(int);
     callback lock-now();
+    /// AI & stems -> model card (set from Rust): 0 = not downloaded, 1 = downloading, 2 = checking the file,
+    /// 3 = ready, 4 = this build has no verified model address (download off).
+    in property <int> stem-state: 0;
+    /// Download / check progress, 0.0 ..= 1.0.
+    in property <float> stem-progress: 0;
+    /// The status line of the card (made in Rust, translated).
+    in property <string> stem-info;
+    callback stem-download();
+    callback stem-import();
+    callback stem-cancel();
+    callback stem-delete();
     /// Own colors the user saved as presets (set from Rust).
     in property <[color]> saved-colors;
     /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
@@ -1837,6 +1848,11 @@ component SettingsPage inherits Rectangle {
     private property <length> sec-h3: 42px + sec-p3.preferred-height + 12px + 40px + 16px;
     private property <length> sec-h4: 42px + sec-p4.preferred-height + 16px;
     private property <length> sec-total: root.sec-h1 + root.sec-h3 + root.sec-h4 + 24px;
+    // AI & stems card: an invisible copy of the text measures how tall the card has to be at the current width.
+    private property <string> stem-t1: @tr("Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer.");
+    stem-p := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.stem-t1; font-size: 13px; wrap: word-wrap; }
+    // Card = title row (42) + text + gap (12) + status line and progress bar (44) + buttons (40) + bottom padding (16) + spare (2).
+    private property <length> stem-h: stem-p.preferred-height + 156px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -1848,7 +1864,6 @@ component SettingsPage inherits Rectangle {
             // Security: the four cards are drawn by hand below (they have controls).
         ],
         [
-            { title: @tr("Models"), text: @tr("Download the separation models or import them from files.") },
             { title: @tr("Stems"), text: @tr("Choose which parts to keep and where they are saved.") },
         ],
         [
@@ -1869,6 +1884,7 @@ component SettingsPage inherits Rectangle {
     private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px
         : root.section == 1 ? root.lang-h + 12px
         : root.section == 2 ? root.sec-total + 12px
+        : root.section == 3 ? root.stem-h + 12px
         : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
@@ -2496,6 +2512,99 @@ component SettingsPage inherits Rectangle {
                 wrap: word-wrap;
             }
         }
+        // ---- AI & stems: the Demucs model (download / import / delete) ----
+        if root.section == 3 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.stem-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Demucs model");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: stem-p.preferred-height;
+                text: root.stem-t1;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            Text {
+                x: 16px;
+                y: 42px + stem-p.preferred-height + 12px;
+                width: parent.width - 32px;
+                height: 18px;
+                text: root.stem-info;
+                color: root.stem-state == 3 ? Theme.accent : Theme.text;
+                font-size: 13px;
+                overflow: elide;
+            }
+            Rectangle {
+                x: 16px;
+                y: 42px + stem-p.preferred-height + 12px + 24px;
+                width: parent.width - 32px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.surface-hover;
+                visible: root.stem-state == 1 || root.stem-state == 2;
+
+                Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width * Math.max(0, Math.min(1, root.stem-progress));
+                    height: parent.height;
+                    border-radius: 3px;
+                    background: Theme.accent;
+                }
+            }
+            AccentButton {
+                x: 16px;
+                y: 42px + stem-p.preferred-height + 12px + 44px;
+                width: 130px;
+                visible: root.stem-state == 0 || root.stem-state == 4;
+                enabled: root.stem-state == 0;
+                text: @tr("Download");
+                clicked => { root.stem-download(); }
+            }
+            PillButton {
+                x: 16px + 130px + 10px;
+                y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
+                width: 160px;
+                visible: root.stem-state == 0;
+                text: @tr("Import from file");
+                clicked => { root.stem-import(); }
+            }
+            PillButton {
+                x: 16px;
+                y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
+                width: 120px;
+                visible: root.stem-state == 1 || root.stem-state == 2;
+                text: @tr("Cancel");
+                clicked => { root.stem-cancel(); }
+            }
+            PillButton {
+                x: 16px;
+                y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
+                width: 120px;
+                visible: root.stem-state == 3;
+                text: @tr("Delete");
+                clicked => { root.stem-delete(); }
+            }
+        }
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
             y: root.extra-h + k * 104px;
@@ -2996,6 +3105,14 @@ export component MainWindow inherits Window {
     callback lock-recover-file();
     callback lock-view-changed();
     callback lock-now();
+    // ---- AI & stems model card (stage 11); see `SettingsPage` for the meaning ----
+    in property <int> stem-state: 0;
+    in property <float> stem-progress: 0;
+    in property <string> stem-info;
+    callback stem-download();
+    callback stem-import();
+    callback stem-cancel();
+    callback stem-delete();
     /// Code dialog of Settings -> Security. Rust drives it: `sec-mode` 0 = turn on, 1 = change code, 2 = turn off;
     /// `sec-step` 0 = current code, 1 = new code, 2 = repeat it, 3 = save the recovery file.
     in-out property <bool> show-sec-popup: false;
@@ -6422,6 +6539,13 @@ export component MainWindow inherits Window {
         lock-enabled: root.lock-enabled;
         sec-open(m) => { root.sec-open(m); }
         lock-now() => { root.lock-now(); }
+        stem-state: root.stem-state;
+        stem-progress: root.stem-progress;
+        stem-info: root.stem-info;
+        stem-download() => { root.stem-download(); }
+        stem-import() => { root.stem-import(); }
+        stem-cancel() => { root.stem-cancel(); }
+        stem-delete() => { root.stem-delete(); }
     }
 
     // ---- Security dialog: turn the lock on / change the code / turn it off (above the settings page) ----

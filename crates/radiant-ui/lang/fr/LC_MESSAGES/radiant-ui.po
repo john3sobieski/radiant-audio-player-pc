@@ -113,12 +113,6 @@ msgstr "Fichier de récupération"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "Un fichier de 12 mots pour retrouver l'accès en cas d'oubli du code."
 
-msgid "Models"
-msgstr "Modèles"
-
-msgid "Download the separation models or import them from files."
-msgstr "Téléchargez les modèles de séparation ou importez-les depuis des fichiers."
-
 msgid "Stems"
 msgstr "Stems"
 
@@ -729,3 +723,54 @@ msgstr "Impossible d'enregistrer le fichier : {}"
 
 msgid "There is no recovery file for this lock."
 msgstr "Il n'existe pas de fichier de récupération pour ce verrouillage."
+
+msgid "Demucs model"
+msgstr "Modèle Demucs"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "Sépare un morceau en quatre parties : voix, batterie, basse et le reste. Le modèle ne fait pas partie du programme : il est téléchargé une seule fois depuis Internet et reste sur cet ordinateur."
+
+msgid "Download"
+msgstr "Télécharger"
+
+msgid "Import from file"
+msgstr "Importer depuis un fichier"
+
+msgid "Not downloaded"
+msgstr "Non téléchargé"
+
+msgid "Downloading… {} of {} MB"
+msgstr "Téléchargement… {} sur {} Mo"
+
+msgid "Checking the file…"
+msgstr "Vérification du fichier…"
+
+msgid "Ready · {} MB"
+msgstr "Prêt · {} Mo"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "Pas encore disponible : cette version n’a pas d’adresse de modèle vérifiée"
+
+msgid "Download cancelled"
+msgstr "Téléchargement annulé"
+
+msgid "Model download failed: {}"
+msgstr "Échec du téléchargement du modèle : {}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "Le fichier ne correspondait pas à la somme de contrôle et a été supprimé"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "Ce fichier n’est pas le modèle attendu (somme de contrôle différente)"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "Téléchargez d’abord le modèle de séparation (Paramètres → IA et stems)"
+
+msgid "The model was deleted"
+msgstr "Le modèle a été supprimé"
+
+msgid "The model is ready"
+msgstr "Le modèle est prêt"
+
+msgid "Could not delete the model: {}"
+msgstr "Impossible de supprimer le modèle : {}"

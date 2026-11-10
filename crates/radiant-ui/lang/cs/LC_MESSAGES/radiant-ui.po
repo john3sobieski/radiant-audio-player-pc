@@ -116,12 +116,6 @@ msgstr "Záchranný soubor"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "Soubor s 12 slovy pro obnovení přístupu při zapomenutém kódu."
 
-msgid "Models"
-msgstr "Modely"
-
-msgid "Download the separation models or import them from files."
-msgstr "Stáhněte modely separace nebo je importujte ze souborů."
-
 msgid "Stems"
 msgstr "Stopy"
 
@@ -733,3 +727,54 @@ msgstr "Soubor se nepodařilo uložit: {}"
 
 msgid "There is no recovery file for this lock."
 msgstr "Pro tento zámek neexistuje soubor pro obnovení."
+
+msgid "Demucs model"
+msgstr "Model Demucs"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "Rozdělí skladbu na čtyři části: zpěv, bicí, baskytaru a zbytek. Model není součástí programu: stáhne se jednou z internetu a zůstane v tomto počítači."
+
+msgid "Download"
+msgstr "Stáhnout"
+
+msgid "Import from file"
+msgstr "Importovat ze souboru"
+
+msgid "Not downloaded"
+msgstr "Nestaženo"
+
+msgid "Downloading… {} of {} MB"
+msgstr "Stahování… {} z {} MB"
+
+msgid "Checking the file…"
+msgstr "Kontrola souboru…"
+
+msgid "Ready · {} MB"
+msgstr "Připraveno · {} MB"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "Zatím nedostupné: tato verze nemá ověřenou adresu modelu"
+
+msgid "Download cancelled"
+msgstr "Stahování zrušeno"
+
+msgid "Model download failed: {}"
+msgstr "Model se nepodařilo stáhnout: {}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "Soubor neodpovídal kontrolnímu součtu a byl odstraněn"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "Tento soubor není očekávaný model (kontrolní součet nesedí)"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "Nejdřív stáhněte model oddělování (Nastavení → AI a stopy)"
+
+msgid "The model was deleted"
+msgstr "Model byl smazán"
+
+msgid "The model is ready"
+msgstr "Model je připraven"
+
+msgid "Could not delete the model: {}"
+msgstr "Model se nepodařilo smazat: {}"

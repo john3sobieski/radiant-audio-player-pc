@@ -116,12 +116,6 @@ msgstr "Plik odzyskiwania"
 msgid "A file of 12 words to get back in if the code is forgotten."
 msgstr "Plik z 12 słowami do odzyskania dostępu po zapomnieniu kodu."
 
-msgid "Models"
-msgstr "Modele"
-
-msgid "Download the separation models or import them from files."
-msgstr "Pobierz modele separacji lub zaimportuj je z plików."
-
 msgid "Stems"
 msgstr "Stemy"
 
@@ -733,3 +727,54 @@ msgstr "Nie udało się zapisać pliku: {}"
 
 msgid "There is no recovery file for this lock."
 msgstr "Dla tej blokady nie ma pliku odzyskiwania."
+
+msgid "Demucs model"
+msgstr "Model Demucs"
+
+msgid "Splits a track into four parts: vocals, drums, bass and the rest. The model is not part of the program: it is downloaded once from the internet and stays on this computer."
+msgstr "Dzieli utwór na cztery części: wokal, perkusję, bas i resztę. Model nie jest częścią programu: pobiera się go raz z internetu i zostaje na tym komputerze."
+
+msgid "Download"
+msgstr "Pobierz"
+
+msgid "Import from file"
+msgstr "Importuj z pliku"
+
+msgid "Not downloaded"
+msgstr "Nie pobrano"
+
+msgid "Downloading… {} of {} MB"
+msgstr "Pobieranie… {} z {} MB"
+
+msgid "Checking the file…"
+msgstr "Sprawdzanie pliku…"
+
+msgid "Ready · {} MB"
+msgstr "Gotowe · {} MB"
+
+msgid "Not available yet: this build has no verified model address"
+msgstr "Jeszcze niedostępne: ta wersja nie ma zweryfikowanego adresu modelu"
+
+msgid "Download cancelled"
+msgstr "Pobieranie anulowane"
+
+msgid "Model download failed: {}"
+msgstr "Nie udało się pobrać modelu: {}"
+
+msgid "The file did not match its checksum and was removed"
+msgstr "Plik nie zgadzał się z sumą kontrolną i został usunięty"
+
+msgid "This file is not the expected model (checksum mismatch)"
+msgstr "Ten plik nie jest oczekiwanym modelem (suma kontrolna się nie zgadza)"
+
+msgid "Download the separation model first (Settings → AI & stems)"
+msgstr "Najpierw pobierz model rozdzielania (Ustawienia → AI i stemy)"
+
+msgid "The model was deleted"
+msgstr "Model został usunięty"
+
+msgid "The model is ready"
+msgstr "Model jest gotowy"
+
+msgid "Could not delete the model: {}"
+msgstr "Nie udało się usunąć modelu: {}"

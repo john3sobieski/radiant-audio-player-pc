@@ -27,7 +27,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// 83000 ms -> "1:23"
@@ -82,6 +82,107 @@ fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>
             ui.set_status(i18n::tr_fmt("Could not save settings: {}", &[&e]).into());
         }
     }
+}
+
+// ---- AI & stems: the Demucs model file (stage 11). The files and the download live in `radiant-stems`; here only the
+// settings card is driven. `stem-state`: 0 not downloaded, 1 downloading, 2 checking the file, 3 ready,
+// 4 this build has no verified model address (download off).
+
+/// The models folder: `%APPDATA%/Radiant/models` (next to `settings.json`).
+fn stem_store() -> radiant_stems::ModelStore {
+    let dir = settings::settings_path().parent().map(|p| p.join("models")).unwrap_or_else(|| PathBuf::from("models"));
+    radiant_stems::ModelStore::new(dir)
+}
+
+/// Bytes -> whole megabytes (decimal, as file managers show them).
+fn stem_mb(bytes: u64) -> String {
+    ((bytes + 500_000) / 1_000_000).to_string()
+}
+
+/// Shows what is on disk in the settings card.
+fn show_stem_state(ui: &MainWindow) {
+    use radiant_stems::{ModelState, MODEL};
+    let store = stem_store();
+    let (state, info) = if store.state() == ModelState::Ready {
+        let size = std::fs::metadata(store.model_path()).map(|m| m.len()).unwrap_or(MODEL.approx_bytes);
+        (3, i18n::tr_fmt("Ready · {} MB", &[&stem_mb(size)]))
+    } else if !MODEL.is_pinned() {
+        (4, i18n::tr("Not available yet: this build has no verified model address"))
+    } else {
+        (0, i18n::tr("Not downloaded"))
+    };
+    ui.set_stem_state(state);
+    ui.set_stem_progress(0.0);
+    ui.set_stem_info(info.into());
+}
+
+/// Runs a download / import on a worker thread; progress and the result come back to the window. Only one job at
+/// a time (`busy`); `cancel` stops it (a half-loaded download is kept and continued next time).
+/// `mismatch_text` is the message for a file that is not the expected model.
+fn run_stem_job<F>(
+    weak: &slint::Weak<MainWindow>,
+    cancel: &Arc<AtomicBool>,
+    busy: &Arc<AtomicBool>,
+    mismatch_text: &'static str,
+    job: F,
+) where
+    F: FnOnce(
+            &radiant_stems::ModelStore,
+            &AtomicBool,
+            &mut dyn FnMut(radiant_stems::Progress),
+        ) -> Result<(), radiant_stems::StemError>
+        + Send
+        + 'static,
+{
+    use radiant_stems::{Progress, StemError};
+    if busy.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    cancel.store(false, Ordering::SeqCst);
+    if let Some(ui) = weak.upgrade() {
+        ui.set_stem_state(1);
+        ui.set_stem_progress(0.0);
+        ui.set_stem_info(i18n::tr_fmt("Downloading… {} of {} MB", &[&0, &stem_mb(radiant_stems::MODEL.approx_bytes)]).into());
+    }
+    let (weak, cancel, busy) = (weak.clone(), cancel.clone(), busy.clone());
+    std::thread::spawn(move || {
+        let store = stem_store();
+        let mut last: Option<std::time::Instant> = None;
+        let mut on_progress = |p: Progress| {
+            let now = std::time::Instant::now();
+            if last.map_or(false, |t| now.duration_since(t) < std::time::Duration::from_millis(120)) {
+                return;
+            }
+            last = Some(now);
+            let (state, done, total) = match p {
+                Progress::Download { done, total } => (1, done, total),
+                Progress::Verify { done, total } => (2, done, total),
+            };
+            let _ = weak.upgrade_in_event_loop(move |ui| {
+                ui.set_stem_state(state);
+                ui.set_stem_progress(if total > 0 { done as f32 / total as f32 } else { 0.0 });
+                let info = if state == 1 {
+                    i18n::tr_fmt("Downloading… {} of {} MB", &[&stem_mb(done), &stem_mb(total)])
+                } else {
+                    i18n::tr("Checking the file…")
+                };
+                ui.set_stem_info(info.into());
+            });
+        };
+        let result = job(&store, &*cancel, &mut on_progress);
+        busy.store(false, Ordering::SeqCst);
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            let message = match &result {
+                Ok(()) => i18n::tr("The model is ready"),
+                Err(StemError::Cancelled) => i18n::tr("Download cancelled"),
+                Err(StemError::NotPinned) => i18n::tr("Not available yet: this build has no verified model address"),
+                Err(StemError::Mismatch) => i18n::tr(mismatch_text),
+                Err(e) => i18n::tr_fmt("Model download failed: {}", &[e]),
+            };
+            show_stem_state(&ui);
+            ui.set_status(message.into());
+        });
+    });
 }
 
 /// Own accent color: the HSV sliders in the settings and the `Theme` colors.
@@ -1895,7 +1996,13 @@ fn main() -> Result<(), slint::PlatformError> {
                 }
                 return;
             }
-            /* TODO: stems */
+            if stem_store().state() != radiant_stems::ModelState::Ready {
+                if let Some(ui) = weak.upgrade() {
+                    ui.set_status(i18n::tr("Download the separation model first (Settings → AI & stems)").into());
+                }
+                return;
+            }
+            /* TODO: stems (pipeline, PROGRESS stage 11) */
         });
     }
     {
@@ -2723,6 +2830,67 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     {
+        // AI & stems -> Demucs model card: download / import / cancel / delete. Not in low-power mode (heavy work).
+        let (cancel, busy) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
+        {
+            let (weak, settings, cancel, busy) = (ui_weak.clone(), settings.clone(), cancel.clone(), busy.clone());
+            ui.on_stem_download(move || {
+                if !radiant_stems::allowed(settings.borrow().low_power) {
+                    if let Some(ui) = weak.upgrade() {
+                        ui.set_status(i18n::tr("Stems are not available in low-power mode").into());
+                    }
+                    return;
+                }
+                run_stem_job(
+                    &weak,
+                    &cancel,
+                    &busy,
+                    "The file did not match its checksum and was removed",
+                    |store, cancel, progress| store.download(cancel, progress),
+                );
+            });
+        }
+        {
+            let (weak, settings, cancel, busy) = (ui_weak.clone(), settings.clone(), cancel.clone(), busy.clone());
+            ui.on_stem_import(move || {
+                if !radiant_stems::allowed(settings.borrow().low_power) {
+                    if let Some(ui) = weak.upgrade() {
+                        ui.set_status(i18n::tr("Stems are not available in low-power mode").into());
+                    }
+                    return;
+                }
+                let Some(path) = rfd::FileDialog::new().add_filter("ONNX model", &["onnx"]).pick_file() else { return };
+                run_stem_job(
+                    &weak,
+                    &cancel,
+                    &busy,
+                    "This file is not the expected model (checksum mismatch)",
+                    move |store, cancel, progress| store.import(&path, cancel, progress),
+                );
+            });
+        }
+        {
+            let cancel = cancel.clone();
+            ui.on_stem_cancel(move || cancel.store(true, Ordering::SeqCst));
+        }
+        {
+            let (weak, busy) = (ui_weak.clone(), busy.clone());
+            ui.on_stem_delete(move || {
+                if busy.load(Ordering::SeqCst) {
+                    return;
+                }
+                let message = match stem_store().delete() {
+                    Ok(()) => i18n::tr("The model was deleted"),
+                    Err(e) => i18n::tr_fmt("Could not delete the model: {}", &[&e]),
+                };
+                if let Some(ui) = weak.upgrade() {
+                    show_stem_state(&ui);
+                    ui.set_status(message.into());
+                }
+            });
+        }
+    }
+    {
         // Section / queue switch: remembered between launches.
         let (settings, weak, qs, library) = (settings.clone(), ui_weak.clone(), queues_state.clone(), library.clone());
         ui.on_section_changed(move |section, queue| {
@@ -2970,6 +3138,7 @@ fn main() -> Result<(), slint::PlatformError> {
     });
     wire_app_lock(&ui, &lock);
     sync_lock_flags(&ui, &lock.store.borrow());
+    show_stem_state(&ui);
     if lock.store.borrow().is_enabled() {
         ui.set_locked(true);
         update_lock_wait(&lock, &ui_weak, &ui);
