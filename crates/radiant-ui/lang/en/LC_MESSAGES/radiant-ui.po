@@ -839,3 +839,6 @@ msgstr "Runs the separation on the graphics card through DirectML, usually sever
 
 msgid "Another separation is already running"
 msgstr "Another separation is already running"
+
+msgid "Stems cannot be made from stems"
+msgstr "Stems cannot be made from stems"
