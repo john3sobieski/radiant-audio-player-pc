@@ -4,7 +4,7 @@
 //! [`crate::runtime_library_path`] (set through `ORT_DYLIB_PATH` before the first session is made). Loading a missing
 //! library would panic inside `ort`, so [`OrtBackend::load`] checks the file first.
 
-use crate::demucs::{self, Backend, IoMap, SegmentOut, TensorInfo, CHANNELS, FRAMES, FREQ_BINS, MIX_LEN, SEGMENT_SAMPLES, SPEC_CHANNELS, SPEC_LEN, STEMS};
+use crate::demucs::{self, Backend, IoMap, Layout, SegmentOut, TensorInfo, CHANNELS, FRAMES, FREQ_BINS, MIX_LEN, SEGMENT_SAMPLES, SPEC_CHANNELS, SPEC_LEN, STEMS};
 use crate::StemError;
 use ort::session::builder::SessionBuilder;
 use ort::session::Session;
@@ -29,6 +29,7 @@ impl Mode {
 
 /// Names of the four tensors of the model.
 struct Io {
+    layout: Layout,
     mix_in: String,
     spec_in: String,
     wave_out: String,
@@ -132,8 +133,25 @@ fn run_session(session: &mut Session, io: &Io, mix: &[f32], spec: &[f32]) -> Res
     debug_assert_eq!(mix.len(), MIX_LEN);
     debug_assert_eq!(spec.len(), SPEC_LEN);
     let mix_t = Tensor::from_array(([1_i64, CHANNELS as i64, SEGMENT_SAMPLES as i64], mix.to_vec())).map_err(infer)?;
-    let spec_t =
-        Tensor::from_array(([1_i64, SPEC_CHANNELS as i64, FREQ_BINS as i64, FRAMES as i64], spec.to_vec())).map_err(infer)?;
+    if io.layout == Layout::Fused {
+        // The STFT is inside the graph: only the waveform goes in, the stems come out (no frequency branch).
+        let outputs = session.run(vec![(io.mix_in.clone(), mix_t)]).map_err(infer)?;
+        let (_, wave) = outputs[io.wave_out.as_str()].try_extract_tensor::<f32>().map_err(infer)?;
+        if wave.len() != STEMS * MIX_LEN {
+            return Err(StemError::BadModel(format!("unexpected output size: {} floats", wave.len())));
+        }
+        return Ok(SegmentOut { wave: wave.to_vec(), spec_out: vec![0.0; STEMS * SPEC_LEN] });
+    }
+    let spec_t = match io.layout {
+        Layout::Classic | Layout::Fused => {
+            Tensor::from_array(([1_i64, SPEC_CHANNELS as i64, FREQ_BINS as i64, FRAMES as i64], spec.to_vec())).map_err(infer)?
+        }
+        Layout::FramesFirst => {
+            let mut turned = vec![0.0_f32; SPEC_LEN];
+            demucs::spec_to_frames_first(spec, &mut turned);
+            Tensor::from_array(([1_i64, FRAMES as i64, SPEC_CHANNELS as i64, FREQ_BINS as i64], turned)).map_err(infer)?
+        }
+    };
     let outputs = session.run(vec![(io.mix_in.clone(), mix_t), (io.spec_in.clone(), spec_t)]).map_err(infer)?;
     let (_, wave) = outputs[io.wave_out.as_str()].try_extract_tensor::<f32>().map_err(infer)?;
     let (_, spec_out) = outputs[io.spec_out.as_str()].try_extract_tensor::<f32>().map_err(infer)?;
@@ -144,7 +162,11 @@ fn run_session(session: &mut Session, io: &Io, mix: &[f32], spec: &[f32]) -> Res
             spec_out.len()
         )));
     }
-    Ok(SegmentOut { wave: wave.to_vec(), spec_out: spec_out.to_vec() })
+    let spec_out = match io.layout {
+        Layout::Classic | Layout::Fused => spec_out.to_vec(),
+        Layout::FramesFirst => demucs::spec_out_from_frames_first(spec_out),
+    };
+    Ok(SegmentOut { wave: wave.to_vec(), spec_out })
 }
 
 impl OrtBackend {
@@ -170,10 +192,11 @@ impl OrtBackend {
             session.inputs.iter().map(|i| TensorInfo { name: i.name.clone(), dims: dims(&i.input_type) }).collect();
         let outputs: Vec<TensorInfo> =
             session.outputs.iter().map(|o| TensorInfo { name: o.name.clone(), dims: dims(&o.output_type) }).collect();
-        let IoMap { mix_in, spec_in, wave_out, spec_out } = demucs::check_io(&inputs, &outputs).map_err(StemError::BadModel)?;
+        let IoMap { mix_in, spec_in, wave_out, spec_out, layout } = demucs::check_io(&inputs, &outputs).map_err(StemError::BadModel)?;
         let on_gpu = modes[current].is_gpu();
         Ok(Self {
             io: Io {
+                layout,
                 mix_in: inputs[mix_in].name.clone(),
                 spec_in: inputs[spec_in].name.clone(),
                 wave_out: outputs[wave_out].name.clone(),

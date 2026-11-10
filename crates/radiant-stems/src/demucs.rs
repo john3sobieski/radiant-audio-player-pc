@@ -62,13 +62,28 @@ pub struct TensorInfo {
     pub dims: Vec<i64>,
 }
 
-/// Which of the session's tensors is which (indices into the lists given to [`check_io`]).
+/// Axis order of the spectrogram tensors. The program works in [`Layout::Classic`] internally; a model with the
+/// other order gets its tensors transposed at the boundary (see `ort_backend`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Layout {
+    /// `spec [1, 4, 2048, FRAMES]`, `spec_out [1, STEMS, 4, 2048, FRAMES]` (StemStudio export).
+    Classic,
+    /// `spec [1, FRAMES, 4, 2048]`, `spec_out [1, FRAMES, STEMS, 4, 2048]` (KICK export).
+    FramesFirst,
+    /// One input `mix [1, 2, SEGMENT]`, one output `stems [1, STEMS, 2, SEGMENT]`: the STFT / iSTFT are inside the
+    /// graph (the DirectML-friendly export). `spec_in` / `spec_out` of [`IoMap`] are not used then.
+    Fused,
+}
+
+/// Which of the session's tensors is which (indices into the lists given to [`check_io`]). With [`Layout::Fused`]
+/// `spec_in` equals `mix_in` and `spec_out` equals `wave_out` (there is no spectrogram, nobody reads them).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IoMap {
     pub mix_in: usize,
     pub spec_in: usize,
     pub wave_out: usize,
     pub spec_out: usize,
+    pub layout: Layout,
 }
 
 fn dim_ok(actual: i64, wanted: usize) -> bool {
@@ -76,7 +91,8 @@ fn dim_ok(actual: i64, wanted: usize) -> bool {
 }
 
 /// Checks that a loaded model has the htdemucs 4-stem contract and finds its tensors by shape:
-/// inputs `[1, 2, SEGMENT]` and `[1, 4, 2048, FRAMES]`, outputs `[1, 4, 2, SEGMENT]` and `[1, 4, 4, 2048, FRAMES]`.
+/// inputs `[1, 2, SEGMENT]` and `[1, 4, 2048, FRAMES]` (or `[1, FRAMES, 4, 2048]`), outputs `[1, 4, 2, SEGMENT]` and
+/// `[1, 4, 4, 2048, FRAMES]` (or `[1, FRAMES, 4, 4, 2048]`, frames, stems, channels, bins).
 /// Dynamic dimensions are accepted; fixed ones must match. The error text says what is wrong (6-stem model, other
 /// segment length, ...), it is meant for the log, not for translation.
 pub fn check_io(inputs: &[TensorInfo], outputs: &[TensorInfo]) -> Result<IoMap, String> {
@@ -85,24 +101,73 @@ pub fn check_io(inputs: &[TensorInfo], outputs: &[TensorInfo]) -> Result<IoMap, 
     };
     let mix_in = find(inputs, 3, &|d: &[i64]| d[1] == CHANNELS as i64 && dim_ok(d[2], SEGMENT_SAMPLES))
         .ok_or("no waveform input [1, 2, 343980]: wrong model or another segment length")?;
-    let spec_in = find(inputs, 4, &|d: &[i64]| {
-        d[1] == SPEC_CHANNELS as i64 && dim_ok(d[2], FREQ_BINS) && dim_ok(d[3], FRAMES)
-    })
-    .ok_or("no spectrogram input [1, 4, 2048, 336]")?;
-    if inputs.len() != 2 {
-        return Err(format!("expected 2 inputs, the model has {}", inputs.len()));
-    }
     let stems = |d: &[i64]| d[1] >= 0 && d[1] as usize == STEMS;
     let wave_out = match find(outputs, 4, &|d: &[i64]| d[1] >= 0 && d[2] == CHANNELS as i64 && dim_ok(d[3], SEGMENT_SAMPLES)) {
         Some(i) if stems(outputs[i].dims.as_slice()) => i,
         Some(i) => return Err(format!("the model has {} stems, 4 are needed", outputs[i].dims[1])),
         None => return Err("no waveform output [1, 4, 2, 343980]".into()),
     };
-    let spec_out = find(outputs, 5, &|d: &[i64]| {
-        stems(d) && d[2] == SPEC_CHANNELS as i64 && dim_ok(d[3], FREQ_BINS) && dim_ok(d[4], FRAMES)
-    })
-    .ok_or("no spectrogram output [1, 4, 4, 2048, 336]")?;
-    Ok(IoMap { mix_in, spec_in, wave_out, spec_out })
+    if inputs.len() == 1 {
+        // The STFT is inside the graph: waveform in, stems out.
+        return Ok(IoMap { mix_in, spec_in: mix_in, wave_out, spec_out: wave_out, layout: Layout::Fused });
+    }
+    let classic_in = find(inputs, 4, &|d: &[i64]| {
+        d[1] == SPEC_CHANNELS as i64 && dim_ok(d[2], FREQ_BINS) && dim_ok(d[3], FRAMES)
+    });
+    let frames_in = find(inputs, 4, &|d: &[i64]| {
+        dim_ok(d[1], FRAMES) && d[2] == SPEC_CHANNELS as i64 && dim_ok(d[3], FREQ_BINS)
+    });
+    let (layout, spec_in) = match (classic_in, frames_in) {
+        (Some(i), _) => (Layout::Classic, i),
+        (None, Some(i)) => (Layout::FramesFirst, i),
+        _ => return Err("no spectrogram input [1, 4, 2048, 336] (or [1, 336, 4, 2048])".into()),
+    };
+    if inputs.len() != 2 {
+        return Err(format!("expected 1 or 2 inputs, the model has {}", inputs.len()));
+    }
+    let spec_out = match layout {
+        Layout::Classic => find(outputs, 5, &|d: &[i64]| {
+            stems(d) && d[2] == SPEC_CHANNELS as i64 && dim_ok(d[3], FREQ_BINS) && dim_ok(d[4], FRAMES)
+        }),
+        Layout::FramesFirst => find(outputs, 5, &|d: &[i64]| {
+            dim_ok(d[1], FRAMES) && d[2] == STEMS as i64 && d[3] == SPEC_CHANNELS as i64 && dim_ok(d[4], FREQ_BINS)
+        }),
+        Layout::Fused => unreachable!("returned above"),
+    }
+    .ok_or("no spectrogram output [1, 4, 4, 2048, 336] (or [1, 336, 4, 4, 2048])")?;
+    Ok(IoMap { mix_in, spec_in, wave_out, spec_out, layout })
+}
+
+/// `[SPEC_CHANNELS][FREQ_BINS][FRAMES]` -> `[FRAMES][SPEC_CHANNELS][FREQ_BINS]` (the input of a frames-first model).
+pub fn spec_to_frames_first(spec: &[f32], out: &mut [f32]) {
+    assert_eq!(spec.len(), SPEC_LEN);
+    assert_eq!(out.len(), SPEC_LEN);
+    for c in 0..SPEC_CHANNELS {
+        for f in 0..FREQ_BINS {
+            let row = &spec[(c * FREQ_BINS + f) * FRAMES..][..FRAMES];
+            for (t, v) in row.iter().enumerate() {
+                out[(t * SPEC_CHANNELS + c) * FREQ_BINS + f] = *v;
+            }
+        }
+    }
+}
+
+/// `[FRAMES][STEMS][SPEC_CHANNELS][FREQ_BINS]` -> `[STEMS][SPEC_CHANNELS][FREQ_BINS][FRAMES]` (the output of a
+/// frames-first model, back to the layout the rest of the program uses).
+pub fn spec_out_from_frames_first(src: &[f32]) -> Vec<f32> {
+    assert_eq!(src.len(), STEMS * SPEC_LEN);
+    let mut out = vec![0.0_f32; STEMS * SPEC_LEN];
+    for t in 0..FRAMES {
+        for s in 0..STEMS {
+            for c in 0..SPEC_CHANNELS {
+                let row = &src[((t * STEMS + s) * SPEC_CHANNELS + c) * FREQ_BINS..][..FREQ_BINS];
+                for (f, v) in row.iter().enumerate() {
+                    out[((s * SPEC_CHANNELS + c) * FREQ_BINS + f) * FRAMES + t] = *v;
+                }
+            }
+        }
+    }
+    out
 }
 
 /// One network call's piece of the track: `len` real samples starting at `start` (the rest of the segment, if any,
@@ -167,19 +232,53 @@ mod tests {
             &[t("mix", &[1, 2, 343980]), t("spec", &[1, 4, 2048, 336])],
             &[t("wave", &[1, 4, 2, 343980]), t("spec_out", &[1, 4, 4, 2048, 336])],
         );
-        assert_eq!(a, Ok(IoMap { mix_in: 0, spec_in: 1, wave_out: 0, spec_out: 1 }));
+        assert_eq!(a, Ok(IoMap { mix_in: 0, spec_in: 1, wave_out: 0, spec_out: 1, layout: Layout::Classic }));
         // Other names and another output order.
         let b = check_io(
             &[t("mag", &[1, 4, 2048, 336]), t("mix", &[1, 2, 343980])],
             &[t("freq", &[1, 4, 4, 2048, 336]), t("time", &[1, 4, 2, 343980])],
         );
-        assert_eq!(b, Ok(IoMap { mix_in: 1, spec_in: 0, wave_out: 1, spec_out: 0 }));
+        assert_eq!(b, Ok(IoMap { mix_in: 1, spec_in: 0, wave_out: 1, spec_out: 0, layout: Layout::Classic }));
         // Dynamic batch and length are accepted.
         assert!(check_io(
             &[t("a", &[-1, 2, -1]), t("b", &[-1, 4, 2048, -1])],
             &[t("c", &[-1, 4, 2, -1]), t("d", &[-1, 4, 4, 2048, -1])],
         )
         .is_ok());
+    }
+
+    #[test]
+    fn frames_first_export_is_recognized() {
+        let io = check_io(
+            &[t("mix", &[1, 2, 343980]), t("spec", &[1, 336, 4, 2048])],
+            &[t("out_spec", &[1, 336, 4, 4, 2048]), t("out_wave", &[1, 4, 2, 343980])],
+        );
+        assert_eq!(io, Ok(IoMap { mix_in: 0, spec_in: 1, wave_out: 1, spec_out: 0, layout: Layout::FramesFirst }));
+    }
+
+    #[test]
+    fn fused_export_is_recognized() {
+        let io = check_io(&[t("mix", &[1, 2, 343980])], &[t("stems", &[1, 4, 2, 343980])]);
+        assert_eq!(io, Ok(IoMap { mix_in: 0, spec_in: 0, wave_out: 0, spec_out: 0, layout: Layout::Fused }));
+        assert!(check_io(&[t("mix", &[1, 2, 343980])], &[t("stems", &[1, 6, 2, 343980])]).is_err());
+    }
+
+    #[test]
+    fn frames_first_transposes_are_exact() {
+        let mut spec = vec![0.0_f32; SPEC_LEN];
+        let (c, f, tt) = (3, 1500, 200);
+        spec[(c * FREQ_BINS + f) * FRAMES + tt] = 7.0;
+        let mut out = vec![0.0_f32; SPEC_LEN];
+        spec_to_frames_first(&spec, &mut out);
+        assert_eq!(out[(tt * SPEC_CHANNELS + c) * FREQ_BINS + f], 7.0);
+        assert_eq!(out.iter().filter(|v| **v != 0.0).count(), 1);
+
+        let mut src = vec![0.0_f32; STEMS * SPEC_LEN];
+        let (s, c, f, tt) = (2, 1, 999, 335);
+        src[((tt * STEMS + s) * SPEC_CHANNELS + c) * FREQ_BINS + f] = 5.0;
+        let back = spec_out_from_frames_first(&src);
+        assert_eq!(back[((s * SPEC_CHANNELS + c) * FREQ_BINS + f) * FRAMES + tt], 5.0);
+        assert_eq!(back.iter().filter(|v| **v != 0.0).count(), 1);
     }
 
     #[test]

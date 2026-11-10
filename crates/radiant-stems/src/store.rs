@@ -39,24 +39,24 @@ impl ModelSpec {
     }
 }
 
-/// The htdemucs 4-stem network (MIT, Meta AI: facebookresearch/demucs), exported to ONNX with the STFT outside
-/// (`mix [1,2,343980]`, `spec [1,4,2048,336]` -> `wave [1,4,2,343980]`, `spec_out [1,4,4,2048,336]`, fp16 weights
-/// stored, cast to fp32 on load, 7.8 s segment).
+/// The htdemucs 4-stem network (MIT, Meta AI: facebookresearch/demucs), the DirectML-friendly export
+/// `ferrite-stems/htdemucs-onnx-dml` (`htdemucs-dml.onnx`): `mix [1,2,343980]` -> `stems [1,4,2,343980]`, the STFT and
+/// iSTFT are inside the graph (4,631 operations, built to fit DirectML; about 12 s for 3:40 on a GPU according to the
+/// author). The program feeds it through `demucs::Layout::Fused`; the other two layouts (StemStudio, KICK) still work.
 ///
-/// PINNED by the owner from the downloaded file (size and `certutil -hashfile` SHA-256). To pin another file:
-/// 1. The repo's `catalog.json` lists size and SHA-256 of `htdemucs.onnx`; or download the file once and run
-///    `certutil -hashfile htdemucs.onnx SHA256` (Windows) and read the size in bytes.
-/// 2. Put both here: `bytes: Some(<size>)`, `sha256: Some("<64 hex chars, lower case>")`.
-/// 3. Keep a copy of the file you hashed: if the repo owner replaces the file the download stops matching and the
-///    program reports a checksum error instead of using it.
-/// If another export is chosen later, only this constant changes (and `check_io` must accept its tensors).
+/// SHA-256 is from the model card. `bytes` is NOT filled yet: until the exact size in bytes is put here, download and
+/// import refuse to work (`is_pinned` needs both). The size is on the file's page on Hugging Face (Files and versions)
+/// or in the file properties after a manual download. Keep a copy of the file you hashed: such repositories can
+/// disappear (the KICK one did).
+/// Previous models: StemStudio `htdemucs.onnx` (size 90 561 288, SHA-256
+/// `d10035a3bf94ff4a97cc17df99e22093865454da42c7828ed0a4bf9a6d13ab14`, gives noise on DirectML).
 pub const MODEL: ModelSpec = ModelSpec {
-    id: "htdemucs",
-    file_name: "htdemucs.onnx",
-    url: "https://huggingface.co/Carnifis/stemstudio-models/resolve/main/htdemucs.onnx",
-    bytes: Some(90_561_288),
-    sha256: Some("d10035a3bf94ff4a97cc17df99e22093865454da42c7828ed0a4bf9a6d13ab14"),
-    approx_bytes: 90_561_288,
+    id: "htdemucs-dml",
+    file_name: "htdemucs-dml.onnx",
+    url: "https://huggingface.co/ferrite-stems/htdemucs-onnx-dml/resolve/main/htdemucs-dml.onnx",
+    bytes: 371_576_554,
+    sha256: Some("9e06fef2b23e0f772c6a0cedc4da3aeacb066fa2fa7b6bf70ba08bb1db6220ab"),
+    approx_bytes: 370_000_000,
 };
 
 /// Progress of a long step. `total` is the full size in bytes.

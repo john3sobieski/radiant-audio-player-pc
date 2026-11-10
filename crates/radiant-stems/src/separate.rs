@@ -46,6 +46,26 @@ impl Stems {
     }
 }
 
+/// The first `len` samples of both channels are loud enough (normalized input: rms above 0.1) for the sum check.
+fn is_loud(mix: &[f32], len: usize) -> bool {
+    let energy: f64 = (0..CHANNELS).flat_map(|c| mix[c * SEGMENT_SAMPLES..][..len].iter()).map(|v| (*v as f64).powi(2)).sum();
+    len > 0 && energy / (CHANNELS * len) as f64 > 0.01
+}
+
+/// The stems of htdemucs add up to the input (the error is far below the signal). If they do not (error above 80 % of
+/// the signal), the tensors of the model are in another order than assumed and the files would be garbage.
+fn sum_matches(mix: &[f32], sum: &[f32], len: usize) -> bool {
+    let (mut err, mut norm) = (0.0_f64, 0.0_f64);
+    for c in 0..CHANNELS {
+        let (m, s) = (&mix[c * SEGMENT_SAMPLES..][..len], &sum[c * SEGMENT_SAMPLES..][..len]);
+        for (a, b) in m.iter().zip(s) {
+            err += ((*a - *b) as f64).powi(2);
+            norm += (*a as f64).powi(2);
+        }
+    }
+    err <= 0.64 * norm
+}
+
 /// Separates `samples` (interleaved stereo). `on_segment(done, total)` is called after every network call.
 pub fn separate(
     samples: &[f32],
@@ -80,6 +100,9 @@ pub fn separate(
     let mut mix = vec![0.0_f32; MIX_LEN];
     let mut spec = vec![0.0_f32; SPEC_LEN];
     let mut stem_wave = vec![0.0_f32; MIX_LEN];
+    // One-time check on the first loud segment: the four stems must add up to the input (see `check_sum`).
+    let mut sum_wave = vec![0.0_f32; MIX_LEN];
+    let mut sum_checked = false;
 
     for (i, chunk) in plan.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
@@ -90,15 +113,30 @@ pub fn separate(
         mix[SEGMENT_SAMPLES..SEGMENT_SAMPLES + chunk.len].copy_from_slice(&right[chunk.start..chunk.start + chunk.len]);
         spectro.forward(&mix, &mut spec);
         let out = backend.run(&mix, &spec)?;
+        let check_sum = !sum_checked && is_loud(&mix, chunk.len);
+        if check_sum {
+            sum_wave.iter_mut().for_each(|v| *v = 0.0);
+        }
         for s in 0..STEMS {
             stem_wave.copy_from_slice(&out.wave[s * MIX_LEN..(s + 1) * MIX_LEN]);
             spectro.inverse_add(&out.spec_out[s * SPEC_LEN..(s + 1) * SPEC_LEN], &mut stem_wave);
+            if check_sum {
+                sum_wave.iter_mut().zip(&stem_wave).for_each(|(a, b)| *a += *b);
+            }
             for c in 0..CHANNELS {
                 let dst = &mut acc[(s * CHANNELS + c) * n + chunk.start..][..chunk.len];
                 let src = &stem_wave[c * SEGMENT_SAMPLES..][..chunk.len];
                 for ((d, v), w) in dst.iter_mut().zip(src).zip(&weights) {
                     *d += v * w;
                 }
+            }
+        }
+        if check_sum {
+            sum_checked = true;
+            if !sum_matches(&mix, &sum_wave, chunk.len) {
+                return Err(StemError::BadModel(
+                    "the stems do not add up to the input: the model's tensor layout is not what was assumed".into(),
+                ));
             }
         }
         for (d, w) in weight_sum[chunk.start..chunk.start + chunk.len].iter_mut().zip(&weights) {
@@ -167,6 +205,18 @@ mod tests {
         stems.mix_block(StemSet::EMPTY.with(Stem::Drums).with(Stem::Bass), 500, &mut out);
         let both = stems.channel(Stem::Drums, 1)[501] + stems.channel(Stem::Bass, 1)[501];
         assert!((out[3] - both).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stems_that_do_not_add_up_are_reported() {
+        struct Zeros;
+        impl Backend for Zeros {
+            fn run(&mut self, _: &[f32], _: &[f32]) -> Result<SegmentOut, StemError> {
+                Ok(SegmentOut { wave: vec![0.0; STEMS * MIX_LEN], spec_out: vec![0.0; STEMS * SPEC_LEN] })
+            }
+        }
+        let r = separate(&track(20_000), &mut Zeros, &AtomicBool::new(false), &mut |_, _| {});
+        assert!(matches!(r, Err(StemError::BadModel(_))));
     }
 
     #[test]
