@@ -65,7 +65,7 @@ impl Backend for OrtBackend {
             spec.to_vec(),
         ))
         .map_err(infer)?;
-        let outputs = self.session.run([(self.mix_in.clone(), mix_t), (self.spec_in.clone(), spec_t)]).map_err(infer)?;
+        let outputs = self.session.run(vec![(self.mix_in.clone(), mix_t), (self.spec_in.clone(), spec_t)]).map_err(infer)?;
         let (_, wave) = outputs[self.wave_out.as_str()].try_extract_tensor::<f32>().map_err(infer)?;
         let (_, spec_out) = outputs[self.spec_out.as_str()].try_extract_tensor::<f32>().map_err(infer)?;
         if wave.len() != STEMS * MIX_LEN || spec_out.len() != STEMS * SPEC_LEN {
