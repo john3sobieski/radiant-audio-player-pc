@@ -222,6 +222,8 @@ component AlbumTile inherits Rectangle {
         drop-shadow-blur: ta.has-hover ? 22px : 14px;
         drop-shadow-color: #000000a0;
         drop-shadow-offset-y: ta.has-hover ? 10px : 5px;
+        // The blurred shadow is costly: keep the rendered cover as a layer instead of redrawing it every frame of the scroll.
+        cache-rendering-hint: true;
         animate y { duration: Theme.low-power ? 0ms : 140ms; easing: ease-out; }
 
         Rectangle {
@@ -1946,6 +1948,9 @@ component SettingsPage inherits Rectangle {
     in-out property <float> cu-h;
     in-out property <float> cu-s;
     in-out property <float> cu-v;
+    /// Library -> music folder card: the folder now in use (empty = none yet; set from Rust) and the chooser.
+    in property <string> music-folder;
+    callback choose-folder();
 
     // To add a section: extend the four lists below (same order), nothing else.
     private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library"), @tr("Power")];
@@ -1996,6 +2001,8 @@ component SettingsPage inherits Rectangle {
     private property <string> gpu-t1: @tr("Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used.");
     gpu-p := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.gpu-t1; font-size: 13px; wrap: word-wrap; }
     private property <length> gpu-h: gpu-p.preferred-height + 102px;
+    // Music folder card: title (42) + path (up to two lines, 40) + gap (10) + button (40) + bottom padding (16).
+    private property <length> lib-h: 148px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -2010,7 +2017,7 @@ component SettingsPage inherits Rectangle {
             // AI & stems: the model card and the graphics card card are drawn by hand below (they have controls).
         ],
         [
-            { title: @tr("Music folder"), text: @tr("Choose and rescan the folder (for now these two buttons stay in the header).") },
+            // Library: the music folder card is drawn by hand below (it has a button).
         ],
         [
             // Power: the switch card and the "What changes" card are drawn by hand below.
@@ -2028,6 +2035,7 @@ component SettingsPage inherits Rectangle {
         : root.section == 1 ? root.lang-h + 12px
         : root.section == 2 ? root.sec-total + 12px
         : root.section == 3 ? root.stem-h + 12px + root.gpu-h + 12px
+        : root.section == 4 ? root.lib-h + 12px
         : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
@@ -2791,6 +2799,46 @@ component SettingsPage inherits Rectangle {
                 }
             }
         }
+        // ---- Library: music folder ----
+        if root.section == 4 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.lib-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Music folder");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: 40px;
+                text: root.music-folder == "" ? @tr("No folder") : root.music-folder;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+                overflow: elide;
+            }
+            AccentButton {
+                x: 16px;
+                y: 92px;
+                width: 180px;
+                text: @tr("Choose folder");
+                clicked => { root.choose-folder(); }
+            }
+        }
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
             y: root.extra-h + k * 104px;
@@ -2994,7 +3042,9 @@ export component MainWindow inherits Window {
     private property <length> tile-min: 190px;
     private property <length> grid-w: root.width - 2 * root.grid-pad - 10px;
     private property <int> album-cols: max(2, Math.floor((root.grid-w + root.grid-gap) / (root.tile-min + root.grid-gap)));
-    private property <length> tile-w: (root.grid-w - (root.album-cols - 1) * root.grid-gap) / root.album-cols;
+    // Whole pixels only: a fractional tile width / row height makes covers and captions of neighbouring rows
+    // round to different pixels while the grid scrolls, which shows up as twitching.
+    private property <length> tile-w: Math.floor((root.grid-w - (root.album-cols - 1) * root.grid-gap) / root.album-cols / 1px) * 1px;
     private property <length> album-row-h: root.tile-w + 52px + 20px;
     private property <int> album-rows: Math.ceil(root.albums.length / root.album-cols);
     // Section switcher ("lens"): the open section unfolds into its label, "Queues" also into four queue dots.
@@ -3301,6 +3351,8 @@ export component MainWindow inherits Window {
 
     callback choose-folder();
     callback rescan-folder();
+    /// The music folder in use, shown in Settings -> Library (empty = none yet; set from Rust).
+    in property <string> music-folder;
     /// The theme was changed in the settings (0 System, 1 Light, 2 Dark, 3 Black); Rust remembers it.
     callback theme-changed(int);
     /// Low-power switch of the settings page; `Theme.low-power` is already flipped when this fires.
@@ -6850,6 +6902,8 @@ export component MainWindow inherits Window {
         stem-delete() => { root.stem-delete(); }
         stem-gpu <=> root.stem-gpu;
         stem-gpu-changed(on) => { root.stem-gpu-changed(on); }
+        music-folder: root.music-folder;
+        choose-folder() => { root.choose-folder(); }
     }
 
     // ---- "Create stems" window: which parts to make for the track picked in the context menu ----

@@ -13,7 +13,7 @@ The Android app (README_ru.md in the owner's repo) is the target: the PC version
 - No feature loss. When unsure whether something matters, ask. Keep the DSP numbers from README section 5 unless measured otherwise.
 
 ## Legend
-✅ done, compiled in CI, tests pass  |  🟡 written, but not compiled yet or not heard by ear  |  ⬜ not started  | ❌ need to be fixed
+✅ done, compiled in CI, tests pass  |  🟡 written, but not compiled yet or not checked  |  ⬜ not started  | ❌ need to be fixed
 
 UI work is marked 🟡 because it was edited after the last known CI run. After the owner pastes a new build log, update the marks.
 
@@ -73,7 +73,7 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 
 ### Этап 7б. Окно настроек (база)
 - ✅ Кнопка-«ползунки» справа от кнопки обновления в шапке открывает страницу настроек поверх библиотеки (нижняя панель остаётся). Стиль «орбита»: тонкие кольца в углу, спутник, дрейфующие световые пятна, слева рельса из точек по разделам (подсвеченная часть линии доходит до открытого), справа карточки раздела. Разделы: Appearance, Language, Security, AI & stems, Library; все карточки пока заглушки «Soon». Код: `SettingsPage` в `main.slint` (новый раздел = дописать в четыре списка `names/hints/leads/pages`). Не компилировалось
-- ⬜ Наполнить разделы по мере готовности: Appearance ← этап 8 (темы), Language ← этап 8, Security ← этап 10, AI & stems ← этап 11, Library ← выбор папки (возможно, переехать из шапки; решит владелец), энергосбережение ← этап 9
+- ✅ Наполнить разделы по мере готовности: Appearance ← этап 8 (темы), Language ← этап 8, Security ← этап 10, AI & stems ← этап 11, Library ← выбор папки (возможно, переехать из шапки; решит владелец), энергосбережение ← этап 9
 - ✅ Открытый раздел настроек запоминается между запусками (`settings_section` в `settings.json`, 0 = первый). Не компилировалось
 
 ### Этап 8. Темы и языки

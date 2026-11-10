@@ -1189,8 +1189,25 @@ fn open_album(ui: &MainWindow, library: &Arc<Mutex<Vec<Track>>>, index: usize) {
     ui.set_album_tracks(ModelRc::new(VecModel::from(rows)));
 }
 
+/// Albums waiting for their cover decode (the newest request is served first: it is the one on screen).
+static ALBUM_QUEUE: Mutex<Vec<(String, Vec<PathBuf>)>> = Mutex::new(Vec::new());
+/// Number of running cover decoder threads (changed only while `ALBUM_QUEUE` is locked).
+static ALBUM_WORKERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// Decoder threads at most: a fast scroll used to start one thread per tile and starve the UI thread.
+const ALBUM_WORKERS_MAX: usize = 2;
+/// Waiting requests at most; older ones (tiles long scrolled past) are dropped and ask again when they return.
+const ALBUM_QUEUE_MAX: usize = 48;
+
 /// A tile came into view: make sure its cover is decoded and shown.
 fn album_cover_wanted(weak: slint::Weak<MainWindow>, index: usize) {
+    // The tile already carries its cover (from `refresh_albums` or an earlier decode): nothing to do.
+    // Re-sending the same picture every time a tile scrolled into view re-uploaded its texture
+    // and rebuilt the row, which made scrolling the grid stutter.
+    if let Some(ui) = weak.upgrade() {
+        if ui.get_albums().row_data(index).map_or(false, |r| r.has_cover) {
+            return;
+        }
+    }
     let Some((key, paths)) = ALBUMS.lock().ok().and_then(|a| a.get(index).map(|e| (e.key.clone(), e.paths.clone()))) else { return };
     let cached = ALBUM_COVERS.lock().ok().and_then(|c| c.get(&key).cloned());
     match cached {
@@ -1202,20 +1219,64 @@ fn album_cover_wanted(weak: slint::Weak<MainWindow>, index: usize) {
             if !ALBUM_PENDING.lock().map(|mut p| p.insert(key.clone())).unwrap_or(false) {
                 return;
             }
-            std::thread::spawn(move || {
-                // The first tracks of the album usually carry the cover; a few tries cover odd files.
-                let pixels = paths.iter().take(4).find_map(|p| decode_cover_sized(p, ALBUM_COVER_PX));
-                if let Ok(mut cache) = ALBUM_COVERS.lock() {
-                    if cache.len() >= ALBUM_CACHE_MAX { cache.clear(); }
-                    cache.insert(key.clone(), pixels.clone());
-                }
-                if let Ok(mut p) = ALBUM_PENDING.lock() { p.remove(&key); }
-                if let Some(px) = pixels {
-                    let _ = weak.upgrade_in_event_loop(move |ui| apply_album_cover(&ui, &key, &px));
-                }
-            });
+            queue_album_decode(weak, key, paths);
         }
     }
+}
+
+/// Queues the decode of one album cover and makes sure a small, fixed set of threads works through the queue.
+fn queue_album_decode(weak: slint::Weak<MainWindow>, key: String, paths: Vec<PathBuf>) {
+    use std::sync::atomic::Ordering as AtomicOrdering;
+    let start_worker = {
+        let Ok(mut queue) = ALBUM_QUEUE.lock() else {
+            if let Ok(mut p) = ALBUM_PENDING.lock() { p.remove(&key); }
+            return;
+        };
+        queue.push((key, paths));
+        if queue.len() > ALBUM_QUEUE_MAX {
+            let extra = queue.len() - ALBUM_QUEUE_MAX;
+            let dropped: Vec<(String, Vec<PathBuf>)> = queue.drain(..extra).collect();
+            if let Ok(mut p) = ALBUM_PENDING.lock() {
+                for (k, _) in dropped { p.remove(&k); }
+            }
+        }
+        if ALBUM_WORKERS.load(AtomicOrdering::Acquire) < ALBUM_WORKERS_MAX {
+            ALBUM_WORKERS.fetch_add(1, AtomicOrdering::AcqRel);
+            true
+        } else {
+            false
+        }
+    };
+    if !start_worker {
+        return;
+    }
+    std::thread::spawn(move || loop {
+        // The worker count is lowered under the queue lock, so a request pushed right now is never left without a worker.
+        let job = {
+            let Ok(mut queue) = ALBUM_QUEUE.lock() else {
+                ALBUM_WORKERS.fetch_sub(1, AtomicOrdering::AcqRel);
+                return;
+            };
+            match queue.pop() {
+                Some(job) => job,
+                None => {
+                    ALBUM_WORKERS.fetch_sub(1, AtomicOrdering::AcqRel);
+                    return;
+                }
+            }
+        };
+        let (key, paths) = job;
+        // The first tracks of the album usually carry the cover; a few tries cover odd files.
+        let pixels = paths.iter().take(4).find_map(|p| decode_cover_sized(p, ALBUM_COVER_PX));
+        if let Ok(mut cache) = ALBUM_COVERS.lock() {
+            if cache.len() >= ALBUM_CACHE_MAX { cache.clear(); }
+            cache.insert(key.clone(), pixels.clone());
+        }
+        if let Ok(mut p) = ALBUM_PENDING.lock() { p.remove(&key); }
+        if let Some(px) = pixels {
+            let _ = weak.upgrade_in_event_loop(move |ui| apply_album_cover(&ui, &key, &px));
+        }
+    });
 }
 
 /// Puts a decoded cover into the tile of its album (the position is looked up again: the grid may have changed).
@@ -1223,6 +1284,10 @@ fn apply_album_cover(ui: &MainWindow, key: &str, px: &CoverPixels) {
     let Some(i) = ALBUMS.lock().ok().and_then(|a| a.iter().position(|e| e.key == key)) else { return };
     let model = ui.get_albums();
     if let Some(mut row) = model.row_data(i) {
+        // Already shown (a second request for the same album): do not upload the texture again.
+        if row.has_cover {
+            return;
+        }
         row.cover = px.to_image();
         row.has_cover = true;
         // The album page of this album is open already (opened before its cover was decoded).
@@ -2111,6 +2176,7 @@ fn main() -> Result<(), slint::PlatformError> {
     if let Ok(mut s) = ALBUM_SORT.lock() { *s = (settings.borrow().album_sort, settings.borrow().album_sort_desc); }
     if let Ok(mut order) = ALBUM_ORDER.lock() { *order = settings.borrow().album_order.clone(); }
     if let Some(dir) = settings.borrow().music_folder.clone() {
+        ui.set_music_folder(dir.display().to_string().into());
         scan_folder(ui_weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, false);
     }
 
@@ -3433,6 +3499,7 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.on_choose_folder(move || {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
+        if let Some(ui) = weak.upgrade() { ui.set_music_folder(dir.display().to_string().into()); }
         save_settings(&weak, &settings);
         scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true);
     });
