@@ -73,6 +73,11 @@ fn apply_language(setting: &str) -> &'static str {
 fn refresh_translated_texts(ui: &MainWindow) {
     let names: Vec<SharedString> = EQ_PRESETS.iter().map(|p| i18n::tr(p.name).into()).collect();
     ui.set_eq_preset_names(ModelRc::new(VecModel::from(names)));
+    // The model card's status line is a ready-made text: rebuild it in the new language (not while a download runs:
+    // its progress events rebuild the text by themselves).
+    if !matches!(ui.get_stem_state(), 1 | 2) {
+        show_stem_state(ui);
+    }
 }
 
 fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>) {
