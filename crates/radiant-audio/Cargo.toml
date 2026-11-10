@@ -14,4 +14,4 @@ rubato = { version = "5", default-features = false }
 # Output (WASAPI on Windows).
 cpal = "0.15"
 # Lock-free single-producer single-consumer ring buffer.
-rtrb = "0.3"
+rtrb = "0.4"
