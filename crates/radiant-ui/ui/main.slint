@@ -689,6 +689,42 @@ component StemChip inherits Rectangle {
     }
 }
 
+component PillButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 17px;
+    background: root.active ? Theme.accent.with-alpha(0.2)
+        : ta.has-hover ? Theme.surface-hover : Theme.surface;
+
+    // Invisible copy of the label: it gives the button its natural width inside layouts.
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        Text {
+            text: root.text;
+            opacity: 0;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    // The visible label shrinks when the button is narrower than the translated word.
+    FitText {
+        x: 12px;
+        width: max(0px, root.width - 24px);
+        height: root.height;
+        text: root.text;
+        ink: root.active ? Theme.accent : Theme.text;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Round header button with a "refresh" arrow (manual rescan of the music folder).
 // The part switches of the Stems tab and of the "Create stems" window: four chips, two quick choices, "each part
 // separately". It only edits the flags; Rust builds the file names from them (`changed`).
 component StemPicker inherits VerticalLayout {
@@ -771,42 +807,6 @@ component StemPicker inherits VerticalLayout {
     }
 }
 
-component PillButton inherits Rectangle {
-    in property <string> text;
-    in property <bool> active: false;
-    callback clicked();
-
-    height: 34px;
-    border-radius: 17px;
-    background: root.active ? Theme.accent.with-alpha(0.2)
-        : ta.has-hover ? Theme.surface-hover : Theme.surface;
-
-    // Invisible copy of the label: it gives the button its natural width inside layouts.
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
-        Text {
-            text: root.text;
-            opacity: 0;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-    // The visible label shrinks when the button is narrower than the translated word.
-    FitText {
-        x: 12px;
-        width: max(0px, root.width - 24px);
-        height: root.height;
-        text: root.text;
-        ink: root.active ? Theme.accent : Theme.text;
-    }
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-// Round header button with a "refresh" arrow (manual rescan of the music folder).
 component RescanButton inherits Rectangle {
     /// True while a scan runs: the arrow spins.
     in property <bool> spinning: false;
