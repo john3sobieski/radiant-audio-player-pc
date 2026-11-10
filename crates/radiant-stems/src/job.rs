@@ -38,6 +38,39 @@ pub fn file_name(base: &str, set: StemSet) -> Option<String> {
     Some(format!("{} - {}.wav", safe_file_name(base), set.file_label()?))
 }
 
+/// The part of a stem file name after `<base> - `: one label of [`StemSet::file_label`] (`Vocals`, `Vocals + Drums`,
+/// `No Bass`).
+fn is_stem_label(label: &str) -> bool {
+    let known = |s: &str| StemSet::ALL.members().iter().any(|m| m.label() == s);
+    match label.strip_prefix("No ") {
+        Some(rest) => known(rest),
+        None => !label.is_empty() && label.split(" + ").all(known),
+    }
+}
+
+/// The file is itself a stem made by this program: it lies in `<...>/Stems/<Artist - Title>/` (where the jobs write),
+/// or (moved elsewhere) it is named `<folder name> - <label>` like our files are. Stems are not separated again:
+/// the result would only be worse (and the original track is the better input).
+pub fn is_stem_file(path: &Path) -> bool {
+    let folder = path.parent();
+    let in_stems_folder = folder
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .map_or(false, |n| n.eq_ignore_ascii_case("Stems"));
+    if in_stems_folder {
+        return true;
+    }
+    let (Some(folder_name), Some(file_stem)) =
+        (folder.and_then(Path::file_name).and_then(|n| n.to_str()), path.file_stem().and_then(|n| n.to_str()))
+    else {
+        return false;
+    };
+    file_stem
+        .strip_prefix(folder_name)
+        .and_then(|rest| rest.strip_prefix(" - "))
+        .map_or(false, is_stem_label)
+}
+
 /// What a finished job reports.
 #[derive(Debug)]
 pub struct Done {
@@ -60,16 +93,28 @@ pub fn create_stems(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(f32),
 ) -> Result<Done, StemError> {
-    let backend = OrtBackend::load(model, default_threads(), gpu)?;
-    let gpu = backend.using_gpu();
-    let files = run(input, backend, out_dir, base, sets, cancel, progress)?;
-    Ok(Done { files, gpu })
+    let mut backend = OrtBackend::load(model, default_threads(), gpu)?;
+    let files = run_with(input, &mut backend, out_dir, base, sets, cancel, progress)?;
+    // Asked after the job: a GPU that returned garbage is dropped in the middle of the run (see `OrtBackend::run`).
+    Ok(Done { files, gpu: backend.using_gpu() })
 }
 
 /// The same with any network (the tests use a fake one).
 pub fn run(
     input: &Path,
     mut backend: impl Backend,
+    out_dir: &Path,
+    base: &str,
+    sets: &[StemSet],
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(f32),
+) -> Result<Vec<PathBuf>, StemError> {
+    run_with(input, &mut backend, out_dir, base, sets, cancel, progress)
+}
+
+fn run_with(
+    input: &Path,
+    backend: &mut dyn Backend,
     out_dir: &Path,
     base: &str,
     sets: &[StemSet],
@@ -87,7 +132,7 @@ pub fn run(
     if samples.is_empty() {
         return Err(StemError::Decode(format!("{}: no audio", input.display())));
     }
-    let stems = separate(&samples, &mut backend, cancel, &mut |done, total| {
+    let stems = separate(&samples, backend, cancel, &mut |done, total| {
         progress(DECODE_SHARE + NETWORK_SHARE * done as f32 / total as f32)
     })?;
     drop(samples);
@@ -124,6 +169,21 @@ mod tests {
         assert_eq!(file_name("A/B", StemSet::EMPTY.with(Stem::Bass)).as_deref(), Some("A_B - Bass.wav"));
         assert_eq!(file_name("A - B", StemSet::ALL), None);
         assert_eq!(file_name("A - B", StemSet::EMPTY), None);
+    }
+
+    #[test]
+    fn our_own_stems_are_recognized() {
+        // The layout the jobs write: <music>/Stems/<base>/<base> - <label>.wav
+        assert!(is_stem_file(Path::new("D:/Music/Stems/A - B/A - B - Vocals + Drums.wav")));
+        assert!(is_stem_file(Path::new("D:/Music/stems/A - B/anything.wav")));
+        // Moved out of the Stems folder: the name still says so.
+        assert!(is_stem_file(Path::new("D:/Elsewhere/A - B/A - B - No Bass.wav")));
+        assert!(is_stem_file(Path::new("D:/Elsewhere/A - B/A - B - Other.wav")));
+        // Ordinary tracks, also ones that merely look similar.
+        assert!(!is_stem_file(Path::new("D:/Music/Album/01 Song.flac")));
+        assert!(!is_stem_file(Path::new("D:/Music/A - B/A - B - Bass Line.mp3")));
+        assert!(!is_stem_file(Path::new("D:/Music/A - B/Other - Vocals.mp3")));
+        assert!(!is_stem_file(Path::new("D:/Music/Stems/loose.wav")));
     }
 
     #[test]

@@ -839,3 +839,6 @@ msgstr "Realiza la separación en la tarjeta gráfica mediante DirectML, normalm
 
 msgid "Another separation is already running"
 msgstr "Ya hay otra separación en curso"
+
+msgid "Stems cannot be made from stems"
+msgstr "No se pueden crear stems a partir de stems"

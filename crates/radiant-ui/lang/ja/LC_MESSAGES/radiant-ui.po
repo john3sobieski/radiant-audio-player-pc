@@ -835,3 +835,6 @@ msgstr "DirectML を使ってグラフィックスカードで分離を実行し
 
 msgid "Another separation is already running"
 msgstr "別の分離がすでに実行中です"
+
+msgid "Stems cannot be made from stems"
+msgstr "ステムからステムは作成できません"

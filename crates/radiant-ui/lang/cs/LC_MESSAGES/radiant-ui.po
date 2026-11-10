@@ -843,3 +843,6 @@ msgstr "Provede rozdělení na grafické kartě přes DirectML, obvykle několik
 
 msgid "Another separation is already running"
 msgstr "Již probíhá jiné rozdělení"
+
+msgid "Stems cannot be made from stems"
+msgstr "Ze stop nelze vytvořit další stopy"

@@ -843,3 +843,6 @@ msgstr "Выполняет разделение на видеокарте чер
 
 msgid "Another separation is already running"
 msgstr "Уже идёт другое разделение"
+
+msgid "Stems cannot be made from stems"
+msgstr "Из стемов нельзя создать стемы"

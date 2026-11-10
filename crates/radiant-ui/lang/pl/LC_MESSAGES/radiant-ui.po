@@ -843,3 +843,6 @@ msgstr "Wykonuje podział na karcie graficznej przez DirectML, zwykle kilka razy
 
 msgid "Another separation is already running"
 msgstr "Trwa już inny podział"
+
+msgid "Stems cannot be made from stems"
+msgstr "Nie można tworzyć stemów ze stemów"

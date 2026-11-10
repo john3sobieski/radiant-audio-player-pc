@@ -281,6 +281,9 @@ fn begin_stems(
             ui.set_stems_info(text.into());
         }
     };
+    if radiant_stems::job::is_stem_file(&path) {
+        return refuse(i18n::tr("Stems cannot be made from stems"));
+    }
     if !radiant_stems::allowed(low_power) {
         return refuse(i18n::tr("Stems are not available in low-power mode"));
     }
@@ -2207,13 +2210,18 @@ fn main() -> Result<(), slint::PlatformError> {
                 displayed.lock().ok().and_then(|l| l.get(row).cloned())
             };
             let Some(path) = path else { return };
+            let Some(ui) = weak.upgrade() else { return };
+            // A stem made by the program is not separated again: no window, just the reason in the status line.
+            if radiant_stems::job::is_stem_file(&path) {
+                ui.set_status(i18n::tr("Stems cannot be made from stems").into());
+                return;
+            }
             let (artist, title) = library
                 .lock()
                 .ok()
                 .and_then(|l| l.iter().find(|t| t.path == path).map(|t| (t.artist.clone(), t.title.clone())))
                 .unwrap_or_default();
             let base = stems_base(&path, artist.as_deref(), &title);
-            let Some(ui) = weak.upgrade() else { return };
             if let Ok(mut t) = STEMS_MENU_TARGET.lock() {
                 *t = Some((path, base.clone()));
             }

@@ -835,3 +835,6 @@ msgstr "通过 DirectML 在显卡上进行分离，通常快数倍。需要在�
 
 msgid "Another separation is already running"
 msgstr "已有另一个分离任务正在运行"
+
+msgid "Stems cannot be made from stems"
+msgstr "不能对分轨再次创建分轨"
