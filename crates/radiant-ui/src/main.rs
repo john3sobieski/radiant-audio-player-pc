@@ -124,67 +124,43 @@ fn show_stem_state(ui: &MainWindow) {
 /// Runs a download / import on a worker thread; progress and the result come back to the window. Only one job at
 /// a time (`busy`); `cancel` stops it (a half-loaded download is kept and continued next time).
 /// `mismatch_text` is the message for a file that is not the expected model.
-fn run_stem_job<F>(
-    weak: &slint::Weak<MainWindow>,
-    cancel: &Arc<AtomicBool>,
-    busy: &Arc<AtomicBool>,
-    mismatch_text: &'static str,
-    job: F,
-) where
-    F: FnOnce(
-            &radiant_stems::ModelStore,
-            &AtomicBool,
-            &mut dyn FnMut(radiant_stems::Progress),
-        ) -> Result<(), radiant_stems::StemError>
-        + Send
-        + 'static,
-{
-    use radiant_stems::{Progress, StemError};
+/// "Create stems": runs the separation on a worker thread; progress and the result go to the status line.
+fn start_stems_job(weak: &slint::Weak<MainWindow>, busy: &Arc<AtomicBool>, input: PathBuf, base: String, out_dir: PathBuf) {
+    use radiant_stems::{Stem, StemSet};
     if busy.swap(true, Ordering::SeqCst) {
         return;
     }
-    cancel.store(false, Ordering::SeqCst);
     if let Some(ui) = weak.upgrade() {
-        ui.set_stem_state(1);
-        ui.set_stem_progress(0.0);
-        ui.set_stem_info(i18n::tr_fmt("Downloading… {} of {} MB", &[&0, &stem_mb(radiant_stems::MODEL.approx_bytes)]).into());
+        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&0]).into());
     }
-    let (weak, cancel, busy) = (weak.clone(), cancel.clone(), busy.clone());
+    let (weak, busy) = (weak.clone(), busy.clone());
     std::thread::spawn(move || {
-        let store = stem_store();
-        let mut last: Option<std::time::Instant> = None;
-        let mut on_progress = |p: Progress| {
-            let now = std::time::Instant::now();
-            if last.map_or(false, |t| now.duration_since(t) < std::time::Duration::from_millis(120)) {
-                return;
-            }
-            last = Some(now);
-            let (state, done, total) = match p {
-                Progress::Download { done, total } => (1, done, total),
-                Progress::Verify { done, total } => (2, done, total),
-            };
-            let _ = weak.upgrade_in_event_loop(move |ui| {
-                ui.set_stem_state(state);
-                ui.set_stem_progress(if total > 0 { done as f32 / total as f32 } else { 0.0 });
-                let info = if state == 1 {
-                    i18n::tr_fmt("Downloading… {} of {} MB", &[&stem_mb(done), &stem_mb(total)])
-                } else {
-                    i18n::tr("Checking the file…")
-                };
-                ui.set_stem_info(info.into());
-            });
-        };
-        let result = job(&store, &*cancel, &mut on_progress);
+        let cancel = AtomicBool::new(false);
+        let sets: Vec<StemSet> = Stem::ALL.iter().map(|s| StemSet::EMPTY.with(*s)).collect();
+        let mut last_pct = -1_i32;
+        let result = radiant_stems::create_stems(
+            &input,
+            &stem_store().model_path(),
+            &out_dir,
+            &base,
+            &sets,
+            &cancel,
+            &mut |p| {
+                let pct = (p * 100.0) as i32;
+                if pct != last_pct {
+                    last_pct = pct;
+                    let _ = weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&pct]).into());
+                    });
+                }
+            },
+        );
         busy.store(false, Ordering::SeqCst);
         let _ = weak.upgrade_in_event_loop(move |ui| {
             let message = match &result {
-                Ok(()) => i18n::tr("The model is ready"),
-                Err(StemError::Cancelled) => i18n::tr("Download cancelled"),
-                Err(StemError::NotPinned) => i18n::tr("Not available yet: this build has no verified model address"),
-                Err(StemError::Mismatch) => i18n::tr(mismatch_text),
-                Err(e) => i18n::tr_fmt("Model download failed: {}", &[e]),
+                Ok(_) => i18n::tr_fmt("Stems saved to {}", &[&out_dir.display()]),
+                Err(e) => i18n::tr_fmt("Stem separation failed: {}", &[e]),
             };
-            show_stem_state(&ui);
             ui.set_status(message.into());
         });
     });
@@ -1990,11 +1966,12 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    {
-        // Context menu stub: "Create stems" is not implemented yet. Stem separation is the heaviest job of the app,
-        // so it will never start in low-power mode: the menu item is dimmed there and says why.
-        let (settings, weak) = (settings.clone(), ui_weak.clone());
-        ui.on_create_stems(move |_row, _in_album| {
+        {
+        // Context menu "Create stems": Vocals, Drums, Bass, Other as WAV files in
+        // `<music folder>/Stems/<Artist - Title>/`. Never in low-power mode; needs the model.
+        let (settings, weak, library, displayed) = (settings.clone(), ui_weak.clone(), library.clone(), displayed.clone());
+        let busy = Arc::new(AtomicBool::new(false));
+        ui.on_create_stems(move |row, in_album| {
             if settings.borrow().low_power {
                 if let Some(ui) = weak.upgrade() {
                     ui.set_status(i18n::tr("Stems are not available in low-power mode").into());
@@ -2007,7 +1984,35 @@ fn main() -> Result<(), slint::PlatformError> {
                 }
                 return;
             }
-            /* TODO: stems (pipeline, PROGRESS stage 11) */
+            let row = row.max(0) as usize;
+            let path = if in_album {
+                OPEN_ROWS.lock().ok().and_then(|r| r.get(row).cloned()).flatten()
+            } else {
+                displayed.lock().ok().and_then(|l| l.get(row).cloned())
+            };
+            let Some(path) = path else { return };
+            let (artist, title) = library
+                .lock()
+                .ok()
+                .and_then(|l| l.iter().find(|t| t.path == path).map(|t| (t.artist.clone(), t.title.clone())))
+                .unwrap_or_default();
+            let title = if title.is_empty() {
+                path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+            } else {
+                title
+            };
+            let base = match artist.filter(|a| !a.trim().is_empty()) {
+                Some(a) => format!("{a} - {title}"),
+                None => title,
+            };
+            let root = settings
+                .borrow()
+                .music_folder
+                .clone()
+                .or_else(|| path.parent().map(Path::to_path_buf))
+                .unwrap_or_default();
+            let out_dir = root.join("Stems").join(radiant_stems::job::safe_file_name(&base));
+            start_stems_job(&weak, &busy, path, base, out_dir);
         });
     }
     {
