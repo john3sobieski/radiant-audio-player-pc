@@ -15,6 +15,11 @@
   <a href="https://github.com/john3sobieski/radiant-audio-player">Версия для Android</a>
 </p>
 
+<p align="center">
+  <a href="https://ko-fi.com/I5I829ZD02"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi"></a>
+  <a href="https://www.buymeacoffee.com/radiant_player"><img src="https://img.shields.io/badge/Support%20the%20project-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+</p>
+
 ---
 
 ## Чем Radiant лучше
@@ -91,11 +96,6 @@ Radiant активно развивается. Планы, без определ
 - установщик и многое другое.
 
 Идеи и сообщения об ошибках приветствуются в [Issues](../../issues).
-
-## Поддержать проект
-
-Если Radiant вам полезен, можно поддержать разработку:
-[Ko-fi](https://ko-fi.com/radiant_player) · [Buy Me a Coffee](https://buymeacoffee.com/radiant_player) · [GitHub Sponsors](https://github.com/sponsors/john3sobieski)
 
 ## Лицензия
 

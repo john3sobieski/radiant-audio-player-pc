@@ -15,6 +15,11 @@
   <a href="README.md">Android version</a>
 </p>
 
+<p align="center">
+  <a href="https://ko-fi.com/I5I829ZD02"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi"></a>
+  <a href="https://www.buymeacoffee.com/radiant_player"><img src="https://img.shields.io/badge/Support%20the%20project-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+</p>
+
 ---
 
 ## Why Radiant
@@ -90,15 +95,6 @@ Radiant is actively developed. Plans, in no particular order:
 - an installer and more.
 
 Ideas and bug reports are welcome in the [Issues](../../issues).
-
-## Support the project
-
-If Radiant is useful to you, you can support its development:
-
-<p align="center">
-  <a href="https://ko-fi.com/radiant_player"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi"></a>
-  <a href="https://buymeacoffee.com/radiant_player"><img src="https://img.shields.io/badge/Support%20the%20project-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
-</p>
 
 ## License
 
