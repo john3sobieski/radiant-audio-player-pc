@@ -780,3 +780,58 @@ msgstr "ステムを {} に保存しました"
 
 msgid "Stem separation failed: {}"
 msgstr "ステムの分離に失敗しました：{}"
+
+# Stems tab, graphics card (stage 11)
+msgid "Vocals"
+msgstr "ボーカル"
+
+msgid "Drums"
+msgstr "ドラム"
+
+msgid "Other"
+msgstr "その他"
+
+msgid "Parts to keep"
+msgstr "残すパート"
+
+msgid "Instrumental"
+msgstr "インストゥルメンタル"
+
+msgid "Vocals only"
+msgstr "ボーカルのみ"
+
+msgid "Also save each part separately"
+msgstr "各パートも個別に保存"
+
+msgid "Play a track to make stems from it"
+msgstr "ステムを作成するには曲を再生してください"
+
+msgid "Pick one to three parts, or turn on separate files"
+msgstr "1〜3個のパートを選ぶか、個別ファイルをオンにしてください"
+
+msgid "Will be saved as: {}"
+msgstr "保存名：{}"
+
+msgid "Will be saved: {} files (first: {})"
+msgstr "{} 個のファイルを保存します（最初：{}）"
+
+msgid "Creating stems… {}% · {} left"
+msgstr "ステムを作成中… {}% · 残り {}"
+
+msgid "Stem separation cancelled"
+msgstr "ステム分離をキャンセルしました"
+
+msgid "Cancelling…"
+msgstr "キャンセル中…"
+
+msgid "(the graphics card could not be used: the processor did the work)"
+msgstr "（グラフィックスカードを使えなかったため、プロセッサで処理しました）"
+
+msgid "Graphics card (GPU)"
+msgstr "グラフィックスカード（GPU）"
+
+msgid "Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used."
+msgstr "DirectML を使ってグラフィックスカードで分離を実行します。通常は数倍高速です。プログラムの隣に DirectML 版の onnxruntime.dll が必要です。ない場合や対応するカードがない場合はプロセッサを使います。"
+
+msgid "Another separation is already running"
+msgstr "別の分離がすでに実行中です"

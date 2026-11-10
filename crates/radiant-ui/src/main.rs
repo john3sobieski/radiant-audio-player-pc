@@ -19,7 +19,7 @@ mod eq_curve;
 mod i18n;
 mod rays;
 
-use radiant_core::models::{AudioInfo, Playlist, SortKey, SortState, Track, FAVORITES_ID};
+use radiant_core::models::{AudioInfo, Playlist, PlaylistFolder, SortKey, SortState, Track, FAVORITES_ID, STEMS_FOLDER_ID};
 use radiant_core::playlists::{self, ListEntry, PlaylistSort, PlaylistSortKey, PlaylistStore};
 use radiant_core::queues::{self, QueueStore};
 use slint::{Model, ModelRc, SharedString, VecModel};
@@ -190,43 +190,193 @@ fn run_stem_job<F>(
     });
 }
 
-/// "Create stems": runs the separation on a worker thread; progress and the result go to the status line.
-fn start_stems_job(weak: &slint::Weak<MainWindow>, busy: &Arc<AtomicBool>, input: PathBuf, base: String, out_dir: PathBuf) {
-    use radiant_stems::{Stem, StemSet};
-    if busy.swap(true, Ordering::SeqCst) {
+// ---- Stems: one separation at a time, started from the context menu ("Create stems": four files) or from the Stems
+// tab of the player (the chosen parts as one file, optionally each part too). `busy` = a job runs, `cancel` stops it.
+#[derive(Clone)]
+struct StemsCtl {
+    busy: Arc<AtomicBool>,
+    cancel: Arc<AtomicBool>,
+}
+
+impl StemsCtl {
+    fn new() -> Self {
+        Self { busy: Arc::new(AtomicBool::new(false)), cancel: Arc::new(AtomicBool::new(false)) }
+    }
+}
+
+/// `Artist - Title` for the file names (just the title without an artist; the file name without a title).
+fn stems_base(path: &Path, artist: Option<&str>, title: &str) -> String {
+    let title = if title.trim().is_empty() {
+        path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    } else {
+        title.to_string()
+    };
+    match artist.filter(|a| !a.trim().is_empty()) {
+        Some(a) => format!("{a} - {title}"),
+        None => title,
+    }
+}
+
+/// The track of the Stems tab: path and `Artist - Title` of what is playing (set by `show_now_playing`).
+static NOW_STEMS_TRACK: Mutex<Option<(PathBuf, String)>> = Mutex::new(None);
+
+/// Finished jobs waiting to be put into the Stems folder of the playlists: (`Artist - Title`, the written files).
+/// The worker thread pushes here and calls `stems-finished`; the handler (UI thread) owns the playlists.
+static STEMS_DONE: Mutex<Vec<(String, Vec<PathBuf>)>> = Mutex::new(Vec::new());
+
+/// The track picked in the context menu for the "Create stems" window: path and `Artist - Title`.
+static STEMS_MENU_TARGET: Mutex<Option<(PathBuf, String)>> = Mutex::new(None);
+
+/// The parts chosen on the Stems tab and "also save each part separately".
+fn stems_choice(ui: &MainWindow) -> (radiant_stems::StemSet, bool) {
+    (
+        radiant_stems::StemSet::from_flags(ui.get_stems_vocals(), ui.get_stems_drums(), ui.get_stems_bass(), ui.get_stems_other()),
+        ui.get_stems_separate(),
+    )
+}
+
+/// The line under the part switches: which file(s) the current choice makes (or what is wrong with the choice).
+fn update_stems_file_info(ui: &MainWindow) {
+    let (selection, each_part) = stems_choice(ui);
+    let sets = radiant_stems::output_sets(selection, each_part);
+    let text = if sets.is_empty() {
+        i18n::tr("Pick one to three parts, or turn on separate files")
+    } else {
+        // The window of the context menu works on the track it was opened for, the tab on the playing one.
+        let target = if ui.get_show_stems_popup() { &STEMS_MENU_TARGET } else { &NOW_STEMS_TRACK };
+        let base = target.lock().ok().and_then(|t| t.as_ref().map(|(_, b)| b.clone()));
+        match base {
+            Some(base) => {
+                let names: Vec<String> =
+                    sets.iter().filter_map(|set| radiant_stems::job::file_name(&base, *set)).collect();
+                match names.as_slice() {
+                    [one] => i18n::tr_fmt("Will be saved as: {}", &[one]),
+                    [first, ..] => i18n::tr_fmt("Will be saved: {} files (first: {})", &[&names.len(), first]),
+                    [] => String::new(),
+                }
+            }
+            None => String::new(),
+        }
+    };
+    ui.set_stems_file_info(text.into());
+}
+
+/// Checks that apply to every start (low-power mode, the model, an empty choice), makes the folder name and starts.
+/// A refusal goes to the status line and to the Stems tab.
+fn begin_stems(
+    weak: &slint::Weak<MainWindow>,
+    settings: &RefCell<AppSettings>,
+    ctl: &StemsCtl,
+    path: PathBuf,
+    base: String,
+    sets: Vec<radiant_stems::StemSet>,
+) {
+    let (low_power, gpu, folder) = {
+        let s = settings.borrow();
+        (s.low_power, s.stems_gpu, s.music_folder.clone())
+    };
+    let refuse = |text: String| {
+        if let Some(ui) = weak.upgrade() {
+            ui.set_status(text.clone().into());
+            ui.set_stems_info(text.into());
+        }
+    };
+    if !radiant_stems::allowed(low_power) {
+        return refuse(i18n::tr("Stems are not available in low-power mode"));
+    }
+    if stem_store().state() != radiant_stems::ModelState::Ready {
+        return refuse(i18n::tr("Download the separation model first (Settings → AI & stems)"));
+    }
+    if sets.is_empty() {
+        return refuse(i18n::tr("Pick one to three parts, or turn on separate files"));
+    }
+    if ctl.busy.load(Ordering::SeqCst) {
         return;
     }
-    if let Some(ui) = weak.upgrade() {
-        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&0]).into());
+    let root = folder.or_else(|| path.parent().map(Path::to_path_buf)).unwrap_or_default();
+    let out_dir = root.join("Stems").join(radiant_stems::job::safe_file_name(&base));
+    start_stems_job(weak, ctl, path, base, out_dir, sets, gpu);
+}
+
+/// Runs the separation on a worker thread; progress (with the time left) and the result go to the status line and
+/// to the Stems tab. `gpu` asks for DirectML (the job falls back to the CPU and says so in the result).
+fn start_stems_job(
+    weak: &slint::Weak<MainWindow>,
+    ctl: &StemsCtl,
+    input: PathBuf,
+    base: String,
+    out_dir: PathBuf,
+    sets: Vec<radiant_stems::StemSet>,
+    gpu: bool,
+) {
+    use radiant_stems::StemError;
+    if ctl.busy.swap(true, Ordering::SeqCst) {
+        return;
     }
-    let (weak, busy) = (weak.clone(), busy.clone());
+    ctl.cancel.store(false, Ordering::SeqCst);
+    if let Some(ui) = weak.upgrade() {
+        let text = i18n::tr_fmt("Creating stems… {}%", &[&0]);
+        ui.set_stems_busy(true);
+        ui.set_stems_progress(0.0);
+        ui.set_stems_info(text.clone().into());
+        ui.set_status(text.into());
+    }
+    let (weak, ctl) = (weak.clone(), ctl.clone());
     std::thread::spawn(move || {
-        let cancel = AtomicBool::new(false);
-        let sets: Vec<StemSet> = Stem::ALL.iter().map(|s| StemSet::EMPTY.with(*s)).collect();
-        let mut last_pct = -1_i32;
+        let mut eta = radiant_stems::eta::Eta::new();
+        let mut last = (-1_i32, u64::MAX);
         let result = radiant_stems::create_stems(
             &input,
             &stem_store().model_path(),
             &out_dir,
             &base,
             &sets,
-            &cancel,
+            gpu,
+            &ctl.cancel,
             &mut |p| {
                 let pct = (p * 100.0) as i32;
-                if pct != last_pct {
-                    last_pct = pct;
-                    let _ = weak.upgrade_in_event_loop(move |ui| {
-                        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&pct]).into());
-                    });
+                let left = eta.update(p);
+                // The interface is told only when the percent or the shown time changes.
+                if (pct, left.unwrap_or(u64::MAX)) == last || ctl.cancel.load(Ordering::SeqCst) {
+                    return;
                 }
+                last = (pct, left.unwrap_or(u64::MAX));
+                let text = match left {
+                    Some(secs) => i18n::tr_fmt(
+                        "Creating stems… {}% · {} left",
+                        &[&pct, &radiant_stems::eta::format_secs(secs)],
+                    ),
+                    None => i18n::tr_fmt("Creating stems… {}%", &[&pct]),
+                };
+                let _ = weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_stems_progress(p.clamp(0.0, 1.0));
+                    ui.set_stems_info(text.clone().into());
+                    ui.set_status(text.into());
+                });
             },
         );
-        busy.store(false, Ordering::SeqCst);
+        ctl.busy.store(false, Ordering::SeqCst);
         let _ = weak.upgrade_in_event_loop(move |ui| {
             let message = match &result {
-                Ok(_) => i18n::tr_fmt("Stems saved to {}", &[&out_dir.display()]),
+                Ok(done) => {
+                    // Into the playlist of this track in the Stems folder (done by the UI-thread handler).
+                    if let Ok(mut list) = STEMS_DONE.lock() {
+                        list.push((base.clone(), done.files.clone()));
+                    }
+                    ui.invoke_stems_finished();
+                    let mut m = i18n::tr_fmt("Stems saved to {}", &[&out_dir.display()]);
+                    if gpu && !done.gpu {
+                        m.push(' ');
+                        m.push_str(&i18n::tr("(the graphics card could not be used: the processor did the work)"));
+                    }
+                    m
+                }
+                Err(StemError::Cancelled) => i18n::tr("Stem separation cancelled"),
                 Err(e) => i18n::tr_fmt("Stem separation failed: {}", &[e]),
             };
+            ui.set_stems_busy(false);
+            ui.set_stems_progress(0.0);
+            ui.set_stems_info(message.clone().into());
             ui.set_status(message.into());
         });
     });
@@ -667,6 +817,10 @@ fn show_now_playing(ui: &MainWindow, track: &Track) {
     ui.set_np_quality(quality_text(&track.info).into());
     ui.set_np_letter(track.title.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default().into());
     ui.set_np_info(ModelRc::new(VecModel::from(info_rows(track))));
+    if let Ok(mut t) = NOW_STEMS_TRACK.lock() {
+        *t = Some((track.path.clone(), stems_base(&track.path, track.artist.as_deref(), &track.title)));
+    }
+    update_stems_file_info(ui);
 
     let key = cover_key(track);
     if let Ok(mut k) = NOW_KEY.lock() { *k = key.clone(); }
@@ -1148,6 +1302,11 @@ fn pl_name(p: &Playlist) -> String {
     if p.id == FAVORITES_ID { i18n::tr("Liked tracks") } else { p.name.clone() }
 }
 
+/// Shown name of a folder: the Stems folder is translated, the others are the user's own text.
+fn folder_name(f: &PlaylistFolder) -> String {
+    if f.id == STEMS_FOLDER_ID { i18n::tr("Stems") } else { f.name.clone() }
+}
+
 fn tracks_text(n: usize) -> String {
     i18n::tr_n("{n} track", "{n} tracks", n)
 }
@@ -1182,7 +1341,7 @@ fn refresh_playlists(ui: &MainWindow, st: &mut PlState) {
         .store
         .folder_order()
         .into_iter()
-        .map(|i| FolderChip { id: st.store.folders[i].id.clone().into(), name: st.store.folders[i].name.clone().into() })
+        .map(|i| FolderChip { id: st.store.folders[i].id.clone().into(), name: folder_name(&st.store.folders[i]).into() })
         .collect();
     ui.set_pl_folders(ModelRc::new(VecModel::from(folders)));
     refresh_playlist_rows(ui, st);
@@ -1199,7 +1358,8 @@ fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
                 let n = st.store.playlists.iter().filter(|p| p.folder_id.as_deref() == Some(f.id.as_str())).count();
                 PlaylistListRow {
                     is_folder: true,
-                    name: f.name.clone().into(),
+                    name: folder_name(f).into(),
+                    locked: PlaylistStore::folder_is_locked(&f.id),
                     sub: i18n::tr_n("{n} playlist", "{n} playlists", n).into(),
                     collapsed: f.collapsed,
                     ..Default::default()
@@ -1219,6 +1379,7 @@ fn refresh_playlist_rows(ui: &MainWindow, st: &mut PlState) {
                     liked: p.id == FAVORITES_ID,
                     collapsed: false,
                     indent: p.folder_id.is_some(),
+                    ..Default::default()
                 }
             }
         })
@@ -2032,24 +2193,12 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-        {
-        // Context menu "Create stems": Vocals, Drums, Bass, Other as WAV files in
-        // `<music folder>/Stems/<Artist - Title>/`. Never in low-power mode; needs the model.
-        let (settings, weak, library, displayed) = (settings.clone(), ui_weak.clone(), library.clone(), displayed.clone());
-        let busy = Arc::new(AtomicBool::new(false));
+    let stems_ctl = StemsCtl::new();
+    {
+        // Context menu "Create stems": opens the window where the parts are chosen (the same switches as on the Stems
+        // tab). Files go to `<music folder>/Stems/<Artist - Title>/`. Never in low-power mode; needs the model.
+        let (weak, library, displayed) = (ui_weak.clone(), library.clone(), displayed.clone());
         ui.on_create_stems(move |row, in_album| {
-            if settings.borrow().low_power {
-                if let Some(ui) = weak.upgrade() {
-                    ui.set_status(i18n::tr("Stems are not available in low-power mode").into());
-                }
-                return;
-            }
-            if stem_store().state() != radiant_stems::ModelState::Ready {
-                if let Some(ui) = weak.upgrade() {
-                    ui.set_status(i18n::tr("Download the separation model first (Settings → AI & stems)").into());
-                }
-                return;
-            }
             let row = row.max(0) as usize;
             let path = if in_album {
                 OPEN_ROWS.lock().ok().and_then(|r| r.get(row).cloned()).flatten()
@@ -2062,23 +2211,97 @@ fn main() -> Result<(), slint::PlatformError> {
                 .ok()
                 .and_then(|l| l.iter().find(|t| t.path == path).map(|t| (t.artist.clone(), t.title.clone())))
                 .unwrap_or_default();
-            let title = if title.is_empty() {
-                path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
-            } else {
-                title
-            };
-            let base = match artist.filter(|a| !a.trim().is_empty()) {
-                Some(a) => format!("{a} - {title}"),
-                None => title,
-            };
-            let root = settings
-                .borrow()
-                .music_folder
-                .clone()
-                .or_else(|| path.parent().map(Path::to_path_buf))
-                .unwrap_or_default();
-            let out_dir = root.join("Stems").join(radiant_stems::job::safe_file_name(&base));
-            start_stems_job(&weak, &busy, path, base, out_dir);
+            let base = stems_base(&path, artist.as_deref(), &title);
+            let Some(ui) = weak.upgrade() else { return };
+            if let Ok(mut t) = STEMS_MENU_TARGET.lock() {
+                *t = Some((path, base.clone()));
+            }
+            ui.set_stems_popup_title(base.into());
+            if !ui.get_stems_busy() {
+                ui.set_stems_info("".into());
+            }
+            ui.set_show_stems_popup(true);
+            update_stems_file_info(&ui);
+        });
+    }
+    {
+        // "Create stems" in the window: starts the job for the remembered track; the window closes when it started.
+        let (settings, weak, ctl) = (settings.clone(), ui_weak.clone(), stems_ctl.clone());
+        ui.on_stems_popup_create(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let (selection, each_part) = stems_choice(&ui);
+            let Some((path, base)) = STEMS_MENU_TARGET.lock().ok().and_then(|t| t.clone()) else { return };
+            if ctl.busy.load(Ordering::SeqCst) {
+                ui.set_stems_info(i18n::tr("Another separation is already running").into());
+                return;
+            }
+            begin_stems(&weak, &settings, &ctl, path, base, radiant_stems::output_sets(selection, each_part));
+            if ctl.busy.load(Ordering::SeqCst) {
+                ui.set_show_stems_popup(false);
+                update_stems_file_info(&ui);
+            }
+        });
+    }
+    {
+        // A finished job: its files go into a playlist named like the track, inside the Stems folder; the folder is
+        // rescanned so the new files are in the library (a playlist shows files that are not in it as missing).
+        let (weak, pl, settings) = (ui_weak.clone(), pl.clone(), settings.clone());
+        ui.on_stems_finished(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let done: Vec<(String, Vec<PathBuf>)> =
+                STEMS_DONE.lock().map(|mut d| std::mem::take(&mut *d)).unwrap_or_default();
+            if done.is_empty() {
+                return;
+            }
+            {
+                let mut st = pl.borrow_mut();
+                for (name, files) in &done {
+                    st.store.add_stems_playlist(name, files);
+                }
+                save_playlists(&ui, &st.store);
+                refresh_playlists(&ui, &mut st);
+            }
+            if settings.borrow().music_folder.is_some() {
+                ui.invoke_rescan_folder();
+            }
+        });
+    }
+    {
+        // Stems tab of the player: the switches change the line with the file name, "Create" starts the job for the
+        // playing track, "Cancel" stops it (the half-written file is never left behind, see `wav.rs`).
+        let (settings, weak, ctl) = (settings.clone(), ui_weak.clone(), stems_ctl.clone());
+        ui.on_stems_create(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let (selection, each_part) = stems_choice(&ui);
+            let Some((path, base)) = NOW_STEMS_TRACK.lock().ok().and_then(|t| t.clone()) else { return };
+            begin_stems(&weak, &settings, &ctl, path, base, radiant_stems::output_sets(selection, each_part));
+        });
+    }
+    {
+        let weak = ui_weak.clone();
+        ui.on_stems_pick_changed(move || {
+            if let Some(ui) = weak.upgrade() {
+                update_stems_file_info(&ui);
+            }
+        });
+    }
+    {
+        let (weak, ctl) = (ui_weak.clone(), stems_ctl.clone());
+        ui.on_stems_cancel(move || {
+            if ctl.busy.load(Ordering::SeqCst) {
+                ctl.cancel.store(true, Ordering::SeqCst);
+                if let Some(ui) = weak.upgrade() {
+                    ui.set_stems_info(i18n::tr("Cancelling…").into());
+                }
+            }
+        });
+    }
+    {
+        // Settings -> AI & stems -> graphics card switch.
+        let (settings, weak) = (settings.clone(), ui_weak.clone());
+        ui.on_stem_gpu_changed(move |on| {
+            settings.borrow_mut().stems_gpu = on;
+            save_settings(&weak, &settings);
         });
     }
     {
@@ -2662,6 +2885,10 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut st = pl.borrow_mut();
             let Some(ListEntry::Folder(fi)) = st.rows.get(row.max(0) as usize).copied() else { return };
             let (id, name) = (st.store.folders[fi].id.clone(), st.store.folders[fi].name.clone());
+            // The Stems folder cannot be renamed or deleted (the core refuses too; the buttons are hidden).
+            if PlaylistStore::folder_is_locked(&id) {
+                return;
+            }
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Folder(id));
@@ -2678,6 +2905,10 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut st = pl.borrow_mut();
             let Some(ListEntry::Folder(fi)) = st.rows.get(row.max(0) as usize).copied() else { return };
             let (id, name) = (st.store.folders[fi].id.clone(), st.store.folders[fi].name.clone());
+            // The Stems folder cannot be renamed or deleted (the core refuses too; the buttons are hidden).
+            if PlaylistStore::folder_is_locked(&id) {
+                return;
+            }
             st.target = None;
             st.moving = None;
             st.edit = Some(Edit::Folder(id));
@@ -3214,6 +3445,8 @@ fn main() -> Result<(), slint::PlatformError> {
     });
     wire_app_lock(&ui, &lock);
     sync_lock_flags(&ui, &lock.store.borrow());
+    ui.set_stem_gpu(settings.borrow().stems_gpu);
+    update_stems_file_info(&ui);
     show_stem_state(&ui);
     if lock.store.borrow().is_enabled() {
         ui.set_locked(true);

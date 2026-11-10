@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 pub const FAVORITES_ID: &str = "favorites";
+/// The folder every playlist file has: finished stems are added to playlists inside it. It cannot be renamed or
+/// deleted; its shown name is translated by the interface (`PlaylistFolder::name` keeps the English "Stems").
+pub const STEMS_FOLDER_ID: &str = "stems";
 pub const QUEUE_COUNT: usize = 4;
 
 #[derive(Debug, Clone, Default)]

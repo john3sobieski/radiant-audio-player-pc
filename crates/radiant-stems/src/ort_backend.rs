@@ -1,4 +1,4 @@
-//! The ONNX Runtime wrapper: implements [`Backend`] for the htdemucs ONNX model (CPU).
+//! The ONNX Runtime wrapper: implements [`Backend`] for the htdemucs ONNX model (CPU, or the GPU through DirectML).
 //!
 //! The runtime library is NOT linked: `ort` is used with `load-dynamic`, the library is loaded from
 //! [`crate::runtime_library_path`] (set through `ORT_DYLIB_PATH` before the first session is made). Loading a missing
@@ -6,12 +6,14 @@
 
 use crate::demucs::{self, Backend, IoMap, SegmentOut, TensorInfo, CHANNELS, FRAMES, FREQ_BINS, MIX_LEN, SEGMENT_SAMPLES, SPEC_CHANNELS, SPEC_LEN, STEMS};
 use crate::StemError;
+use ort::session::builder::SessionBuilder;
 use ort::session::Session;
 use ort::value::{Tensor, ValueType};
 use std::path::Path;
 
 pub struct OrtBackend {
     session: Session,
+    gpu: bool,
     mix_in: String,
     spec_in: String,
     wave_out: String,
@@ -29,17 +31,49 @@ fn dims(t: &ValueType) -> Vec<i64> {
     }
 }
 
+/// DirectML needs the memory pattern optimization and parallel execution switched off (ONNX Runtime docs).
+#[cfg(feature = "directml")]
+fn with_gpu(builder: SessionBuilder) -> Result<SessionBuilder, StemError> {
+    use ort::execution_providers::DirectMLExecutionProvider;
+    builder
+        .with_memory_pattern(false)
+        .map_err(infer)?
+        .with_parallel_execution(false)
+        .map_err(infer)?
+        // `error_on_failure`: when the DLL has no DirectML or there is no card, we want an error (and the CPU
+        // fallback below), not a silent CPU session that is reported as "GPU".
+        .with_execution_providers([DirectMLExecutionProvider::default().build().error_on_failure()])
+        .map_err(infer)
+}
+
+#[cfg(not(feature = "directml"))]
+fn with_gpu(_: SessionBuilder) -> Result<SessionBuilder, StemError> {
+    Err(StemError::Inference("this build has no DirectML support".into()))
+}
+
+fn build_session(model: &Path, threads: usize, gpu: bool) -> Result<Session, StemError> {
+    let mut builder = Session::builder().map_err(infer)?;
+    if gpu {
+        builder = with_gpu(builder)?;
+    }
+    builder.with_intra_threads(threads.max(1)).map_err(infer)?.commit_from_file(model).map_err(infer)
+}
+
 impl OrtBackend {
-    /// Loads the model. `threads` = intra-op threads (keep it below the core count so the music does not crackle).
-    pub fn load(model: &Path, threads: usize) -> Result<Self, StemError> {
+    /// Loads the model. `threads` = intra-op threads (keep it below the core count so the music does not crackle;
+    /// the CPU path only). `gpu` asks for DirectML; when it cannot be used (plain CPU `onnxruntime.dll`, no
+    /// DirectX 12 card, driver problem) the model is loaded on the CPU instead and [`OrtBackend::using_gpu`] says so.
+    pub fn load(model: &Path, threads: usize, gpu: bool) -> Result<Self, StemError> {
         let lib = crate::runtime_library_path().filter(|p| p.is_file()).ok_or(StemError::NoRuntime)?;
         std::env::set_var("ORT_DYLIB_PATH", &lib);
-        let session = Session::builder()
-            .map_err(infer)?
-            .with_intra_threads(threads.max(1))
-            .map_err(infer)?
-            .commit_from_file(model)
-            .map_err(infer)?;
+        let (session, gpu) = if gpu {
+            match build_session(model, threads, true) {
+                Ok(session) => (session, true),
+                Err(_) => (build_session(model, threads, false)?, false),
+            }
+        } else {
+            (build_session(model, threads, false)?, false)
+        };
         let inputs: Vec<TensorInfo> =
             session.inputs.iter().map(|i| TensorInfo { name: i.name.clone(), dims: dims(&i.input_type) }).collect();
         let outputs: Vec<TensorInfo> =
@@ -51,7 +85,13 @@ impl OrtBackend {
             wave_out: outputs[wave_out].name.clone(),
             spec_out: outputs[spec_out].name.clone(),
             session,
+            gpu,
         })
+    }
+
+    /// The session really runs on the GPU (false = CPU, also when the GPU was asked for but was not available).
+    pub fn using_gpu(&self) -> bool {
+        self.gpu
     }
 }
 

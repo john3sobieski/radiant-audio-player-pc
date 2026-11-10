@@ -6,13 +6,16 @@
 //! DONE (stage 11, pipeline; written, not compiled): `ort_backend` (ONNX Runtime, CPU), `dsp` (STFT / iSTFT as in
 //!       htdemucs), `separate` (normalization, segments, overlap-add), `wav` (16-bit writer), `job::create_stems`
 //!       (decode -> separate -> files, progress 0..1, cancel).
-//! TODO: GPU (DirectML), the Stems tab in the player, choice of the parts to keep (see PROGRESS.md, stage 11).
+//! DONE (stage 11, player; written, not compiled): `eta` (time left), GPU through DirectML (`ort_backend`, falls back
+//!       to the CPU), `stem::output_sets` (which files a choice of parts gives). The Stems tab itself is in radiant-ui.
+//! TODO: check on the real model (see PROGRESS.md, stage 11).
 //!
 //! Low-power mode (Settings -> Power): stem separation is the heaviest job of the app, so it must never start
 //! (and no model may be downloaded) while the mode is on. Every entry point asks [`allowed`] first.
 
 pub mod demucs;
 pub mod dsp;
+pub mod eta;
 pub mod job;
 pub mod ort_backend;
 pub mod separate;
@@ -20,8 +23,8 @@ pub mod stem;
 pub mod store;
 pub mod wav;
 
-pub use job::create_stems;
-pub use stem::{Stem, StemSet};
+pub use job::{create_stems, Done};
+pub use stem::{output_sets, Stem, StemSet};
 pub use store::{hash_file, ModelSpec, ModelState, ModelStore, Progress, MODEL};
 
 use std::fmt;

@@ -16,3 +16,10 @@ realfft = "3"
 # ONNX Runtime. `load-dynamic`: onnxruntime.dll is loaded at run time from next to the exe (nothing is linked in, the
 # exe stays small). Pinned: the API changes between release candidates. This version needs ONNX Runtime 1.22.x.
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }
+
+[features]
+default = ["directml"]
+# GPU through DirectML (Windows 10+, any DirectX 12 card). Still nothing is linked: it only works when the
+# `onnxruntime.dll` next to the exe is the DirectML build; with the plain CPU build (or without a card) the job
+# falls back to the CPU by itself.
+directml = ["ort/directml"]

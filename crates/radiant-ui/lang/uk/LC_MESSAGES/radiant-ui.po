@@ -788,3 +788,58 @@ msgstr "Стеми збережено в {}"
 
 msgid "Stem separation failed: {}"
 msgstr "Не вдалося розділити на стеми: {}"
+
+# Stems tab, graphics card (stage 11)
+msgid "Vocals"
+msgstr "Вокал"
+
+msgid "Drums"
+msgstr "Ударні"
+
+msgid "Other"
+msgstr "Решта"
+
+msgid "Parts to keep"
+msgstr "Які частини залишити"
+
+msgid "Instrumental"
+msgstr "Інструментал"
+
+msgid "Vocals only"
+msgstr "Лише вокал"
+
+msgid "Also save each part separately"
+msgstr "Зберегти також кожну частину окремо"
+
+msgid "Play a track to make stems from it"
+msgstr "Увімкніть трек, щоб зробити з нього стеми"
+
+msgid "Pick one to three parts, or turn on separate files"
+msgstr "Виберіть від однієї до трьох частин або ввімкніть окремі файли"
+
+msgid "Will be saved as: {}"
+msgstr "Буде збережено як: {}"
+
+msgid "Will be saved: {} files (first: {})"
+msgstr "Буде збережено: файлів — {} (перший: {})"
+
+msgid "Creating stems… {}% · {} left"
+msgstr "Створення стемів… {}% · залишилось {}"
+
+msgid "Stem separation cancelled"
+msgstr "Розділення на стеми скасовано"
+
+msgid "Cancelling…"
+msgstr "Скасування…"
+
+msgid "(the graphics card could not be used: the processor did the work)"
+msgstr "(відеокарту використати не вдалося: працював процесор)"
+
+msgid "Graphics card (GPU)"
+msgstr "Відеокарта (GPU)"
+
+msgid "Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used."
+msgstr "Виконує розділення на відеокарті через DirectML, зазвичай у кілька разів швидше. Потрібна DirectML-версія onnxruntime.dll поруч із програмою; без неї або без відповідної відеокарти працює процесор."
+
+msgid "Another separation is already running"
+msgstr "Уже триває інше розділення"

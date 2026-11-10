@@ -780,3 +780,58 @@ msgstr "音轨已保存到 {}"
 
 msgid "Stem separation failed: {}"
 msgstr "音轨分离失败：{}"
+
+# Stems tab, graphics card (stage 11)
+msgid "Vocals"
+msgstr "人声"
+
+msgid "Drums"
+msgstr "鼓"
+
+msgid "Other"
+msgstr "其他"
+
+msgid "Parts to keep"
+msgstr "要保留的部分"
+
+msgid "Instrumental"
+msgstr "伴奏"
+
+msgid "Vocals only"
+msgstr "仅人声"
+
+msgid "Also save each part separately"
+msgstr "同时单独保存每个部分"
+
+msgid "Play a track to make stems from it"
+msgstr "播放一首曲目即可为其创建分轨"
+
+msgid "Pick one to three parts, or turn on separate files"
+msgstr "请选择一到三个部分，或开启单独文件"
+
+msgid "Will be saved as: {}"
+msgstr "将保存为：{}"
+
+msgid "Will be saved: {} files (first: {})"
+msgstr "将保存 {} 个文件（第一个：{}）"
+
+msgid "Creating stems… {}% · {} left"
+msgstr "正在创建音轨… {}% · 剩余 {}"
+
+msgid "Stem separation cancelled"
+msgstr "分轨已取消"
+
+msgid "Cancelling…"
+msgstr "正在取消…"
+
+msgid "(the graphics card could not be used: the processor did the work)"
+msgstr "（无法使用显卡：由处理器完成）"
+
+msgid "Graphics card (GPU)"
+msgstr "显卡（GPU）"
+
+msgid "Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used."
+msgstr "通过 DirectML 在显卡上进行分离，通常快数倍。需要在程序旁放置 DirectML 版 onnxruntime.dll；没有它或没有合适的显卡时将使用处理器。"
+
+msgid "Another separation is already running"
+msgstr "已有另一个分离任务正在运行"

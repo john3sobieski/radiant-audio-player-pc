@@ -1,7 +1,7 @@
 //! Playlists and playlist folders (README 3.1 / 3.2): data, rules and the `playlists.json` file.
 //! No UI here. "Liked tracks" (`FAVORITES_ID`) always exists, is pinned on top, has no folder.
 
-use crate::models::{Playlist, PlaylistFolder, FAVORITES_ID};
+use crate::models::{Playlist, PlaylistFolder, FAVORITES_ID, STEMS_FOLDER_ID};
 use crate::settings::{replace_file, settings_path};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -103,6 +103,10 @@ impl PlaylistStore {
     pub fn normalize(&mut self) {
         let mut seen = HashSet::new();
         self.folders.retain(|f| seen.insert(f.id.clone()));
+        // The Stems folder always exists (README: stems are added there automatically).
+        if !self.folders.iter().any(|f| f.id == STEMS_FOLDER_ID) {
+            self.folders.push(PlaylistFolder { id: STEMS_FOLDER_ID.to_string(), name: "Stems".to_string(), collapsed: false });
+        }
         let folder_ids: HashSet<String> = self.folders.iter().map(|f| f.id.clone()).collect();
         let mut seen = HashSet::new();
         self.playlists.retain(|p| seen.insert(p.id.clone()));
@@ -247,7 +251,15 @@ impl PlaylistStore {
         self.playlists.len() != before
     }
 
+    /// The folder cannot be renamed or deleted (the Stems folder).
+    pub fn folder_is_locked(id: &str) -> bool {
+        id == STEMS_FOLDER_ID
+    }
+
     pub fn rename_folder(&mut self, id: &str, name: &str) -> bool {
+        if Self::folder_is_locked(id) {
+            return false;
+        }
         let Some(name) = clean_name(name) else { return false };
         match self.folders.iter_mut().find(|f| f.id == id) {
             Some(f) => {
@@ -260,6 +272,9 @@ impl PlaylistStore {
 
     /// Deletes a folder; its playlists are kept and become folder-less.
     pub fn delete_folder(&mut self, id: &str) -> bool {
+        if Self::folder_is_locked(id) {
+            return false;
+        }
         let before = self.folders.len();
         self.folders.retain(|f| f.id != id);
         if self.folders.len() == before {
@@ -271,6 +286,33 @@ impl PlaylistStore {
             }
         }
         true
+    }
+
+    /// Puts finished stem files into the playlist `name` (normally `Artist - Title`) inside the Stems folder: the
+    /// playlist is made when it does not exist yet (a repeated run for the same track adds only what is new).
+    /// Returns the playlist id, `None` when `name` is empty.
+    pub fn add_stems_playlist(&mut self, name: &str, files: &[PathBuf]) -> Option<String> {
+        let name = clean_name(name)?;
+        self.normalize_stems_folder();
+        let existing = self
+            .playlists
+            .iter()
+            .find(|p| p.folder_id.as_deref() == Some(STEMS_FOLDER_ID) && p.name.to_lowercase() == name.to_lowercase())
+            .map(|p| p.id.clone());
+        let id = match existing {
+            Some(id) => id,
+            None => self.create_playlist(&name, Some(STEMS_FOLDER_ID))?,
+        };
+        for file in files {
+            self.add_track(&id, file);
+        }
+        Some(id)
+    }
+
+    fn normalize_stems_folder(&mut self) {
+        if !self.folders.iter().any(|f| f.id == STEMS_FOLDER_ID) {
+            self.folders.push(PlaylistFolder { id: STEMS_FOLDER_ID.to_string(), name: "Stems".to_string(), collapsed: false });
+        }
     }
 
     pub fn toggle_folder_collapsed(&mut self, id: &str) -> bool {
@@ -475,6 +517,38 @@ mod tests {
     }
 
     #[test]
+    fn stems_folder_always_exists_and_is_locked() {
+        let mut s = PlaylistStore::default();
+        s.normalize();
+        assert!(s.folder(STEMS_FOLDER_ID).is_some());
+        assert!(!s.rename_folder(STEMS_FOLDER_ID, "Mine"));
+        assert!(!s.delete_folder(STEMS_FOLDER_ID));
+        assert!(s.folder(STEMS_FOLDER_ID).is_some());
+        // A file without it gets it back; a normal folder is still deletable.
+        s.folders.clear();
+        s.normalize();
+        assert!(s.folder(STEMS_FOLDER_ID).is_some());
+        let f = s.create_folder("Gym").unwrap();
+        assert!(s.delete_folder(&f));
+    }
+
+    #[test]
+    fn stems_go_to_a_playlist_in_the_stems_folder() {
+        let mut s = PlaylistStore::default();
+        s.normalize();
+        let a = PathBuf::from("a - x - Vocals.wav");
+        let b = PathBuf::from("a - x - Bass.wav");
+        let id = s.add_stems_playlist("A - X", &[a.clone()]).unwrap();
+        assert_eq!(s.playlist(&id).unwrap().folder_id.as_deref(), Some(STEMS_FOLDER_ID));
+        // The same track again: same playlist, no duplicates, new file added.
+        let again = s.add_stems_playlist("a - x", &[a.clone(), b.clone()]).unwrap();
+        assert_eq!(again, id);
+        assert_eq!(s.playlist(&id).unwrap().track_paths, vec![a, b]);
+        assert_eq!(s.playlists.len(), 2); // Liked tracks + this one
+        assert!(s.add_stems_playlist("  ", &[]).is_none());
+    }
+
+    #[test]
     fn folders_and_moving() {
         let mut s = fresh();
         let f = s.create_folder("Gym").unwrap();
@@ -547,6 +621,7 @@ mod tests {
         let idx = |s: &PlaylistStore, id: &str| s.playlists.iter().position(|p| p.id == id).unwrap();
         let fa = s.folders.iter().position(|f| f.id == a).unwrap();
         let fb = s.folders.iter().position(|f| f.id == b).unwrap();
+        let fs = s.folders.iter().position(|f| f.id == STEMS_FOLDER_ID).unwrap();
         let expect = vec![
             ListEntry::Playlist(0),
             ListEntry::Playlist(idx(&s, &loose)),
@@ -554,6 +629,7 @@ mod tests {
             ListEntry::Playlist(idx(&s, &in_a)),
             ListEntry::Folder(fb),
             ListEntry::Playlist(idx(&s, &in_b)),
+            ListEntry::Folder(fs), // the Stems folder: always there, empty here, "stems" sorts after "beta"
         ];
         assert_eq!(s.list_entries(), expect);
         assert!(s.toggle_folder_collapsed(&a));

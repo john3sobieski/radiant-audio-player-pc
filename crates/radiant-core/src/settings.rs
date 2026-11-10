@@ -123,6 +123,9 @@ pub struct AppSettings {
     /// Low-power mode: no animations, no spectrum rays, sound effects (equalizer, bass, treble, subsonic,
     /// normalization) bypassed, AI stems not allowed, the engine wakes up less often. Everything else keeps working.
     pub low_power: bool,
+    /// Stem separation on the graphics card (DirectML). Off by default: it needs the DirectML build of
+    /// `onnxruntime.dll`; when the card or the file is missing the job falls back to the CPU anyway.
+    pub stems_gpu: bool,
 }
 
 impl Default for AppSettings {
@@ -152,6 +155,7 @@ impl Default for AppSettings {
             saved_colors: Vec::new(),
             language: LANGUAGE_SYSTEM.to_string(),
             low_power: false,
+            stems_gpu: false,
         }
     }
 }
@@ -502,6 +506,13 @@ mod tests {
         assert_eq!(s.repeat_mode, RepeatModeSetting::Off);
         assert_eq!(s.music_folder, None);
         assert!((s.speed_t - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn stems_gpu_is_off_by_default_and_remembered() {
+        assert!(!AppSettings::default().stems_gpu);
+        assert!(!parse(r#"{}"#).unwrap().stems_gpu);
+        assert!(parse(r#"{"stems_gpu": true}"#).unwrap().stems_gpu);
     }
 
     #[test]

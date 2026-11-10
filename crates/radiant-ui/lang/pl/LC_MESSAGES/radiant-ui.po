@@ -788,3 +788,58 @@ msgstr "Stemy zapisano w {}"
 
 msgid "Stem separation failed: {}"
 msgstr "Nie udało się rozdzielić na stemy: {}"
+
+# Stems tab, graphics card (stage 11)
+msgid "Vocals"
+msgstr "Wokal"
+
+msgid "Drums"
+msgstr "Perkusja"
+
+msgid "Other"
+msgstr "Pozostałe"
+
+msgid "Parts to keep"
+msgstr "Części do zachowania"
+
+msgid "Instrumental"
+msgstr "Wersja instrumentalna"
+
+msgid "Vocals only"
+msgstr "Tylko wokal"
+
+msgid "Also save each part separately"
+msgstr "Zapisz też każdą część osobno"
+
+msgid "Play a track to make stems from it"
+msgstr "Odtwórz utwór, aby zrobić z niego stemy"
+
+msgid "Pick one to three parts, or turn on separate files"
+msgstr "Wybierz od jednej do trzech części lub włącz osobne pliki"
+
+msgid "Will be saved as: {}"
+msgstr "Zostanie zapisane jako: {}"
+
+msgid "Will be saved: {} files (first: {})"
+msgstr "Zostanie zapisanych plików: {} (pierwszy: {})"
+
+msgid "Creating stems… {}% · {} left"
+msgstr "Tworzenie stemów… {}% · zostało {}"
+
+msgid "Stem separation cancelled"
+msgstr "Podział na stemy anulowano"
+
+msgid "Cancelling…"
+msgstr "Anulowanie…"
+
+msgid "(the graphics card could not be used: the processor did the work)"
+msgstr "(nie udało się użyć karty graficznej: pracował procesor)"
+
+msgid "Graphics card (GPU)"
+msgstr "Karta graficzna (GPU)"
+
+msgid "Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used."
+msgstr "Wykonuje podział na karcie graficznej przez DirectML, zwykle kilka razy szybciej. Obok programu musi leżeć wersja onnxruntime.dll z obsługą DirectML; bez niej lub bez odpowiedniej karty używany jest procesor."
+
+msgid "Another separation is already running"
+msgstr "Trwa już inny podział"

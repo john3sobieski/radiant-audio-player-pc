@@ -788,3 +788,58 @@ msgstr "Stopy uloženy do {}"
 
 msgid "Stem separation failed: {}"
 msgstr "Rozdělení na stopy se nezdařilo: {}"
+
+# Stems tab, graphics card (stage 11)
+msgid "Vocals"
+msgstr "Zpěv"
+
+msgid "Drums"
+msgstr "Bicí"
+
+msgid "Other"
+msgstr "Ostatní"
+
+msgid "Parts to keep"
+msgstr "Které části ponechat"
+
+msgid "Instrumental"
+msgstr "Instrumentální verze"
+
+msgid "Vocals only"
+msgstr "Jen zpěv"
+
+msgid "Also save each part separately"
+msgstr "Uložit také každou část zvlášť"
+
+msgid "Play a track to make stems from it"
+msgstr "Spusťte skladbu, ze které chcete vytvořit stopy"
+
+msgid "Pick one to three parts, or turn on separate files"
+msgstr "Vyberte jednu až tři části nebo zapněte samostatné soubory"
+
+msgid "Will be saved as: {}"
+msgstr "Uloží se jako: {}"
+
+msgid "Will be saved: {} files (first: {})"
+msgstr "Uloží se souborů: {} (první: {})"
+
+msgid "Creating stems… {}% · {} left"
+msgstr "Vytváření stop… {}% · zbývá {}"
+
+msgid "Stem separation cancelled"
+msgstr "Rozdělení na stopy bylo zrušeno"
+
+msgid "Cancelling…"
+msgstr "Ruší se…"
+
+msgid "(the graphics card could not be used: the processor did the work)"
+msgstr "(grafickou kartu se nepodařilo použít: práci udělal procesor)"
+
+msgid "Graphics card (GPU)"
+msgstr "Grafická karta (GPU)"
+
+msgid "Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used."
+msgstr "Provede rozdělení na grafické kartě přes DirectML, obvykle několikrát rychleji. Vedle programu musí ležet verze onnxruntime.dll s podporou DirectML; bez ní nebo bez vhodné karty se použije procesor."
+
+msgid "Another separation is already running"
+msgstr "Již probíhá jiné rozdělení"

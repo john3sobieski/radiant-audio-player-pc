@@ -68,6 +68,14 @@ impl StemSet {
         stems.iter().fold(StemSet::EMPTY, |set, s| set.with(*s))
     }
 
+    /// From four on/off flags (the checkboxes of the Stems tab).
+    pub fn from_flags(vocals: bool, drums: bool, bass: bool, other: bool) -> StemSet {
+        [(Stem::Vocals, vocals), (Stem::Drums, drums), (Stem::Bass, bass), (Stem::Other, other)]
+            .into_iter()
+            .filter(|(_, on)| *on)
+            .fold(StemSet::EMPTY, |set, (s, _)| set.with(s))
+    }
+
     /// Members in the display order of the file names: Vocals, Drums, Bass, Other.
     pub fn members(self) -> Vec<Stem> {
         [Stem::Vocals, Stem::Drums, Stem::Bass, Stem::Other].into_iter().filter(|s| self.contains(*s)).collect()
@@ -85,6 +93,24 @@ impl StemSet {
             _ => Some(self.members().iter().map(|s| s.label()).collect::<Vec<_>>().join(" + ")),
         }
     }
+}
+
+/// The files one run makes: the chosen mix (when it has a name, i.e. 1..=3 parts) and, with `each_part`, every part
+/// on its own too. The mix comes first. Empty when the choice gives no file at all.
+pub fn output_sets(selection: StemSet, each_part: bool) -> Vec<StemSet> {
+    let mut sets = Vec::new();
+    if selection.file_label().is_some() {
+        sets.push(selection);
+    }
+    if each_part {
+        for stem in [Stem::Vocals, Stem::Drums, Stem::Bass, Stem::Other] {
+            let single = StemSet::EMPTY.with(stem);
+            if !sets.contains(&single) {
+                sets.push(single);
+            }
+        }
+    }
+    sets
 }
 
 #[cfg(test)]
@@ -115,5 +141,29 @@ mod tests {
         assert_eq!(s.len(), 2);
         assert!(!s.without(Stem::Bass).contains(Stem::Bass));
         assert!(StemSet::EMPTY.is_empty());
+    }
+
+    #[test]
+    fn flags_make_sets() {
+        assert_eq!(StemSet::from_flags(false, true, true, true), StemSet::ALL.without(Stem::Vocals));
+        assert_eq!(StemSet::from_flags(false, false, false, false), StemSet::EMPTY);
+    }
+
+    #[test]
+    fn output_sets_rules() {
+        let vocals = StemSet::EMPTY.with(Stem::Vocals);
+        let karaoke = StemSet::ALL.without(Stem::Vocals);
+        // One mix.
+        assert_eq!(output_sets(karaoke, false), vec![karaoke]);
+        // Nothing / all four alone give no file; all four with "each part" give the four parts.
+        assert!(output_sets(StemSet::EMPTY, false).is_empty());
+        assert!(output_sets(StemSet::ALL, false).is_empty());
+        assert_eq!(output_sets(StemSet::ALL, true).len(), 4);
+        // Mix + four parts; a single part is not made twice.
+        let both = output_sets(karaoke, true);
+        assert_eq!(both.len(), 5);
+        assert_eq!(both[0], karaoke);
+        assert_eq!(output_sets(vocals, true).len(), 4);
+        assert_eq!(output_sets(vocals, true)[0], vocals);
     }
 }

@@ -142,6 +142,8 @@ export struct PlaylistListRow {
     collapsed: bool,
     /// Playlist inside a folder.
     indent: bool,
+    /// Folder that cannot be renamed or deleted (the Stems folder).
+    locked: bool,
 }
 
 // One track of the open playlist page. `missing`: the file is no longer in the library.
@@ -632,6 +634,140 @@ component ToggleText inherits Rectangle {
     ta := TouchArea {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
+    }
+}
+
+// Switch with a check box and a word (the Stems tab: the parts to keep, "each part separately").
+component StemChip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 40px;
+    border-radius: 10px;
+    background: root.active ? Theme.accent.with-alpha(0.18) : (ta.has-hover && root.enabled ? Theme.surface-hover : Theme.bg);
+    border-width: 1px;
+    border-color: root.active ? Theme.accent : Theme.surface-hover;
+    opacity: root.enabled ? 1.0 : 0.5;
+    animate background { duration: Theme.low-power ? 0ms : 120ms; }
+
+    Rectangle {
+        x: 12px;
+        y: (root.height - self.height) / 2;
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        border-width: 1.5px;
+        border-color: root.active ? Theme.accent : Theme.muted;
+        background: root.active ? Theme.accent : transparent;
+        if root.active : Path {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            viewbox-width: 18;
+            viewbox-height: 18;
+            commands: "M 4.5 9.5 L 7.5 12.5 L 13.5 5.5";
+            stroke: Theme.on-accent;
+            stroke-width: 2px;
+        }
+    }
+    FitText {
+        x: 38px;
+        width: max(0px, root.width - 46px);
+        height: root.height;
+        text: root.text;
+        ink: root.active ? Theme.text : Theme.muted;
+        font-size: 13px;
+        h-align: left;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// The part switches of the Stems tab and of the "Create stems" window: four chips, two quick choices, "each part
+// separately". It only edits the flags; Rust builds the file names from them (`changed`).
+component StemPicker inherits VerticalLayout {
+    in-out property <bool> vocals;
+    in-out property <bool> drums;
+    in-out property <bool> bass;
+    in-out property <bool> other;
+    in-out property <bool> separate;
+    /// A job runs: the switches are locked.
+    in property <bool> busy;
+    callback changed();
+
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 8px;
+        StemChip {
+            text: @tr("Vocals");
+            active: root.vocals;
+            enabled: !root.busy;
+            clicked => { root.vocals = !root.vocals; root.changed(); }
+        }
+        StemChip {
+            text: @tr("Drums");
+            active: root.drums;
+            enabled: !root.busy;
+            clicked => { root.drums = !root.drums; root.changed(); }
+        }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        StemChip {
+            text: @tr("Bass");
+            active: root.bass;
+            enabled: !root.busy;
+            clicked => { root.bass = !root.bass; root.changed(); }
+        }
+        StemChip {
+            text: @tr("Other");
+            active: root.other;
+            enabled: !root.busy;
+            clicked => { root.other = !root.other; root.changed(); }
+        }
+    }
+    // Quick choices: everything but the vocals / the vocals alone.
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        PillButton {
+            text: @tr("Instrumental");
+            active: !root.vocals && root.drums && root.bass && root.other;
+            clicked => {
+                if (!root.busy) {
+                    root.vocals = false;
+                    root.drums = true;
+                    root.bass = true;
+                    root.other = true;
+                    root.changed();
+                }
+            }
+        }
+        PillButton {
+            text: @tr("Vocals only");
+            active: root.vocals && !root.drums && !root.bass && !root.other;
+            clicked => {
+                if (!root.busy) {
+                    root.vocals = true;
+                    root.drums = false;
+                    root.bass = false;
+                    root.other = false;
+                    root.changed();
+                }
+            }
+        }
+    }
+    StemChip {
+        text: @tr("Also save each part separately");
+        active: root.separate;
+        enabled: !root.busy;
+        clicked => { root.separate = !root.separate; root.changed(); }
     }
 }
 
@@ -1801,6 +1937,9 @@ component SettingsPage inherits Rectangle {
     callback stem-import();
     callback stem-cancel();
     callback stem-delete();
+    /// Stems on the graphics card (DirectML): Rust remembers it; the job falls back to the CPU when it cannot be used.
+    in-out property <bool> stem-gpu: false;
+    callback stem-gpu-changed(bool);
     /// Own colors the user saved as presets (set from Rust).
     in property <[color]> saved-colors;
     /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
@@ -1853,6 +1992,10 @@ component SettingsPage inherits Rectangle {
     stem-p := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.stem-t1; font-size: 13px; wrap: word-wrap; }
     // Card = title row (42) + text + gap (12) + status line and progress bar (44) + buttons (40) + bottom padding (16) + spare (2).
     private property <length> stem-h: stem-p.preferred-height + 156px;
+    // GPU card under it: title (42) + text + gap (12) + switch (32) + bottom padding (16).
+    private property <string> gpu-t1: @tr("Runs the separation on the graphics card through DirectML, usually several times faster. It needs the DirectML build of onnxruntime.dll next to the program; without it, or without a suitable card, the processor is used.");
+    gpu-p := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.gpu-t1; font-size: 13px; wrap: word-wrap; }
+    private property <length> gpu-h: gpu-p.preferred-height + 102px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -1864,7 +2007,7 @@ component SettingsPage inherits Rectangle {
             // Security: the four cards are drawn by hand below (they have controls).
         ],
         [
-            { title: @tr("Stems"), text: @tr("Choose which parts to keep and where they are saved.") },
+            // AI & stems: the model card and the graphics card card are drawn by hand below (they have controls).
         ],
         [
             { title: @tr("Music folder"), text: @tr("Choose and rescan the folder (for now these two buttons stay in the header).") },
@@ -1884,7 +2027,7 @@ component SettingsPage inherits Rectangle {
     private property <length> extra-h: root.section == 0 ? 136px + root.pal-h + 12px
         : root.section == 1 ? root.lang-h + 12px
         : root.section == 2 ? root.sec-total + 12px
-        : root.section == 3 ? root.stem-h + 12px
+        : root.section == 3 ? root.stem-h + 12px + root.gpu-h + 12px
         : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
@@ -2605,6 +2748,49 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.stem-delete(); }
             }
         }
+        // ---- AI & stems: graphics card (DirectML) ----
+        if root.section == 3 : Rectangle {
+            x: 0px;
+            y: root.stem-h + 12px;
+            width: parent.width;
+            height: root.gpu-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: @tr("Graphics card (GPU)");
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: gpu-p.preferred-height;
+                text: root.gpu-t1;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            SegmentedControl {
+                x: 16px;
+                y: 42px + gpu-p.preferred-height + 12px;
+                width: min(parent.width - 32px, 240px);
+                labels: [@tr("Off"), @tr("On")];
+                current: root.stem-gpu ? 1 : 0;
+                selected(k) => {
+                    root.stem-gpu = k == 1;
+                    root.stem-gpu-changed(k == 1);
+                }
+            }
+        }
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
             y: root.extra-h + k * 104px;
@@ -2883,8 +3069,39 @@ export component MainWindow inherits Window {
 
     // Big player view ("Emitter"): cover inside a progress ring, glow from the cover, side tabs.
     in-out property <bool> show-player: false;
-    /// 0 = Lyrics, 1 = Sound, 2 = Info, -1 = none (narrow windows only).
+    /// 0 = Lyrics, 1 = Sound, 2 = Info, 3 = Stems, -1 = none (narrow windows only).
     in-out property <int> player-tab: 0;
+    // ---- Stems tab of the player (stage 11): the parts to keep, the job state ----
+    in-out property <bool> stems-vocals: false;
+    in-out property <bool> stems-drums: true;
+    in-out property <bool> stems-bass: true;
+    in-out property <bool> stems-other: true;
+    /// "Also save each part separately".
+    in-out property <bool> stems-separate: false;
+    /// A separation runs now (the switches lock, the progress bar and "Cancel" show).
+    in property <bool> stems-busy: false;
+    in property <float> stems-progress: 0;
+    /// Progress with the time left, the result, or why nothing started.
+    in property <string> stems-info;
+    /// Which file(s) the current choice makes (Rust builds it from the track and the switches).
+    in property <string> stems-file-info;
+    /// The parts changed: Rust refreshes `stems-file-info`.
+    callback stems-pick-changed();
+    callback stems-create();
+    callback stems-cancel();
+    /// A job finished and wrote files: Rust adds them to the playlist in the Stems folder.
+    callback stems-finished();
+    // "Create stems" window (context menu of a track): the same switches, for the track Rust remembered.
+    in-out property <bool> show-stems-popup: false;
+    in property <string> stems-popup-title;
+    callback stems-popup-create();
+    private property <bool> stems-popup-can: !root.stems-busy
+        && (root.stems-separate || (root.stems-count >= 1 && root.stems-count <= 3));
+    private property <int> stems-count: (root.stems-vocals ? 1 : 0) + (root.stems-drums ? 1 : 0)
+        + (root.stems-bass ? 1 : 0) + (root.stems-other ? 1 : 0);
+    // One to three parts make a mix; with "each part separately" any choice gives files.
+    private property <bool> stems-can: root.np-title != "" && !root.stems-busy
+        && (root.stems-separate || (root.stems-count >= 1 && root.stems-count <= 3));
     in property <string> np-title;
     in property <string> np-sub;
     in property <string> np-quality;
@@ -3113,6 +3330,9 @@ export component MainWindow inherits Window {
     callback stem-import();
     callback stem-cancel();
     callback stem-delete();
+    /// Stems on the graphics card (DirectML): Rust remembers it; the job falls back to the CPU when it cannot be used.
+    in-out property <bool> stem-gpu: false;
+    callback stem-gpu-changed(bool);
     /// Code dialog of Settings -> Security. Rust drives it: `sec-mode` 0 = turn on, 1 = change code, 2 = turn off;
     /// `sec-step` 0 = current code, 1 = new code, 2 = repeat it, 3 = save the recovery file.
     in-out property <bool> show-sec-popup: false;
@@ -4006,7 +4226,7 @@ export component MainWindow inherits Window {
                                     }
                                 }
                                 // Folder header: rename / delete.
-                                if r.is-folder : IconButton {
+                                if r.is-folder && !r.locked : IconButton {
                                     x: parent.width - 28px - 34px - 38px;
                                     y: (parent.height - self.height) / 2;
                                     width: 34px;
@@ -4016,7 +4236,7 @@ export component MainWindow inherits Window {
                                     commands: "M 3 14.5 V 17 H 5.5 L 14.8 7.7 L 12.3 5.2 Z M 16.7 5.8 L 14.2 3.3 L 12.9 4.6 L 15.4 7.1 Z";
                                     clicked => { root.pl-open-rename-folder(i); }
                                 }
-                                if r.is-folder : IconButton {
+                                if r.is-folder && !r.locked : IconButton {
                                     x: parent.width - 28px - 34px;
                                     y: (parent.height - self.height) / 2;
                                     width: 34px;
@@ -5469,6 +5689,81 @@ export component MainWindow inherits Window {
             }
         }
 
+        // Stems tab: parts to keep, the file name, Create / progress / Cancel (the job: see `main.rs`, `start_stems_job`).
+        if root.side-open && root.eff-tab == 3 : Flickable {
+            x: root.card-x;
+            y: root.header-h;
+            width: root.card-w;
+            height: root.card-h;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 10px;
+                alignment: start;
+                if root.np-title == "" : Text {
+                    text: @tr("Play a track to make stems from it");
+                    color: Theme.muted;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+                if root.np-title != "" : Text {
+                    text: @tr("Parts to keep");
+                    color: Theme.text;
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                if root.np-title != "" : StemPicker {
+                    vocals <=> root.stems-vocals;
+                    drums <=> root.stems-drums;
+                    bass <=> root.stems-bass;
+                    other <=> root.stems-other;
+                    separate <=> root.stems-separate;
+                    busy: root.stems-busy;
+                    changed => { root.stems-pick-changed(); }
+                }
+                if root.np-title != "" : Text {
+                    text: root.stems-file-info;
+                    color: Theme.muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                if root.np-title != "" && !root.stems-busy : HorizontalLayout {
+                    alignment: start;
+                    AccentButton {
+                        width: 170px;
+                        enabled: root.stems-can;
+                        text: @tr("Create stems");
+                        clicked => { root.stems-create(); }
+                    }
+                }
+                if root.stems-busy : Rectangle {
+                    height: 6px;
+                    border-radius: 3px;
+                    background: Theme.surface-hover;
+                    Rectangle {
+                        x: 0px;
+                        y: 0px;
+                        width: parent.width * Math.max(0, Math.min(1, root.stems-progress));
+                        height: parent.height;
+                        border-radius: 3px;
+                        background: Theme.accent;
+                    }
+                }
+                if root.stems-busy : HorizontalLayout {
+                    alignment: start;
+                    PillButton {
+                        text: @tr("Cancel");
+                        clicked => { root.stems-cancel(); }
+                    }
+                }
+                if root.stems-info != "" : Text {
+                    text: root.stems-info;
+                    color: root.stems-busy ? Theme.text : Theme.muted;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
         // Header: close, caption, tabs.
         Rectangle {
             x: 0px;
@@ -5513,6 +5808,13 @@ export component MainWindow inherits Window {
                         text: @tr("Info");
                         active: root.side-open && root.eff-tab == 2;
                         clicked => { root.pick-tab(2); }
+                    }
+                }
+                HeaderItem {
+                    PillButton {
+                        text: @tr("Stems");
+                        active: root.side-open && root.eff-tab == 3;
+                        clicked => { root.pick-tab(3); }
                     }
                 }
             }
@@ -6546,6 +6848,100 @@ export component MainWindow inherits Window {
         stem-import() => { root.stem-import(); }
         stem-cancel() => { root.stem-cancel(); }
         stem-delete() => { root.stem-delete(); }
+        stem-gpu <=> root.stem-gpu;
+        stem-gpu-changed(on) => { root.stem-gpu-changed(on); }
+    }
+
+    // ---- "Create stems" window: which parts to make for the track picked in the context menu ----
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        background: #000000b0;
+        opacity: root.show-stems-popup ? 1 : 0;
+        visible: self.opacity > 0.01;
+        animate opacity { duration: Theme.low-power ? 0ms : 180ms; }
+
+        TouchArea {
+            clicked => { root.show-stems-popup = false; root.stems-pick-changed(); }
+            scroll-event(e) => { return accept; }
+        }
+
+        Rectangle {
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            width: min(400px, root.width - 32px);
+            height: min(430px, root.height - 32px);
+            background: Theme.surface;
+            border-radius: 18px;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: #000000a0;
+            drop-shadow-offset-y: 8px;
+
+            TouchArea { }
+            if root.show-stems-popup : VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                alignment: start;
+                Text {
+                    text: @tr("Create stems");
+                    color: Theme.text;
+                    font-size: 20px;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.stems-popup-title;
+                    color: Theme.muted;
+                    font-size: 13px;
+                    overflow: elide;
+                }
+                Text {
+                    text: @tr("Parts to keep");
+                    color: Theme.text;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                StemPicker {
+                    vocals <=> root.stems-vocals;
+                    drums <=> root.stems-drums;
+                    bass <=> root.stems-bass;
+                    other <=> root.stems-other;
+                    separate <=> root.stems-separate;
+                    busy: root.stems-busy;
+                    changed => { root.stems-pick-changed(); }
+                }
+                Text {
+                    text: root.stems-file-info;
+                    color: Theme.muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                if root.stems-info != "" : Text {
+                    text: root.stems-info;
+                    color: Theme.text;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    PillButton {
+                        text: @tr("Cancel");
+                        clicked => { root.show-stems-popup = false; root.stems-pick-changed(); }
+                    }
+                    AccentButton {
+                        width: 150px;
+                        enabled: root.stems-popup-can;
+                        text: @tr("Create stems");
+                        clicked => { root.stems-popup-create(); }
+                    }
+                }
+            }
+        }
     }
 
     // ---- Security dialog: turn the lock on / change the code / turn it off (above the settings page) ----
