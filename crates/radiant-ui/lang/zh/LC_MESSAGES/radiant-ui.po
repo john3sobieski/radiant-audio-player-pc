@@ -770,3 +770,13 @@ msgstr "模型已就绪"
 
 msgid "Could not delete the model: {}"
 msgstr "无法删除模型：{}"
+
+# Stem separation (stage 11)
+msgid "Creating stems… {}%"
+msgstr "正在创建音轨… {}%"
+
+msgid "Stems saved to {}"
+msgstr "音轨已保存到 {}"
+
+msgid "Stem separation failed: {}"
+msgstr "音轨分离失败：{}"

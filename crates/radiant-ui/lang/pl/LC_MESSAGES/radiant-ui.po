@@ -778,3 +778,13 @@ msgstr "Model jest gotowy"
 
 msgid "Could not delete the model: {}"
 msgstr "Nie udało się usunąć modelu: {}"
+
+# Stem separation (stage 11)
+msgid "Creating stems… {}%"
+msgstr "Tworzenie stemów… {}%"
+
+msgid "Stems saved to {}"
+msgstr "Stemy zapisano w {}"
+
+msgid "Stem separation failed: {}"
+msgstr "Nie udało się rozdzielić na stemy: {}"

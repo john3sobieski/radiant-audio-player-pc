@@ -770,3 +770,13 @@ msgstr "モデルの準備ができました"
 
 msgid "Could not delete the model: {}"
 msgstr "モデルを削除できませんでした：{}"
+
+# Stem separation (stage 11)
+msgid "Creating stems… {}%"
+msgstr "ステムを作成中… {}%"
+
+msgid "Stems saved to {}"
+msgstr "ステムを {} に保存しました"
+
+msgid "Stem separation failed: {}"
+msgstr "ステムの分離に失敗しました：{}"

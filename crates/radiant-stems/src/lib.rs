@@ -3,17 +3,24 @@
 //! DONE (stage 11, base): the contract of the network and the segment planner (`demucs`), the stems and the output
 //! file names (`stem`), the model file manager: download with resume + SHA-256, import, delete (`store`), the
 //! check for the ONNX Runtime library.
-//! TODO: the ONNX Runtime wrapper that implements `demucs::Backend`, decode + resample to 44.1 kHz stereo, STFT /
-//!       iSTFT (4096 / 1024), per-track normalization, overlap-add, 16-bit WAV writer, progress / cancel / worker
-//!       thread (see PROGRESS.md, stage 11).
+//! DONE (stage 11, pipeline; written, not compiled): `ort_backend` (ONNX Runtime, CPU), `dsp` (STFT / iSTFT as in
+//!       htdemucs), `separate` (normalization, segments, overlap-add), `wav` (16-bit writer), `job::create_stems`
+//!       (decode -> separate -> files, progress 0..1, cancel).
+//! TODO: GPU (DirectML), the Stems tab in the player, choice of the parts to keep (see PROGRESS.md, stage 11).
 //!
 //! Low-power mode (Settings -> Power): stem separation is the heaviest job of the app, so it must never start
 //! (and no model may be downloaded) while the mode is on. Every entry point asks [`allowed`] first.
 
 pub mod demucs;
+pub mod dsp;
+pub mod job;
+pub mod ort_backend;
+pub mod separate;
 pub mod stem;
 pub mod store;
+pub mod wav;
 
+pub use job::create_stems;
 pub use stem::{Stem, StemSet};
 pub use store::{hash_file, ModelSpec, ModelState, ModelStore, Progress, MODEL};
 
@@ -41,6 +48,12 @@ pub enum StemError {
     Mismatch,
     /// The network loaded fine but is not the htdemucs 4-stem contract (see `demucs::check_io`).
     BadModel(String),
+    /// `onnxruntime.dll` is not next to the exe.
+    NoRuntime,
+    /// The track could not be decoded (the text names the file).
+    Decode(String),
+    /// ONNX Runtime failed while loading or running the network.
+    Inference(String),
 }
 
 impl fmt::Display for StemError {
@@ -48,7 +61,9 @@ impl fmt::Display for StemError {
         match self {
             StemError::NotPinned => write!(f, "the model size and checksum are not set in this build"),
             StemError::Cancelled => write!(f, "cancelled"),
-            StemError::Io(e) | StemError::Http(e) | StemError::BadModel(e) => write!(f, "{e}"),
+            StemError::Io(e) | StemError::Http(e) | StemError::BadModel(e) | StemError::Decode(e) => write!(f, "{e}"),
+            StemError::Inference(e) => write!(f, "ONNX Runtime: {e}"),
+            StemError::NoRuntime => write!(f, "{RUNTIME_LIBRARY} was not found next to the program"),
             StemError::Mismatch => write!(f, "the file does not match the expected size or checksum"),
         }
     }

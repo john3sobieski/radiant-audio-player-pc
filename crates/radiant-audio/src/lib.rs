@@ -6,6 +6,7 @@
 //!   position.rs   source-time position that stays correct while the speed changes
 //!   convert.rs    channel remap + streaming sample-rate conversion (buffering, delay trim, tail flush)
 //!   sinc_core.rs  adapter over `rubato` (the only file that uses its API)
+//!   offline.rs    whole-file decode to stereo at a given rate (stem separation)
 //!   engine.rs     engine thread (owns decoder + cpal stream), `Player` handle, commands
 //!
 //! Data flow: engine thread: decode -> convert -> phase vocoder (speed) -> effects -> rtrb ring buffer -> cpal callback.
@@ -32,12 +33,14 @@
 mod convert;
 mod decode;
 mod engine;
+mod offline;
 mod position;
 mod sinc_core;
 mod spectrum;
 mod transport;
 
 pub use engine::{Command, Player, Status};
+pub use offline::decode_stereo;
 pub use radiant_dsp::presets::{EqPreset, EQ_PRESETS};
 pub use radiant_dsp::stretch::{slider_to_speed, MAX_SPEED, MIN_SPEED};
 pub use radiant_dsp::spectrum::{SpectrumFrame, BANDS as SPECTRUM_BANDS};

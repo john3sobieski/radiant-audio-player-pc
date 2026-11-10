@@ -778,3 +778,13 @@ msgstr "Model je připraven"
 
 msgid "Could not delete the model: {}"
 msgstr "Model se nepodařilo smazat: {}"
+
+# Stem separation (stage 11)
+msgid "Creating stems… {}%"
+msgstr "Vytváření stop… {}%"
+
+msgid "Stems saved to {}"
+msgstr "Stopy uloženy do {}"
+
+msgid "Stem separation failed: {}"
+msgstr "Rozdělení na stopy se nezdařilo: {}"

@@ -5,10 +5,14 @@ edition.workspace = true
 license-file.workspace = true
 
 [dependencies]
+# Whole-file decode + resample to 44.1 kHz stereo (the same decoder as playback).
+radiant-audio = { path = "../radiant-audio" }
 # Streaming SHA-256 for the model file (the whole file never sits in memory).
 sha2 = "0.10"
 # Blocking HTTPS client for the one-time model download (rustls, no system TLS needed).
 ureq = { version = "2", default-features = false, features = ["tls"] }
-
-# TODO (pipeline stage): `ort` with the `load-dynamic` feature (onnxruntime.dll next to the exe, so the base exe
-# stays small and the static CRT is not an issue), `realfft` for the STFT / iSTFT.
+# STFT / iSTFT around the network (4096-point real FFT).
+realfft = "3"
+# ONNX Runtime. `load-dynamic`: onnxruntime.dll is loaded at run time from next to the exe (nothing is linked in, the
+# exe stays small). Pinned: the API changes between release candidates. This version needs ONNX Runtime 1.22.x.
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }
