@@ -1,0 +1,73 @@
+version: 2
+
+updates:
+  # Cargo workspace (radiant-core, -audio, -dsp, -stems, -cloud, -ui).
+  # Dependabot читает корневые Cargo.toml / Cargo.lock и обновляет весь workspace.
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Slint и slint-build обязаны быть одной версии
+      slint:
+        patterns:
+          - "slint*"
+          - "i-slint-*"
+      # Звуковой стек: декодеры, вывод, ресемплер, кольцевой буфер
+      audio:
+        patterns:
+          - "symphonia*"
+          - "cpal"
+          - "rubato"
+          - "rtrb"
+      # Сеть и проверка файлов (скачивание модели, Dropbox)
+      net-and-crypto:
+        patterns:
+          - "ureq*"
+          - "rustls*"
+          - "sha2"
+      # Всё остальное, только патчи и минорные
+      other-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # ONNX Runtime: crate `ort` закреплён на =2.0.0-rc.10 вместе с onnxruntime.dll 1.22.x.
+      # API меняется между rc-версиями, обновлять только вручную (весь код в ort_backend.rs).
+      - dependency-name: "ort"
+      # rubato 5.x: весь код ресемплера в sinc_core.rs, мажор обновлять вручную
+      - dependency-name: "rubato"
+        update-types: ["version-update:semver-major"]
+      # symphonia 0.x: смена минорной версии (0.5 -> 0.6) ломает API декодеров и тегов
+      - dependency-name: "symphonia"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "symphonia-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # cpal 0.x: то же самое для звукового вывода
+      - dependency-name: "cpal"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # ureq 2 -> 3 меняет API целиком (скачивание модели в store.rs)
+      - dependency-name: "ureq"
+        update-types: ["version-update:semver-major"]
+
+  # Версии GitHub Actions в workflow-файлах (сборка Windows, релизы)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
