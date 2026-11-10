@@ -190,6 +190,48 @@ fn run_stem_job<F>(
     });
 }
 
+/// "Create stems": runs the separation on a worker thread; progress and the result go to the status line.
+fn start_stems_job(weak: &slint::Weak<MainWindow>, busy: &Arc<AtomicBool>, input: PathBuf, base: String, out_dir: PathBuf) {
+    use radiant_stems::{Stem, StemSet};
+    if busy.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(ui) = weak.upgrade() {
+        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&0]).into());
+    }
+    let (weak, busy) = (weak.clone(), busy.clone());
+    std::thread::spawn(move || {
+        let cancel = AtomicBool::new(false);
+        let sets: Vec<StemSet> = Stem::ALL.iter().map(|s| StemSet::EMPTY.with(*s)).collect();
+        let mut last_pct = -1_i32;
+        let result = radiant_stems::create_stems(
+            &input,
+            &stem_store().model_path(),
+            &out_dir,
+            &base,
+            &sets,
+            &cancel,
+            &mut |p| {
+                let pct = (p * 100.0) as i32;
+                if pct != last_pct {
+                    last_pct = pct;
+                    let _ = weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_status(i18n::tr_fmt("Creating stems… {}%", &[&pct]).into());
+                    });
+                }
+            },
+        );
+        busy.store(false, Ordering::SeqCst);
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            let message = match &result {
+                Ok(_) => i18n::tr_fmt("Stems saved to {}", &[&out_dir.display()]),
+                Err(e) => i18n::tr_fmt("Stem separation failed: {}", &[e]),
+            };
+            ui.set_status(message.into());
+        });
+    });
+}
+
 /// Own accent color: the HSV sliders in the settings and the `Theme` colors.
 fn apply_custom_color(ui: &MainWindow, hsv: [f32; 3]) {
     let rgb = radiant_core::theme::hsv_to_rgb(hsv[0], hsv[1], hsv[2]);
