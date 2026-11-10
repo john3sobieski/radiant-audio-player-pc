@@ -2059,6 +2059,7 @@ fn main() -> Result<(), slint::PlatformError> {
     };
     apply_language(&settings.borrow().language);
     ui.set_language(i18n::setting_to_index(&settings.borrow().language));
+    ui.set_stem_gpu(settings.borrow().stems_gpu);
     let pl: PlRef = {
         let store = match playlists::load() {
             Ok(store) => store,
@@ -3445,7 +3446,6 @@ fn main() -> Result<(), slint::PlatformError> {
     });
     wire_app_lock(&ui, &lock);
     sync_lock_flags(&ui, &lock.store.borrow());
-    ui.set_stem_gpu(settings.borrow().stems_gpu);
     update_stems_file_info(&ui);
     show_stem_state(&ui);
     if lock.store.borrow().is_enabled() {
