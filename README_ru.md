@@ -63,6 +63,8 @@ Windows может показать сообщение *«Windows защитил
 
 Для стемов нужны два дополнительных файла, они не входят в сборку, чтобы программа оставалась маленькой. Без них остальное приложение работает.
 
+*(по умолчанию, они уже включены в zip релиза.)*
+
 1. **`onnxruntime.dll`**
    - Скачайте <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (файл `.nupkg`).
    - `.nupkg` это zip: переименуйте в `.zip` (или откройте в 7-Zip) и возьмите `runtimes/win-x64/native/onnxruntime.dll`.

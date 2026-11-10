@@ -51,7 +51,7 @@ Most players want you to sign in, stream, or look at ads. Radiant is the opposit
 Requirements: **Windows 10 or 11**, 64-bit.
 
 1. Open the **[latest release](../../releases/latest)** and download the Windows build.
-2. If it is a `.zip`, extract it to any folder (for example `C:\Apps\Radiant`).
+2. Extract `.zip` to any folder (for example `C:\Apps\Radiant`).
 3. Run `radiant.exe`. There is no installer and nothing to set up; the Visual C++ runtime is built in.
 4. Open **Settings → Library** and choose your music folder.
 
@@ -62,6 +62,8 @@ Settings, playlists and models are stored in `%APPDATA%\Radiant`. To remove Radi
 ### AI stem separation setup (optional)
 
 Stems need two extra files that are not bundled, to keep the program small. The rest of the app works without them.
+
+*(by default, they are already included in the release zip.)*
 
 1. **`onnxruntime.dll`**
    - Download <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (a `.nupkg` file).
