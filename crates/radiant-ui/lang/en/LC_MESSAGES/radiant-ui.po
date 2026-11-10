@@ -842,3 +842,75 @@ msgstr "Another separation is already running"
 
 msgid "Stems cannot be made from stems"
 msgstr "Stems cannot be made from stems"
+
+msgid "Download your music"
+msgstr "Download your music"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "Copy music from Dropbox to this computer."
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+
+msgid "Saves to: {}"
+msgstr "Saves to: {}"
+
+msgid "Connect"
+msgstr "Connect"
+
+msgid "Sync now"
+msgstr "Sync now"
+
+msgid "Disconnect"
+msgstr "Disconnect"
+
+msgid "Not connected"
+msgstr "Not connected"
+
+msgid "Connected"
+msgstr "Connected"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "Sign in to Dropbox in your browser…"
+
+msgid "Looking for files… {} found"
+msgstr "Looking for files… {} found"
+
+msgid "Downloading {} of {} · {}"
+msgstr "Downloading {} of {} · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "Dropbox is not set up in this build"
+
+msgid "Connected to Dropbox"
+msgstr "Connected to Dropbox"
+
+msgid "Disconnected from Dropbox"
+msgstr "Disconnected from Dropbox"
+
+msgid "Sign-in was cancelled"
+msgstr "Sign-in was cancelled"
+
+msgid "Sign-in took too long"
+msgstr "Sign-in took too long"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "Port {} is busy: close the program using it and try again"
+
+msgid "Could not open the browser"
+msgstr "Could not open the browser"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Dropbox access has expired: connect again"
+
+msgid "Dropbox error: {}"
+msgstr "Dropbox error: {}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox: {} downloaded, {} already here"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox: {} downloaded, {} already here, {} failed"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Dropbox sync cancelled: {} downloaded"

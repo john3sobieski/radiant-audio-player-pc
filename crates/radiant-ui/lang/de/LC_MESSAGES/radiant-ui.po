@@ -842,3 +842,75 @@ msgstr "Es läuft bereits eine andere Trennung"
 
 msgid "Stems cannot be made from stems"
 msgstr "Aus Stems können keine Stems erstellt werden"
+
+msgid "Download your music"
+msgstr "Musik herunterladen"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "Musik aus Dropbox auf diesen Computer kopieren."
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "Lädt die Musik aus deinem Dropbox-App-Ordner in den Ordner „Dropbox“ innerhalb deines Musikordners. Nur in eine Richtung: Nichts wird hochgeladen, geändert oder gelöscht, und vorhandene Dateien werden nie überschrieben."
+
+msgid "Saves to: {}"
+msgstr "Speicherort: {}"
+
+msgid "Connect"
+msgstr "Verbinden"
+
+msgid "Sync now"
+msgstr "Jetzt synchronisieren"
+
+msgid "Disconnect"
+msgstr "Trennen"
+
+msgid "Not connected"
+msgstr "Nicht verbunden"
+
+msgid "Connected"
+msgstr "Verbunden"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "Melde dich im Browser bei Dropbox an …"
+
+msgid "Looking for files… {} found"
+msgstr "Suche nach Dateien … {} gefunden"
+
+msgid "Downloading {} of {} · {}"
+msgstr "Lade {} von {} herunter · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "Dropbox ist in dieser Version nicht eingerichtet"
+
+msgid "Connected to Dropbox"
+msgstr "Mit Dropbox verbunden"
+
+msgid "Disconnected from Dropbox"
+msgstr "Von Dropbox getrennt"
+
+msgid "Sign-in was cancelled"
+msgstr "Anmeldung abgebrochen"
+
+msgid "Sign-in took too long"
+msgstr "Die Anmeldung hat zu lange gedauert"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "Port {} ist belegt: Schließe das Programm, das ihn nutzt, und versuche es erneut"
+
+msgid "Could not open the browser"
+msgstr "Der Browser konnte nicht geöffnet werden"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Der Dropbox-Zugriff ist abgelaufen: Verbinde dich erneut"
+
+msgid "Dropbox error: {}"
+msgstr "Dropbox-Fehler: {}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox: {} heruntergeladen, {} bereits vorhanden"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox: {} heruntergeladen, {} bereits vorhanden, {} fehlgeschlagen"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Dropbox-Synchronisierung abgebrochen: {} heruntergeladen"

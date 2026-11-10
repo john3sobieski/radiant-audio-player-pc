@@ -121,6 +121,180 @@ fn show_stem_state(ui: &MainWindow) {
     ui.set_stem_info(info.into());
 }
 
+// ---- Dropbox (stage 12): one-way download into `<music folder>/Dropbox`. The work lives in `radiant-cloud`; here only the
+// settings card is driven. `dbx-state`: 0 not connected, 1 waiting for the browser, 2 connected, 3 downloading,
+// 4 this build has no Dropbox app key.
+
+/// Where `dropbox.json` (the sign-in token) lives: next to `settings.json`.
+fn dbx_dir() -> PathBuf {
+    settings::settings_path().parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+/// The "Saves to" line of the card: `<music folder>/Dropbox` (empty without a music folder).
+fn set_dbx_folder_text(ui: &MainWindow) {
+    let folder = ui.get_music_folder().to_string();
+    let text = if folder.is_empty() {
+        String::new()
+    } else {
+        PathBuf::from(folder).join(radiant_cloud::FOLDER_NAME).display().to_string()
+    };
+    ui.set_dbx_folder(text.into());
+}
+
+/// Shows what is stored (a token or not) in the settings card.
+fn show_dbx_state(ui: &MainWindow) {
+    let (state, info) = if !radiant_cloud::is_configured() {
+        (4, i18n::tr("Dropbox is not set up in this build"))
+    } else if radiant_cloud::load_token(&dbx_dir()).is_some() {
+        (2, i18n::tr("Connected"))
+    } else {
+        (0, i18n::tr("Not connected"))
+    };
+    ui.set_dbx_state(state);
+    ui.set_dbx_progress(0.0);
+    ui.set_dbx_info(info.into());
+    set_dbx_folder_text(ui);
+}
+
+fn dbx_error_text(e: &radiant_cloud::CloudError) -> String {
+    use radiant_cloud::CloudError as E;
+    match e {
+        E::NotConfigured => i18n::tr("Dropbox is not set up in this build"),
+        E::PortBusy => i18n::tr_fmt("Port {} is busy: close the program using it and try again", &[&radiant_cloud::REDIRECT_PORT]),
+        E::Browser => i18n::tr("Could not open the browser"),
+        E::Denied | E::Cancelled => i18n::tr("Sign-in was cancelled"),
+        E::Timeout => i18n::tr("Sign-in took too long"),
+        E::AuthExpired | E::NotSignedIn => i18n::tr("Dropbox access has expired: connect again"),
+        E::NoFolder => i18n::tr("Choose a music folder first"),
+        E::Network(_) | E::Api(_) | E::Io(_) => i18n::tr_fmt("Dropbox error: {}", &[e]),
+    }
+}
+
+/// Connect / sync / disconnect on worker threads (one job at a time); the results come back to the window.
+fn wire_dropbox(ui: &MainWindow, settings: &Rc<RefCell<AppSettings>>) {
+    let busy = Arc::new(AtomicBool::new(false));
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let (weak, busy, cancel) = (ui.as_weak(), busy.clone(), cancel.clone());
+        ui.on_dbx_connect(move || {
+            if !radiant_cloud::is_configured() || busy.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            cancel.store(false, Ordering::SeqCst);
+            if let Some(ui) = weak.upgrade() {
+                ui.set_dbx_state(1);
+                ui.set_dbx_progress(0.0);
+                ui.set_dbx_info(i18n::tr("Sign in to Dropbox in your browser…").into());
+            }
+            let (weak, busy, cancel) = (weak.clone(), busy.clone(), cancel.clone());
+            std::thread::spawn(move || {
+                let result = radiant_cloud::login(&cancel).and_then(|token| radiant_cloud::save_token(&dbx_dir(), &token));
+                busy.store(false, Ordering::SeqCst);
+                let _ = weak.upgrade_in_event_loop(move |ui| {
+                    show_dbx_state(&ui);
+                    let message = match &result {
+                        Ok(()) => i18n::tr("Connected to Dropbox"),
+                        Err(e) => dbx_error_text(e),
+                    };
+                    ui.set_status(message.into());
+                });
+            });
+        });
+    }
+    {
+        let (weak, settings, busy, cancel) = (ui.as_weak(), settings.clone(), busy.clone(), cancel.clone());
+        ui.on_dbx_sync(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(folder) = settings.borrow().music_folder.clone() else {
+                ui.set_status(i18n::tr("Choose a music folder first").into());
+                return;
+            };
+            let Some(token) = radiant_cloud::load_token(&dbx_dir()) else {
+                show_dbx_state(&ui);
+                return;
+            };
+            if busy.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            cancel.store(false, Ordering::SeqCst);
+            ui.set_dbx_state(3);
+            ui.set_dbx_progress(0.0);
+            ui.set_dbx_info(i18n::tr_fmt("Looking for files… {} found", &[&0]).into());
+            let dest = folder.join(radiant_cloud::FOLDER_NAME);
+            let (weak, busy, cancel) = (weak.clone(), busy.clone(), cancel.clone());
+            std::thread::spawn(move || {
+                use radiant_cloud::{CloudError, Progress};
+                let mut last: Option<std::time::Instant> = None;
+                let mut on_progress = |p: Progress| {
+                    let now = std::time::Instant::now();
+                    if last.map_or(false, |t| now.duration_since(t) < std::time::Duration::from_millis(120)) {
+                        return;
+                    }
+                    last = Some(now);
+                    let _ = weak.upgrade_in_event_loop(move |ui| {
+                        ui.set_dbx_state(3);
+                        match p {
+                            Progress::Listing { found } => {
+                                ui.set_dbx_info(i18n::tr_fmt("Looking for files… {} found", &[&found]).into());
+                            }
+                            Progress::Downloading { index, count, name, done_bytes, total_bytes } => {
+                                ui.set_dbx_progress(if total_bytes > 0 { done_bytes as f32 / total_bytes as f32 } else { 0.0 });
+                                ui.set_dbx_info(i18n::tr_fmt("Downloading {} of {} · {}", &[&index, &count, &name]).into());
+                            }
+                        }
+                    });
+                };
+                let result = radiant_cloud::sync(&token, &dest, &cancel, &mut on_progress);
+                if matches!(result, Err(CloudError::AuthExpired)) {
+                    let _ = radiant_cloud::clear_token(&dbx_dir());
+                }
+                busy.store(false, Ordering::SeqCst);
+                let _ = weak.upgrade_in_event_loop(move |ui| {
+                    show_dbx_state(&ui);
+                    let message = match &result {
+                        Ok(s) if s.cancelled => i18n::tr_fmt("Dropbox sync cancelled: {} downloaded", &[&s.downloaded]),
+                        Ok(s) if s.failed > 0 => {
+                            i18n::tr_fmt("Dropbox: {} downloaded, {} already here, {} failed", &[&s.downloaded, &s.present, &s.failed])
+                        }
+                        Ok(s) => i18n::tr_fmt("Dropbox: {} downloaded, {} already here", &[&s.downloaded, &s.present]),
+                        Err(e) => dbx_error_text(e),
+                    };
+                    ui.set_status(message.into());
+                    // New files: the library picks them up.
+                    if matches!(&result, Ok(s) if s.downloaded > 0) {
+                        ui.invoke_rescan_folder();
+                    }
+                });
+            });
+        });
+    }
+    {
+        let cancel = cancel.clone();
+        ui.on_dbx_cancel(move || cancel.store(true, Ordering::SeqCst));
+    }
+    {
+        let (weak, busy) = (ui.as_weak(), busy.clone());
+        ui.on_dbx_disconnect(move || {
+            if busy.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            let (weak, busy) = (weak.clone(), busy.clone());
+            std::thread::spawn(move || {
+                let result = radiant_cloud::disconnect(&dbx_dir());
+                busy.store(false, Ordering::SeqCst);
+                let _ = weak.upgrade_in_event_loop(move |ui| {
+                    show_dbx_state(&ui);
+                    let message = match &result {
+                        Ok(()) => i18n::tr("Disconnected from Dropbox"),
+                        Err(e) => dbx_error_text(e),
+                    };
+                    ui.set_status(message.into());
+                });
+            });
+        });
+    }
+}
+
 /// Runs a download / import on a worker thread; progress and the result come back to the window. Only one job at
 /// a time (`busy`); `cancel` stops it (a half-loaded download is kept and continued next time).
 /// `mismatch_text` is the message for a file that is not the expected model.
@@ -3095,7 +3269,7 @@ fn main() -> Result<(), slint::PlatformError> {
         // Open section of the settings page: remembered between launches.
         let (settings, weak) = (settings.clone(), ui_weak.clone());
         ui.on_settings_section_changed(move |i| {
-            settings.borrow_mut().settings_section = i.clamp(0, 5) as u8;
+            settings.borrow_mut().settings_section = i.clamp(0, 6) as u8;
             save_settings(&weak, &settings);
         });
     }
@@ -3211,6 +3385,7 @@ fn main() -> Result<(), slint::PlatformError> {
             apply_low_power_visuals(&weak, &timer, &player, on);
         });
     }
+    wire_dropbox(&ui, &settings);
     {
         // AI & stems -> Demucs model card: download / import / cancel / delete. Not in low-power mode (heavy work).
         let (cancel, busy) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
@@ -3499,7 +3674,10 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.on_choose_folder(move || {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         settings.borrow_mut().music_folder = Some(dir.clone());
-        if let Some(ui) = weak.upgrade() { ui.set_music_folder(dir.display().to_string().into()); }
+        if let Some(ui) = weak.upgrade() {
+            ui.set_music_folder(dir.display().to_string().into());
+            set_dbx_folder_text(&ui);
+        }
         save_settings(&weak, &settings);
         scan_folder(weak.clone(), library.clone(), displayed.clone(), query.clone(), sort.clone(), scan_gen.clone(), dir, true);
     });
@@ -3523,6 +3701,7 @@ fn main() -> Result<(), slint::PlatformError> {
     sync_lock_flags(&ui, &lock.store.borrow());
     update_stems_file_info(&ui);
     show_stem_state(&ui);
+    show_dbx_state(&ui);
     if lock.store.borrow().is_enabled() {
         ui.set_locked(true);
         update_lock_wait(&lock, &ui_weak, &ui);

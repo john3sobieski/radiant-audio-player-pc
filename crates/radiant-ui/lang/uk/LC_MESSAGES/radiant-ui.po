@@ -846,3 +846,75 @@ msgstr "Уже триває інше розділення"
 
 msgid "Stems cannot be made from stems"
 msgstr "Зі стемів не можна створити стеми"
+
+msgid "Download your music"
+msgstr "Завантажити музику"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "Копіювання музики з Dropbox на цей комп’ютер."
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "Завантажує музику з папки застосунку в Dropbox до папки Dropbox усередині вашої папки з музикою. Лише в один бік: нічого не вивантажується, не змінюється й не видаляється, а наявні файли ніколи не перезаписуються."
+
+msgid "Saves to: {}"
+msgstr "Зберігається в: {}"
+
+msgid "Connect"
+msgstr "Підключити"
+
+msgid "Sync now"
+msgstr "Синхронізувати"
+
+msgid "Disconnect"
+msgstr "Відключити"
+
+msgid "Not connected"
+msgstr "Не підключено"
+
+msgid "Connected"
+msgstr "Підключено"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "Увійдіть у Dropbox у браузері…"
+
+msgid "Looking for files… {} found"
+msgstr "Пошук файлів… знайдено: {}"
+
+msgid "Downloading {} of {} · {}"
+msgstr "Завантаження {} з {} · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "Dropbox не налаштовано в цій збірці"
+
+msgid "Connected to Dropbox"
+msgstr "Підключено до Dropbox"
+
+msgid "Disconnected from Dropbox"
+msgstr "Відключено від Dropbox"
+
+msgid "Sign-in was cancelled"
+msgstr "Вхід скасовано"
+
+msgid "Sign-in took too long"
+msgstr "Вхід тривав надто довго"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "Порт {} зайнятий: закрийте програму, яка його використовує, і повторіть"
+
+msgid "Could not open the browser"
+msgstr "Не вдалося відкрити браузер"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Доступ до Dropbox закінчився: підключіться знову"
+
+msgid "Dropbox error: {}"
+msgstr "Помилка Dropbox: {}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox: завантажено {}, вже було {}"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox: завантажено {}, вже було {}, не вдалося {}"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Синхронізацію Dropbox скасовано: завантажено {}"

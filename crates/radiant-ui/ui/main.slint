@@ -1942,6 +1942,17 @@ component SettingsPage inherits Rectangle {
     /// Stems on the graphics card (DirectML): Rust remembers it; the job falls back to the CPU when it cannot be used.
     in-out property <bool> stem-gpu: false;
     callback stem-gpu-changed(bool);
+    /// Dropbox card (set from Rust): 0 = not connected, 1 = waiting for the browser, 2 = connected, 3 = downloading,
+    /// 4 = this build has no Dropbox app key.
+    in property <int> dbx-state: 0;
+    in property <float> dbx-progress: 0;
+    in property <string> dbx-info;
+    /// The download folder (`<music folder>/Dropbox`; empty without a music folder).
+    in property <string> dbx-folder;
+    callback dbx-connect();
+    callback dbx-sync();
+    callback dbx-cancel();
+    callback dbx-disconnect();
     /// Own colors the user saved as presets (set from Rust).
     in property <[color]> saved-colors;
     /// The own color as hue / saturation / value (Rust keeps them; the sliders show them).
@@ -1953,8 +1964,8 @@ component SettingsPage inherits Rectangle {
     callback choose-folder();
 
     // To add a section: extend the four lists below (same order), nothing else.
-    private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library"), @tr("Power")];
-    private property <[string]> hints: [@tr("Themes and colors"), @tr("Interface language"), @tr("App lock"), @tr("Stem separation"), @tr("Music folder"), @tr("Low-power mode")];
+    private property <[string]> names: [@tr("Appearance"), @tr("Language"), @tr("Security"), @tr("AI & stems"), @tr("Library"), @tr("Power"), "Dropbox"];
+    private property <[string]> hints: [@tr("Themes and colors"), @tr("Interface language"), @tr("App lock"), @tr("Stem separation"), @tr("Music folder"), @tr("Low-power mode"), @tr("Download your music")];
     private property <[string]> leads: [
         @tr("How Radiant looks."),
         @tr("The language of the interface."),
@@ -1962,6 +1973,7 @@ component SettingsPage inherits Rectangle {
         @tr("Splitting tracks into vocals, drums, bass and the rest."),
         @tr("Where the music lives."),
         @tr("Save battery and CPU: a calmer interface and a lighter sound engine."),
+        @tr("Copy music from Dropbox to this computer."),
     ];
     // Power: what the low-power mode changes (one text, so the card can be as tall as its lines need).
     private property <string> pow-list: "• " + @tr("Animations are off: pages, menus and sliders switch instantly.")
@@ -2003,6 +2015,10 @@ component SettingsPage inherits Rectangle {
     private property <length> gpu-h: gpu-p.preferred-height + 102px;
     // Music folder card: title (42) + path (up to two lines, 40) + gap (10) + button (40) + bottom padding (16).
     private property <length> lib-h: 148px;
+    // Dropbox card: title (42) + text + "Saves to" line, status line, progress bar, buttons, bottom padding.
+    private property <string> dbx-t1: @tr("Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten.");
+    dbx-p := Text { x: 0px; y: 0px; width: max(10px, root.content-w - 32px); visible: false; text: root.dbx-t1; font-size: 13px; wrap: word-wrap; }
+    private property <length> dbx-h: dbx-p.preferred-height + 184px;
     private property <[[SettingsCardInfo]]> pages: [
         [
             // Appearance: the Theme and Color palette cards are drawn by hand below (they have controls).
@@ -2022,6 +2038,9 @@ component SettingsPage inherits Rectangle {
         [
             // Power: the switch card and the "What changes" card are drawn by hand below.
         ],
+        [
+            // Dropbox: the card is drawn by hand below (it has buttons).
+        ],
     ];
 
     // Rail geometry: the rows shrink a little in short windows.
@@ -2036,7 +2055,8 @@ component SettingsPage inherits Rectangle {
         : root.section == 2 ? root.sec-total + 12px
         : root.section == 3 ? root.stem-h + 12px + root.gpu-h + 12px
         : root.section == 4 ? root.lib-h + 12px
-        : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px : 0px;
+        : root.section == 5 ? 136px + root.pow-list-h + 56px + 12px
+        : root.section == 6 ? root.dbx-h + 12px : 0px;
     // Color palette card: 11 circles (10 presets + own color) wrap into rows; the HSV sliders open under "own".
     private property <int> pal-cols: Math.max(1, Math.floor((root.content-w - 32px + 10px) / 44px));
     private property <int> pal-rows: Math.ceil(11.0 / root.pal-cols);
@@ -2839,6 +2859,109 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.choose-folder(); }
             }
         }
+        // ---- Dropbox: connect / download / disconnect ----
+        if root.section == 6 : Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: root.dbx-h;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.surface-hover;
+
+            Text {
+                x: 16px;
+                y: 14px;
+                width: parent.width - 32px;
+                text: "Dropbox";
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px;
+                width: parent.width - 32px;
+                height: dbx-p.preferred-height;
+                text: root.dbx-t1;
+                color: Theme.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            Text {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 10px;
+                width: parent.width - 32px;
+                height: 18px;
+                text: root.dbx-folder == "" ? @tr("Choose a music folder first") : @tr("Saves to: {}", root.dbx-folder);
+                color: Theme.muted;
+                font-size: 12px;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 38px;
+                width: parent.width - 32px;
+                height: 18px;
+                text: root.dbx-info;
+                color: root.dbx-state == 2 ? Theme.accent : Theme.text;
+                font-size: 13px;
+                overflow: elide;
+            }
+            Rectangle {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 62px;
+                width: parent.width - 32px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.surface-hover;
+                visible: root.dbx-state == 3;
+
+                Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width * Math.max(0, Math.min(1, root.dbx-progress));
+                    height: parent.height;
+                    border-radius: 3px;
+                    background: Theme.accent;
+                }
+            }
+            AccentButton {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 82px;
+                width: 140px;
+                visible: root.dbx-state == 0 || root.dbx-state == 4;
+                enabled: root.dbx-state == 0;
+                text: @tr("Connect");
+                clicked => { root.dbx-connect(); }
+            }
+            AccentButton {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 82px;
+                width: 140px;
+                visible: root.dbx-state == 2;
+                text: @tr("Sync now");
+                clicked => { root.dbx-sync(); }
+            }
+            PillButton {
+                x: 16px + 140px + 10px;
+                y: 42px + dbx-p.preferred-height + 82px + 3px;
+                width: 140px;
+                visible: root.dbx-state == 2;
+                text: @tr("Disconnect");
+                clicked => { root.dbx-disconnect(); }
+            }
+            PillButton {
+                x: 16px;
+                y: 42px + dbx-p.preferred-height + 82px + 3px;
+                width: 120px;
+                visible: root.dbx-state == 1 || root.dbx-state == 3;
+                text: @tr("Cancel");
+                clicked => { root.dbx-cancel(); }
+            }
+        }
         for card[k] in root.pages[root.section] : Rectangle {
             x: 0px;
             y: root.extra-h + k * 104px;
@@ -3386,6 +3509,15 @@ export component MainWindow inherits Window {
     /// Stems on the graphics card (DirectML): Rust remembers it; the job falls back to the CPU when it cannot be used.
     in-out property <bool> stem-gpu: false;
     callback stem-gpu-changed(bool);
+    /// Dropbox card of Settings -> Dropbox (stage 12); see `SettingsPage` for the meaning.
+    in property <int> dbx-state: 0;
+    in property <float> dbx-progress: 0;
+    in property <string> dbx-info;
+    in property <string> dbx-folder;
+    callback dbx-connect();
+    callback dbx-sync();
+    callback dbx-cancel();
+    callback dbx-disconnect();
     /// Code dialog of Settings -> Security. Rust drives it: `sec-mode` 0 = turn on, 1 = change code, 2 = turn off;
     /// `sec-step` 0 = current code, 1 = new code, 2 = repeat it, 3 = save the recovery file.
     in-out property <bool> show-sec-popup: false;
@@ -6903,6 +7035,14 @@ export component MainWindow inherits Window {
         stem-delete() => { root.stem-delete(); }
         stem-gpu <=> root.stem-gpu;
         stem-gpu-changed(on) => { root.stem-gpu-changed(on); }
+        dbx-state: root.dbx-state;
+        dbx-progress: root.dbx-progress;
+        dbx-info: root.dbx-info;
+        dbx-folder: root.dbx-folder;
+        dbx-connect() => { root.dbx-connect(); }
+        dbx-sync() => { root.dbx-sync(); }
+        dbx-cancel() => { root.dbx-cancel(); }
+        dbx-disconnect() => { root.dbx-disconnect(); }
         music-folder: root.music-folder;
         choose-folder() => { root.choose-folder(); }
     }

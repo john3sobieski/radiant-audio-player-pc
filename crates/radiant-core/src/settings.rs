@@ -330,7 +330,7 @@ fn sanitize(settings: &mut AppSettings) {
     settings.album_sort = settings.album_sort.min(3);
     settings.volume = finite(settings.volume, 1.0).clamp(0.0, 1.0);
     settings.theme = settings.theme.min(3);
-    settings.settings_section = settings.settings_section.min(5); // 6 sections now; raise when one is added
+    settings.settings_section = settings.settings_section.min(6); // 7 sections now; raise when one is added
     for p in settings.palettes.iter_mut() {
         *p = (*p).min(10);
     }
@@ -522,7 +522,7 @@ mod tests {
         assert!(parse(r#"{"low_power": true}"#).unwrap().low_power);
         // The power section is the sixth one of the settings page.
         assert_eq!(parse(r#"{"settings_section": 5}"#).unwrap().settings_section, 5);
-        assert_eq!(parse(r#"{"settings_section": 9}"#).unwrap().settings_section, 5);
+        assert_eq!(parse(r#"{"settings_section": 9}"#).unwrap().settings_section, 6);
     }
 
     #[test]

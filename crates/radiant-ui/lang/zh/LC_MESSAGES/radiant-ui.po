@@ -838,3 +838,75 @@ msgstr "已有另一个分离任务正在运行"
 
 msgid "Stems cannot be made from stems"
 msgstr "不能对分轨再次创建分轨"
+
+msgid "Download your music"
+msgstr "下载你的音乐"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "将音乐从 Dropbox 复制到这台电脑。"
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "把 Dropbox 应用文件夹中的音乐下载到音乐文件夹内的 Dropbox 文件夹。仅单向：不会上传、修改或删除任何内容，已有的文件也不会被覆盖。"
+
+msgid "Saves to: {}"
+msgstr "保存到：{}"
+
+msgid "Connect"
+msgstr "连接"
+
+msgid "Sync now"
+msgstr "立即同步"
+
+msgid "Disconnect"
+msgstr "断开连接"
+
+msgid "Not connected"
+msgstr "未连接"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "请在浏览器中登录 Dropbox…"
+
+msgid "Looking for files… {} found"
+msgstr "正在查找文件…已找到 {} 个"
+
+msgid "Downloading {} of {} · {}"
+msgstr "正在下载 {} / {} · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "此版本未配置 Dropbox"
+
+msgid "Connected to Dropbox"
+msgstr "已连接到 Dropbox"
+
+msgid "Disconnected from Dropbox"
+msgstr "已断开与 Dropbox 的连接"
+
+msgid "Sign-in was cancelled"
+msgstr "登录已取消"
+
+msgid "Sign-in took too long"
+msgstr "登录超时"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "端口 {} 被占用：请关闭占用它的程序后重试"
+
+msgid "Could not open the browser"
+msgstr "无法打开浏览器"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Dropbox 授权已过期：请重新连接"
+
+msgid "Dropbox error: {}"
+msgstr "Dropbox 错误：{}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox：已下载 {} 个，已有 {} 个"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox：已下载 {} 个，已有 {} 个，失败 {} 个"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Dropbox 同步已取消：已下载 {} 个"

@@ -838,3 +838,75 @@ msgstr "別の分離がすでに実行中です"
 
 msgid "Stems cannot be made from stems"
 msgstr "ステムからステムは作成できません"
+
+msgid "Download your music"
+msgstr "音楽をダウンロード"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "Dropbox の音楽をこのパソコンにコピーします。"
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "Dropbox のアプリフォルダにある音楽を、音楽フォルダ内の Dropbox フォルダにダウンロードします。一方向のみで、アップロード・変更・削除は行わず、既にあるファイルが上書きされることもありません。"
+
+msgid "Saves to: {}"
+msgstr "保存先: {}"
+
+msgid "Connect"
+msgstr "接続"
+
+msgid "Sync now"
+msgstr "今すぐ同期"
+
+msgid "Disconnect"
+msgstr "接続解除"
+
+msgid "Not connected"
+msgstr "未接続"
+
+msgid "Connected"
+msgstr "接続済み"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "ブラウザで Dropbox にサインインしてください…"
+
+msgid "Looking for files… {} found"
+msgstr "ファイルを検索中… {} 件見つかりました"
+
+msgid "Downloading {} of {} · {}"
+msgstr "ダウンロード中 {} / {} · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "このビルドでは Dropbox が設定されていません"
+
+msgid "Connected to Dropbox"
+msgstr "Dropbox に接続しました"
+
+msgid "Disconnected from Dropbox"
+msgstr "Dropbox との接続を解除しました"
+
+msgid "Sign-in was cancelled"
+msgstr "サインインがキャンセルされました"
+
+msgid "Sign-in took too long"
+msgstr "サインインに時間がかかりすぎました"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "ポート {} は使用中です。使用しているプログラムを閉じてもう一度お試しください"
+
+msgid "Could not open the browser"
+msgstr "ブラウザを開けませんでした"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Dropbox のアクセスが期限切れです。もう一度接続してください"
+
+msgid "Dropbox error: {}"
+msgstr "Dropbox エラー: {}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox: {} 件ダウンロード、{} 件は既にあります"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox: {} 件ダウンロード、{} 件は既にあり、{} 件は失敗しました"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Dropbox の同期をキャンセルしました: {} 件ダウンロード済み"

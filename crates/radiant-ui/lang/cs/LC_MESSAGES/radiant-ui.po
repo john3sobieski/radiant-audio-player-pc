@@ -846,3 +846,75 @@ msgstr "Již probíhá jiné rozdělení"
 
 msgid "Stems cannot be made from stems"
 msgstr "Ze stop nelze vytvořit další stopy"
+
+msgid "Download your music"
+msgstr "Stáhnout hudbu"
+
+msgid "Copy music from Dropbox to this computer."
+msgstr "Zkopírujte hudbu z Dropboxu do tohoto počítače."
+
+msgid "Downloads the music from your Dropbox app folder into the Dropbox folder inside your music folder. One way only: nothing is uploaded, changed or deleted, and files you already have are never overwritten."
+msgstr "Stáhne hudbu ze složky aplikace v Dropboxu do složky Dropbox uvnitř vaší hudební složky. Pouze jedním směrem: nic se nenahrává, nemění ani nemaže a existující soubory se nikdy nepřepíšou."
+
+msgid "Saves to: {}"
+msgstr "Ukládá do: {}"
+
+msgid "Connect"
+msgstr "Připojit"
+
+msgid "Sync now"
+msgstr "Synchronizovat"
+
+msgid "Disconnect"
+msgstr "Odpojit"
+
+msgid "Not connected"
+msgstr "Nepřipojeno"
+
+msgid "Connected"
+msgstr "Připojeno"
+
+msgid "Sign in to Dropbox in your browser…"
+msgstr "Přihlaste se k Dropboxu v prohlížeči…"
+
+msgid "Looking for files… {} found"
+msgstr "Hledání souborů… nalezeno: {}"
+
+msgid "Downloading {} of {} · {}"
+msgstr "Stahování {} z {} · {}"
+
+msgid "Dropbox is not set up in this build"
+msgstr "Dropbox není v této verzi nastaven"
+
+msgid "Connected to Dropbox"
+msgstr "Připojeno k Dropboxu"
+
+msgid "Disconnected from Dropbox"
+msgstr "Odpojeno od Dropboxu"
+
+msgid "Sign-in was cancelled"
+msgstr "Přihlášení bylo zrušeno"
+
+msgid "Sign-in took too long"
+msgstr "Přihlášení trvalo příliš dlouho"
+
+msgid "Port {} is busy: close the program using it and try again"
+msgstr "Port {} je obsazený: zavřete program, který ho používá, a zkuste to znovu"
+
+msgid "Could not open the browser"
+msgstr "Prohlížeč se nepodařilo otevřít"
+
+msgid "Dropbox access has expired: connect again"
+msgstr "Přístup k Dropboxu vypršel: připojte se znovu"
+
+msgid "Dropbox error: {}"
+msgstr "Chyba Dropboxu: {}"
+
+msgid "Dropbox: {} downloaded, {} already here"
+msgstr "Dropbox: staženo {}, již existuje {}"
+
+msgid "Dropbox: {} downloaded, {} already here, {} failed"
+msgstr "Dropbox: staženo {}, již existuje {}, selhalo {}"
+
+msgid "Dropbox sync cancelled: {} downloaded"
+msgstr "Synchronizace Dropboxu zrušena: staženo {}"
