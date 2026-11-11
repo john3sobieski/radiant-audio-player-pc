@@ -19,7 +19,7 @@ radiant-cloud = { path = "../radiant-cloud" }
 # Slint with default features for now.
 # TODO: test the software renderer / lightest backend and pick by measuring RAM and CPU (README 2).
 # TODO: check the Slint license option (royalty-free needs attribution) and add the notice.
-slint = "1"
+slint = { version = "1", features = ["raw-window-handle-06"] }
 # Native folder dialog.
 rfd = "0.18"
 # Decodes cover art (embedded or cover.jpg/png) into small thumbnails for the track list.
@@ -29,3 +29,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 slint-build = "1"
 # Puts assets/icon.ico into radiant.exe (Windows only, see build.rs).
 winresource = "0.1"
+
+# Stage 13: Windows media controls (SMTC) and the window handle they need.
+[target.'cfg(windows)'.dependencies]
+souvlaki = "0.8"
+raw-window-handle = "0.6"

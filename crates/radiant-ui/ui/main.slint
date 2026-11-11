@@ -694,11 +694,16 @@ component StemChip inherits Rectangle {
 component PillButton inherits Rectangle {
     in property <string> text;
     in property <bool> active: false;
+    /// For buttons on a card (Settings): the card is `Theme.surface` too, so a plain pill would be invisible.
+    in property <bool> raised: false;
     callback clicked();
 
     height: 34px;
     border-radius: 17px;
+    border-width: root.raised ? 1px : 0px;
+    border-color: Theme.muted.with-alpha(0.35);
     background: root.active ? Theme.accent.with-alpha(0.2)
+        : root.raised ? (ta.has-hover ? Theme.surface-hover.mix(Theme.text, 0.14) : Theme.surface-hover.mix(Theme.text, 0.06))
         : ta.has-hover ? Theme.surface-hover : Theme.surface;
 
     // Invisible copy of the label: it gives the button its natural width inside layouts.
@@ -866,6 +871,8 @@ component HeaderItem inherits Rectangle {
 component SearchField inherits Rectangle {
     in-out property <string> value;
     callback edited(string);
+    /// Enter was pressed: the window takes the keyboard back (hotkeys work again).
+    callback leave();
     height: 40px;
     border-radius: 10px;
     border-width: 1px;
@@ -898,6 +905,7 @@ component SearchField inherits Rectangle {
             vertical-alignment: center;
             horizontal-stretch: 1;
             edited => { root.value = self.text; root.edited(self.text); }
+            accepted => { root.leave(); }
         }
     }
 }
@@ -2328,6 +2336,7 @@ component SettingsPage inherits Rectangle {
                 width: parent.width;
                 height: root.custom-h;
                 PillButton {
+                    raised: true;
                     x: 16px;
                     y: 100px;
                     width: 112px;
@@ -2531,6 +2540,7 @@ component SettingsPage inherits Rectangle {
                 }
             }
             PillButton {
+                raised: true;
                 x: 16px + 120px + 10px;
                 y: 42px + sec-p1.preferred-height + 12px - 1px;
                 width: 110px;
@@ -2752,6 +2762,7 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.stem-download(); }
             }
             PillButton {
+                raised: true;
                 x: 16px + 130px + 10px;
                 y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
                 width: 160px;
@@ -2760,6 +2771,7 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.stem-import(); }
             }
             PillButton {
+                raised: true;
                 x: 16px;
                 y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
                 width: 120px;
@@ -2768,6 +2780,7 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.stem-cancel(); }
             }
             PillButton {
+                raised: true;
                 x: 16px;
                 y: 42px + stem-p.preferred-height + 12px + 44px + 3px;
                 width: 120px;
@@ -2946,6 +2959,7 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.dbx-sync(); }
             }
             PillButton {
+                raised: true;
                 x: 16px + 140px + 10px;
                 y: 42px + dbx-p.preferred-height + 82px + 3px;
                 width: 140px;
@@ -2954,6 +2968,7 @@ component SettingsPage inherits Rectangle {
                 clicked => { root.dbx-disconnect(); }
             }
             PillButton {
+                raised: true;
                 x: 16px;
                 y: 42px + dbx-p.preferred-height + 82px + 3px;
                 width: 120px;
@@ -3028,6 +3043,68 @@ export component MainWindow inherits Window {
     min-height: 360px;
     background: Theme.bg;
     default-font-size: 14px;
+    forward-focus: main-fs;
+
+    // ---- Hotkeys (stage 13). A window-wide focus scope sits UNDER everything: a click on empty space gives it the
+    // keyboard back, a focused text field keeps its keys (Space types a space there; Enter in the search field
+    // leaves it). Off while the lock screen is shown. Global media keys come from Windows (`src/media.rs`). ----
+    main-fs := FocusScope {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        key-pressed(e) => {
+            if (root.locked || e.modifiers.alt || e.modifiers.meta) { return reject; }
+            let k = e.text.to-lowercase();
+            if (e.text == " " && !e.modifiers.control) {
+                if (!e.repeat) { root.toggle-play(); }
+                return accept;
+            }
+            if (e.text == Key.LeftArrow) {
+                if (e.modifiers.control) { if (!e.repeat) { root.previous-track(); } } else { root.seek-by(-5.0); }
+                return accept;
+            }
+            if (e.text == Key.RightArrow) {
+                if (e.modifiers.control) { if (!e.repeat) { root.next-track(); } } else { root.seek-by(5.0); }
+                return accept;
+            }
+            if (e.modifiers.control) { return reject; }
+            if (e.text == Key.UpArrow) { root.change-volume(0.05); return accept; }
+            if (e.text == Key.DownArrow) { root.change-volume(-0.05); return accept; }
+            if (e.repeat) { return reject; }
+            // Latin and Russian layouts: M/Ь mute, N/Т next, P/З previous, S/Ы shuffle, R/К repeat.
+            if (k == "m" || k == "ь") { root.toggle-mute(); return accept; }
+            if (k == "n" || k == "т") { root.next-track(); return accept; }
+            if (k == "p" || k == "з") { root.previous-track(); return accept; }
+            if (k == "s" || k == "ы") { root.shuffle-changed(!root.shuffle); return accept; }
+            if (k == "r" || k == "к") { root.repeat-changed(root.repeat-mode >= 2 ? 0 : root.repeat-mode + 1); return accept; }
+            return reject;
+        }
+    }
+    function seek-by(secs: float) {
+        if (root.duration-secs > 0) {
+            root.seek(Math.max(0, Math.min(1, root.progress + secs / root.duration-secs)));
+        }
+    }
+    function change-volume(delta: float) {
+        root.volume = Math.max(0, Math.min(1, root.volume + delta));
+        root.volume-changed(root.volume);
+    }
+    function toggle-mute() {
+        if (root.volume > 0.001) {
+            root.volume-before-mute = root.volume;
+            root.volume = 0.0;
+        } else {
+            root.volume = root.volume-before-mute;
+        }
+        root.volume-changed(root.volume);
+    }
+    // A closed dialog or the lock screen takes its text field (and the focus) with it: give the keyboard back.
+    changed locked => { if (!root.locked) { main-fs.focus(); } }
+    changed show-pl-popup => { if (!root.show-pl-popup) { main-fs.focus(); } }
+    changed show-q-popup => { if (!root.show-q-popup) { main-fs.focus(); } }
+    changed show-sec-popup => { if (!root.show-sec-popup) { main-fs.focus(); } }
+    changed show-stems-popup => { if (!root.show-stems-popup) { main-fs.focus(); } }
 
     in property <[TrackRow]> tracks;
 
@@ -3715,6 +3792,7 @@ export component MainWindow inherits Window {
                     SearchField {
                         value: root.search-text;
                         edited(text) => { root.search-text = text; root.search-changed(text); }
+                        leave => { main-fs.focus(); }
                     }
                 }
                 Text {
@@ -5346,15 +5424,7 @@ export component MainWindow inherits Window {
                         icon-size: 16px;
                         icon-color: root.volume <= 0.001 ? Theme.muted : Theme.text;
                         commands: "M 1 7 H 5 L 11 2 V 18 L 5 13 H 1 Z M 13 6 Q 16.5 10 13 14 L 14.5 15.5 Q 19.5 10 14.5 4.5 Z";
-                        clicked => {
-                            if (root.volume > 0.001) {
-                                root.volume-before-mute = root.volume;
-                                root.volume = 0.0;
-                            } else {
-                                root.volume = root.volume-before-mute;
-                            }
-                            root.volume-changed(root.volume);
-                        }
+                        clicked => { root.toggle-mute(); }
                     }
                     VolumeBar {
                         x: 36px;

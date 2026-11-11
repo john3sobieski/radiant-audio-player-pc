@@ -17,6 +17,7 @@ use radiant_core::applock::{self, CodeError, CodeKind, LockStore, RecoverResult,
 use radiant_core::settings::{self, AppSettings, EqMode, RepeatModeSetting};
 mod eq_curve;
 mod i18n;
+mod media;
 mod rays;
 
 use radiant_core::models::{AudioInfo, Playlist, PlaylistFolder, SortKey, SortState, Track, FAVORITES_ID, STEMS_FOLDER_ID};
@@ -2246,6 +2247,10 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(track) = &changed_track {
                 show_now_playing(&ui, track);
             }
+            if let Some(path) = &changed_path {
+                media::set_track(changed_track.as_ref(), Some(path));
+            }
+            media::set_state(status.state, status.position_ms);
             // The equalizer follows the track (per-track mode); handled on the UI thread by Rust.
             if let Some(path) = &changed_path {
                 let path_text: String = path.to_string_lossy().into_owned();
@@ -3710,6 +3715,9 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // Spectrum rays: live (a timer, see `start_rays_timer`) or, in low-power mode, one still picture and no timer.
     apply_low_power_visuals(&ui_weak, &rays_timer, &player, low_power_start);
+
+    // Windows media controls (media keys, volume flyout): created once the window has a handle.
+    media::start(&ui);
 
     ui.run()
 }
