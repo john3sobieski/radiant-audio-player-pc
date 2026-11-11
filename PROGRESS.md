@@ -143,7 +143,7 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 - ⬜ Добавить подробные скриншоты из готового приложения в каждый `README.md` каждого перевода (ещё не сделаны)
 
 ### Этап 14. Выпуск
-- ⬜ Portable .zip и установщик (EXE)
+- ⬜ Portable .zip с нужными файлами и установщик (EXE) в нём; в установщике выбор папки для приложения, затем выбор папки с музыкой, выбор языка приложения по умолчанию
 - ⬜ Лицензия Slint: вариант «royalty-free» с указанием авторства, добавить уведомление
 - ⬜ Раздел «Сторонние компоненты» (symphonia, cpal, rubato, rtrb, ort, onnxruntime.dll, ureq, sha2, Slint; модель Demucs: MIT, Meta AI) и `onnxruntime.dll` рядом с exe в portable-zip
 - 🟡 Пользовательский README написан (README.md на английском + README_ru.md; осталось перевести на остальные языки); сохранить `LICENSE.md` (PolyForm Noncommercial 1.0.0, Required Notice с ником), `FUNDING.yml`
