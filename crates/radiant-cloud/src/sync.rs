@@ -113,7 +113,6 @@ pub fn sync(
     let total_bytes: u64 = todo.iter().map(|(f, _)| f.size).sum();
     let count = todo.len();
     let (mut done_bytes, mut in_a_row) = (0u64, 0usize);
-    let mut last_error = CloudError::Api("unknown".into());
 
     for (i, (file, target)) in todo.into_iter().enumerate() {
         if cancel.load(Ordering::SeqCst) {
@@ -169,9 +168,8 @@ pub fn sync(
                 summary.failed += 1;
                 done_bytes += file.size;
                 in_a_row += 1;
-                last_error = e;
                 if in_a_row >= MAX_FAILURES_IN_A_ROW {
-                    return Err(last_error);
+                    return Err(e);
                 }
             }
         }
