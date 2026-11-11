@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Radiant.png" width="800" alt="Radiant">
+  <img src="/git_images/Radiant.png" width="800" alt="Radiant">
 </p>
 
 <h1 align="center">Radiant for PC</h1>
