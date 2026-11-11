@@ -3101,8 +3101,6 @@ export component MainWindow inherits Window {
     }
     // A closed dialog or the lock screen takes its text field (and the focus) with it: give the keyboard back.
     changed locked => { if (!root.locked) { main-fs.focus(); } }
-    changed show-pl-popup => { if (!root.show-pl-popup) { main-fs.focus(); } }
-    changed show-q-popup => { if (!root.show-q-popup) { main-fs.focus(); } }
     changed show-sec-popup => { if (!root.show-sec-popup) { main-fs.focus(); } }
     changed show-stems-popup => { if (!root.show-stems-popup) { main-fs.focus(); } }
 
@@ -3760,10 +3758,10 @@ export component MainWindow inherits Window {
         if (root.pl-has-track && root.pl-view == 1) { root.pl-view = 0; } else { root.show-pl-popup = false; }
     }
     changed show-pl-popup => {
-        if (self.show-pl-popup) { pl-fs.focus(); } else { root.clear-confirm = false; }
+        if (self.show-pl-popup) { pl-fs.focus(); } else { root.clear-confirm = false; main-fs.focus(); }
     }
     changed show-q-popup => {
-        if (self.show-q-popup) { q-fs.focus(); }
+        if (self.show-q-popup) { q-fs.focus(); } else { main-fs.focus(); }
     }
 
     VerticalLayout {
