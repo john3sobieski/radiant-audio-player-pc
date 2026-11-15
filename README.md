@@ -11,8 +11,20 @@
 
 <p align="center">
   <a href="../../releases/latest"><b>Download the latest release</b></a> ·
+  <a href="https://github.com/john3sobieski/radiant-audio-player">Android version</a>
+</p>
+
+<p align="center">
+  <b>English</b> ·
+  <a href="README_de.md">Deutsch</a> ·
   <a href="README_ru.md">Русский</a> ·
-  <a href="README.md">Android version</a>
+  <a href="README_uk.md">Українська</a> ·
+  <a href="README_zh.md">中文</a> ·
+  <a href="README_ja.md">日本語</a> ·
+  <a href="README_fr.md">Français</a> ·
+  <a href="README_cs.md">Čeština</a> ·
+  <a href="README_es.md">Español</a> ·
+  <a href="README_pl.md">Polski</a>
 </p>
 
 <p align="center">
@@ -79,7 +91,7 @@ Then right-click a track → **Create stems**, or use the **Stems** tab in the p
 
 ## Mobile version
 
-Radiant is also available for Android, with local music, offline playback, an equalizer, AI stem separation and app lock: **[Radiant for Android](README.md)**.
+Radiant is also available for Android, with local music, offline playback, an equalizer, AI stem separation and app lock: **[Radiant for Android](https://github.com/john3sobieski/radiant-audio-player)**.
 
 ## What's next
 
