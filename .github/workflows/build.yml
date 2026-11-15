@@ -1,4 +1,4 @@
-# Windows CI: runs tests, builds the release exe, uploads it as an artifact.
+# Windows CI: runs tests, builds the release exe and the installer, uploads both as artifacts.
 # TODO: add a release job (zip + GitHub Release) when the app is usable.
 # TODO: separate legacy workflow for Windows 7/8.1 only if that stretch goal is pursued.
 name: build
@@ -24,7 +24,66 @@ jobs:
         run: cargo test --workspace --target x86_64-pc-windows-msvc
       - name: Build release
         run: cargo build --release -p radiant-ui --target x86_64-pc-windows-msvc
+
+      # ---- Installer (crates/radiant-setup, PROGRESS.md stage 14) ----
+      # Builds the setup program and the `pack` tool; `pack` glues radiant.exe + the two DLLs + LICENSE.md to the end of
+      # the setup exe. The setup exe is also what becomes uninstall.exe in the app folder (it copies itself without
+      # the payload). README files and PROGRESS.md are not packed.
+      - name: Build installer
+        run: cargo build --release -p radiant-setup --target x86_64-pc-windows-msvc
+
+      # The two files that must always sit next to radiant.exe. A copy in installer/redist/ (committed to the repo)
+      # wins; if it is not there, the DLLs are downloaded from NuGet and checked against the SHA-256 of the exact files
+      # the app was tested with. To update a DLL: change the version and the hash below (or commit the new file).
+      - name: Collect the files for the installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          New-Item -ItemType Directory -Force -Path payload | Out-Null
+          $dlls = @(
+            @{ Name = 'onnxruntime.dll'; Package = 'Microsoft.ML.OnnxRuntime.DirectML'; Version = '1.22.1'; Inner = 'runtimes/win-x64/native/onnxruntime.dll'; Sha = 'f722dd91a311b9fa4b7f2341d22c379a72fb7bc5b639df18b64821f23cdde14b' },
+            @{ Name = 'DirectML.dll'; Package = 'Microsoft.AI.DirectML'; Version = '1.15.4'; Inner = 'bin/x64-win/DirectML.dll'; Sha = '9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1' }
+          )
+          foreach ($d in $dlls) {
+            $local = Join-Path 'installer/redist' $d.Name
+            $dest = Join-Path 'payload' $d.Name
+            if (Test-Path $local) {
+              Copy-Item $local $dest
+              Write-Host "$($d.Name): taken from the repository ($local)"
+            } else {
+              $zip = Join-Path $env:RUNNER_TEMP "$($d.Package).zip"
+              $dir = Join-Path $env:RUNNER_TEMP $d.Package
+              Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$($d.Package)/$($d.Version)" -OutFile $zip
+              Expand-Archive -Path $zip -DestinationPath $dir -Force
+              Copy-Item (Join-Path $dir $d.Inner) $dest
+              Write-Host "$($d.Name): downloaded from NuGet ($($d.Package) $($d.Version))"
+              $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLower()
+              if ($hash -ne $d.Sha) {
+                throw "$($d.Name) from NuGet has SHA-256 $hash, expected $($d.Sha). Put the exact file you tested with into installer/redist/$($d.Name) (commit it) or update the hash in build.yml."
+              }
+            }
+            Write-Host "$($d.Name) SHA-256: $((Get-FileHash $dest -Algorithm SHA256).Hash.ToLower())"
+          }
+          $t = 'target/x86_64-pc-windows-msvc/release'
+          Copy-Item "$t/radiant.exe" payload/radiant.exe
+          Copy-Item LICENSE.md payload/LICENSE.md
+
+      - name: Pack installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $t = 'target/x86_64-pc-windows-msvc/release'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & "$t/pack.exe" "$t/radiant-setup.exe" dist/Radiant-Setup.exe payload/radiant.exe payload/onnxruntime.dll payload/DirectML.dll payload/LICENSE.md
+          if ($LASTEXITCODE -ne 0) { throw "pack.exe failed with code $LASTEXITCODE" }
+          Get-ChildItem dist | ForEach-Object { Write-Host ("{0}: {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
+
       - uses: actions/upload-artifact@v7
         with:
           name: radiant-windows-x64
           path: target/x86_64-pc-windows-msvc/release/radiant.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: radiant-setup-windows-x64
+          path: dist/Radiant-Setup.exe

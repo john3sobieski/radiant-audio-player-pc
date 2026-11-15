@@ -1,0 +1,31 @@
+[package]
+name = "radiant-setup"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+build = "build.rs"
+
+# The installer. The same exe is also the uninstaller (it is copied as `uninstall.exe` into the app folder, without
+# the payload). `pack` glues the payload (radiant.exe + DLLs) to the end of it, see PROGRESS.md stage 14.
+[[bin]]
+name = "radiant-setup"
+path = "src/main.rs"
+
+[[bin]]
+name = "pack"
+path = "src/pack.rs"
+
+[dependencies]
+radiant-core = { path = "../radiant-core" }
+# Model download (resumable, SHA-256 checked): the same code the app uses in Settings -> AI & stems.
+radiant-stems = { path = "../radiant-stems" }
+slint = "1"
+rfd = "0.18"
+# Payload is stored deflate-compressed (pure Rust backend).
+flate2 = "1"
+# Uninstall entry in "Apps & features" (per user, no admin rights needed).
+winreg = "0.52"
+
+[build-dependencies]
+slint-build = "1"
+winresource = "0.1"

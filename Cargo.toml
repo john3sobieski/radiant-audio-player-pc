@@ -9,6 +9,7 @@ members = [
     "crates/radiant-stems",
     "crates/radiant-cloud",
     "crates/radiant-ui",
+    "crates/radiant-setup",
 ]
 
 [workspace.package]
