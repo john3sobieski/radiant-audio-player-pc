@@ -198,6 +198,8 @@ component AlbumTile inherits Rectangle {
     /// The tile is being dragged (manual order): dimmed. `drop-target`: the tile the dragged one will take the place of.
     in property <bool> dragging: false;
     in property <bool> drop-target: false;
+    /// False while the grid scrolls: tiles passing under the pointer must not lift.
+    in property <bool> hover-lift: true;
     callback clicked();
     callback shown();
     callback drag-start();
@@ -212,16 +214,17 @@ component AlbumTile inherits Rectangle {
 
     // Cover (square, as wide as the tile).
     Rectangle {
-        y: ta.has-hover ? -4px : 0px;
+        y: (ta.has-hover && root.hover-lift) ? -4px : 0px;
         width: parent.width;
         height: parent.width;
         border-radius: 12px;
         background: Theme.surface-hover;
         border-width: root.drop-target ? 3px : 0px;
         border-color: Theme.accent;
-        drop-shadow-blur: ta.has-hover ? 22px : 14px;
+        // The shadow is constant: changing its blur on hover re-rendered the cached layer of the tile.
+        drop-shadow-blur: 14px;
         drop-shadow-color: #000000a0;
-        drop-shadow-offset-y: ta.has-hover ? 10px : 5px;
+        drop-shadow-offset-y: 5px;
         // The blurred shadow is costly: keep the rendered cover as a layer instead of redrawing it every frame of the scroll.
         cache-rendering-hint: true;
         animate y { duration: Theme.low-power ? 0ms : 140ms; easing: ease-out; }
@@ -3236,6 +3239,18 @@ export component MainWindow inherits Window {
     private property <length> album-title-w: max(0px, root.width - 2 * root.album-side);
     private property <length> album-list-title-w: max(0px, root.time-right - root.title-x - root.dur-w - root.col-gap);
     callback album-shown(int);
+    // True while the album grid moves (set by the grid, cleared by `album-scroll-timer` once it stands still).
+    private property <bool> album-scrolling: false;
+    private property <length> album-scroll-y: 0px;
+    private property <length> album-scroll-seen: 0px;
+    album-scroll-timer := Timer {
+        interval: 120ms;
+        running: root.album-scrolling;
+        triggered => {
+            if (root.album-scroll-seen == root.album-scroll-y) { root.album-scrolling = false; }
+            root.album-scroll-seen = root.album-scroll-y;
+        }
+    }
     private property <length> grid-pad: 28px;
     private property <length> grid-gap: 22px;
     private property <length> tile-min: 190px;
@@ -4008,6 +4023,10 @@ export component MainWindow inherits Window {
                         wrap: word-wrap;
                     }
                     if root.albums.length > 0 : ListView {
+                        changed viewport-y => {
+                            root.album-scroll-y = self.viewport-y;
+                            root.album-scrolling = true;
+                        }
                         for r in root.album-rows : Rectangle {
                             height: root.album-row-h;
                             for c in root.album-cols : Rectangle {
@@ -4021,6 +4040,7 @@ export component MainWindow inherits Window {
                                     letter: root.albums[r * root.album-cols + c].letter;
                                     title: root.albums[r * root.album-cols + c].title;
                                     artist: root.albums[r * root.album-cols + c].artist;
+                                    hover-lift: !root.album-scrolling;
                                     dragging: root.album-drag-active && root.album-drag-from == r * root.album-cols + c;
                                     drop-target: root.album-drag-active && root.album-drag-to == r * root.album-cols + c
                                         && root.album-drag-to != root.album-drag-from;
