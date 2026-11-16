@@ -32,9 +32,10 @@ jobs:
       - name: Build installer
         run: cargo build --release -p radiant-setup --target x86_64-pc-windows-msvc
 
-      # The two files that must always sit next to radiant.exe. A copy in installer/redist/ (committed to the repo)
-      # wins; if it is not there, the DLLs are downloaded from NuGet and checked against the SHA-256 of the exact files
-      # the app was tested with. To update a DLL: change the version and the hash below (or commit the new file).
+      # The two files that must always sit next to radiant.exe, plus the license texts that come with them (MIT/Microsoft
+      # terms ask to ship them). The NuGet packages are always downloaded for the license texts. A copy of a DLL in
+      # installer/redist/ (committed to the repo) wins over the NuGet one; a DLL taken from NuGet is checked against the
+      # SHA-256 of the exact file the app was tested with. To update a DLL: change the version and the hash below.
       - name: Collect the files for the installer
         shell: pwsh
         run: |
@@ -42,40 +43,55 @@ jobs:
           $ProgressPreference = 'SilentlyContinue'
           New-Item -ItemType Directory -Force -Path payload | Out-Null
           $dlls = @(
-            @{ Name = 'onnxruntime.dll'; Package = 'Microsoft.ML.OnnxRuntime.DirectML'; Version = '1.22.1'; Inner = 'runtimes/win-x64/native/onnxruntime.dll'; Sha = 'f722dd91a311b9fa4b7f2341d22c379a72fb7bc5b639df18b64821f23cdde14b' },
-            @{ Name = 'DirectML.dll'; Package = 'Microsoft.AI.DirectML'; Version = '1.15.4'; Inner = 'bin/x64-win/DirectML.dll'; Sha = '9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1' }
+            @{ Name = 'onnxruntime.dll'; Short = 'ONNXRuntime'; Package = 'Microsoft.ML.OnnxRuntime.DirectML'; Version = '1.22.1'; Inner = 'runtimes/win-x64/native/onnxruntime.dll'; Sha = 'f722dd91a311b9fa4b7f2341d22c379a72fb7bc5b639df18b64821f23cdde14b' },
+            @{ Name = 'DirectML.dll'; Short = 'DirectML'; Package = 'Microsoft.AI.DirectML'; Version = '1.15.4'; Inner = 'bin/x64-win/DirectML.dll'; Sha = '9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1' }
           )
           foreach ($d in $dlls) {
+            $zip = Join-Path $env:RUNNER_TEMP "$($d.Package).zip"
+            $dir = Join-Path $env:RUNNER_TEMP $d.Package
+            Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$($d.Package)/$($d.Version)" -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $dir -Force
+
             $local = Join-Path 'installer/redist' $d.Name
             $dest = Join-Path 'payload' $d.Name
             if (Test-Path $local) {
               Copy-Item $local $dest
               Write-Host "$($d.Name): taken from the repository ($local)"
             } else {
-              $zip = Join-Path $env:RUNNER_TEMP "$($d.Package).zip"
-              $dir = Join-Path $env:RUNNER_TEMP $d.Package
-              Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$($d.Package)/$($d.Version)" -OutFile $zip
-              Expand-Archive -Path $zip -DestinationPath $dir -Force
               Copy-Item (Join-Path $dir $d.Inner) $dest
-              Write-Host "$($d.Name): downloaded from NuGet ($($d.Package) $($d.Version))"
+              Write-Host "$($d.Name): taken from NuGet ($($d.Package) $($d.Version))"
               $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLower()
               if ($hash -ne $d.Sha) {
                 throw "$($d.Name) from NuGet has SHA-256 $hash, expected $($d.Sha). Put the exact file you tested with into installer/redist/$($d.Name) (commit it) or update the hash in build.yml."
               }
             }
             Write-Host "$($d.Name) SHA-256: $((Get-FileHash $dest -Algorithm SHA256).Hash.ToLower())"
+
+            # License texts of the package -> the app folder (LICENSE-<name>.txt, ThirdPartyNotices-<name>.txt).
+            foreach ($f in @('LICENSE.txt', 'ThirdPartyNotices.txt')) {
+              $src = Join-Path $dir $f
+              $target = Join-Path 'payload' ($f -replace '\.txt$', "-$($d.Short).txt")
+              if (Test-Path $src) {
+                Copy-Item $src $target
+              } else {
+                Write-Warning "$f was not found in $($d.Package) $($d.Version): the installer will not contain it."
+              }
+            }
           }
           $t = 'target/x86_64-pc-windows-msvc/release'
           Copy-Item "$t/radiant.exe" payload/radiant.exe
           Copy-Item LICENSE.md payload/LICENSE.md
 
+      # Everything in payload/ goes into the installer (and the uninstaller removes exactly what was installed).
       - name: Pack installer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $t = 'target/x86_64-pc-windows-msvc/release'
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          & "$t/pack.exe" "$t/radiant-setup.exe" dist/Radiant-Setup.exe payload/radiant.exe payload/onnxruntime.dll payload/DirectML.dll payload/LICENSE.md
+          $files = Get-ChildItem payload -File | Sort-Object Name | ForEach-Object { $_.FullName }
+          $files | ForEach-Object { Write-Host "payload: $_" }
+          & "$t/pack.exe" "$t/radiant-setup.exe" dist/Radiant-Setup.exe $files
           if ($LASTEXITCODE -ne 0) { throw "pack.exe failed with code $LASTEXITCODE" }
           Get-ChildItem dist | ForEach-Object { Write-Host ("{0}: {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
 

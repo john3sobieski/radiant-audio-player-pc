@@ -118,4 +118,6 @@ Radiant は **[PolyForm Noncommercial License 1.0.0](LICENSE.md)** のもとで�
 
 [Slint](https://slint.dev)（インターフェース）、[symphonia](https://github.com/pdeljanov/Symphonia)（デコード、MPL-2.0）、libopus（Opus）、[cpal](https://github.com/RustAudio/cpal)（オーディオ出力）、[rubato](https://github.com/HEnquist/rubato)（リサンプリング）、[rtrb](https://github.com/mgeier/rtrb)、ONNX Runtime と DirectML を使う [ort](https://github.com/pykeio/ort)（Microsoft、MIT）、[rfd](https://github.com/PolyMeilex/rfd)、[ureq](https://github.com/algesten/ureq)、[image](https://github.com/image-rs/image)、そして Meta AI の **Demucs (htdemucs)** モデル（MIT）。それぞれ各自のライセンスに従います。
 
+<a href="https://slint.dev"><img src="git_images/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" width="140"></a>
+
 *Radiant は john3sobieski が制作しています。*

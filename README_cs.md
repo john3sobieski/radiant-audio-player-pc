@@ -118,4 +118,6 @@ Radiant je šířen pod licencí **[PolyForm Noncommercial License 1.0.0](LICENS
 
 [Slint](https://slint.dev) (rozhraní), [symphonia](https://github.com/pdeljanov/Symphonia) (dekódování, MPL-2.0), libopus (Opus), [cpal](https://github.com/RustAudio/cpal) (zvukový výstup), [rubato](https://github.com/HEnquist/rubato) (převzorkování), [rtrb](https://github.com/mgeier/rtrb), [ort](https://github.com/pykeio/ort) s ONNX Runtime a DirectML (Microsoft, MIT), [rfd](https://github.com/PolyMeilex/rfd), [ureq](https://github.com/algesten/ureq), [image](https://github.com/image-rs/image) a model **Demucs (htdemucs)** od Meta AI (MIT). Každá komponenta podléhá vlastní licenci.
 
+<a href="https://slint.dev"><img src="git_images/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" width="140"></a>
+
 *Radiant vytváří john3sobieski.*

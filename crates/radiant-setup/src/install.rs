@@ -19,7 +19,8 @@ pub const EXE_NAME: &str = "radiant.exe";
 pub const UNINSTALLER_NAME: &str = "uninstall.exe";
 /// What the program needs next to its exe (the setup refuses to run without them).
 pub const REQUIRED: [&str; 3] = ["radiant.exe", "onnxruntime.dll", "DirectML.dll"];
-/// Every file the setup puts into the app folder. The uninstaller removes exactly these and nothing else.
+/// Fallback list for the uninstaller. The exact list of installed files is recorded in the registry (`File0..`),
+/// so a file added to the payload needs no change here.
 pub const APP_FILES: [&str; 5] = ["radiant.exe", "onnxruntime.dll", "DirectML.dll", "LICENSE.md", "uninstall.exe"];
 pub const REG_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Radiant";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -188,8 +189,9 @@ fn set_str(key: &RegKey, name: &str, value: &str) -> Result<(), String> {
     key.set_value(name, &value.to_string()).map_err(|e| e.to_string())
 }
 
-/// The "Apps & features" entry. The shortcut paths are kept here too, so the uninstaller deletes exactly them.
-fn register(c: &Choices, version: &str, links: &[PathBuf], size_kb: u32) -> Result<(), String> {
+/// The "Apps & features" entry. The shortcut paths and the names of all installed files are kept here too, so the
+/// uninstaller deletes exactly them.
+fn register(c: &Choices, version: &str, links: &[PathBuf], files: &[String], size_kb: u32) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let _ = hkcu.delete_subkey_all(REG_KEY);
     let (key, _) = hkcu.create_subkey(REG_KEY).map_err(|e| e.to_string())?;
@@ -206,6 +208,9 @@ fn register(c: &Choices, version: &str, links: &[PathBuf], size_kb: u32) -> Resu
     key.set_value("EstimatedSize", &size_kb).map_err(|e| e.to_string())?;
     for (i, link) in links.iter().enumerate() {
         set_str(&key, &format!("Shortcut{i}"), &link.display().to_string())?;
+    }
+    for (i, file) in files.iter().enumerate() {
+        set_str(&key, &format!("File{i}"), file)?;
     }
     Ok(())
 }
@@ -285,7 +290,9 @@ pub fn run(
 
     report("Registering the program…", files_end * 0.98, false);
     let size_kb = ((payload.raw_total() + payload.stub_len) / 1024).min(u32::MAX as u64) as u32;
-    if let Err(e) = register(c, env!("CARGO_PKG_VERSION"), &links, size_kb) {
+    let mut installed: Vec<String> = payload.entries.iter().map(|e| e.name.clone()).collect();
+    installed.push(UNINSTALLER_NAME.to_string());
+    if let Err(e) = register(c, env!("CARGO_PKG_VERSION"), &links, &installed, size_kb) {
         notes.push(format!("Radiant could not be added to the list of installed programs ({e}). Remove it by deleting its folder."));
     }
 

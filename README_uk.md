@@ -118,4 +118,6 @@ Radiant поширюється за ліцензією **[PolyForm Noncommercial
 
 [Slint](https://slint.dev) (інтерфейс), [symphonia](https://github.com/pdeljanov/Symphonia) (декодування, MPL-2.0), libopus (Opus), [cpal](https://github.com/RustAudio/cpal) (виведення звуку), [rubato](https://github.com/HEnquist/rubato) (ресемплінг), [rtrb](https://github.com/mgeier/rtrb), [ort](https://github.com/pykeio/ort) з ONNX Runtime і DirectML (Microsoft, MIT), [rfd](https://github.com/PolyMeilex/rfd), [ureq](https://github.com/algesten/ureq), [image](https://github.com/image-rs/image) та модель **Demucs (htdemucs)** від Meta AI (MIT). Кожен компонент поширюється за своєю ліцензією.
 
+<a href="https://slint.dev"><img src="git_images/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" width="140"></a>
+
 *Radiant створює john3sobieski.*

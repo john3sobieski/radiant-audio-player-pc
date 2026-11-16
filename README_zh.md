@@ -118,4 +118,6 @@ Radiant 采用 **[PolyForm Noncommercial License 1.0.0](LICENSE.md)** 许可：�
 
 [Slint](https://slint.dev)（界面）、[symphonia](https://github.com/pdeljanov/Symphonia)（解码，MPL-2.0）、libopus（Opus）、[cpal](https://github.com/RustAudio/cpal)（音频输出）、[rubato](https://github.com/HEnquist/rubato)（重采样）、[rtrb](https://github.com/mgeier/rtrb)、带有 ONNX Runtime 和 DirectML 的 [ort](https://github.com/pykeio/ort)（Microsoft，MIT）、[rfd](https://github.com/PolyMeilex/rfd)、[ureq](https://github.com/algesten/ureq)、[image](https://github.com/image-rs/image)，以及 Meta AI 的 **Demucs (htdemucs)** 模型（MIT）。每个组件均遵循其各自的许可证。
 
+<a href="https://slint.dev"><img src="git_images/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" width="140"></a>
+
 *Radiant 由 john3sobieski 制作。*

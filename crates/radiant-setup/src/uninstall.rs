@@ -70,33 +70,53 @@ fn is_in_use(e: &std::io::Error) -> bool {
     matches!(e.raw_os_error(), Some(5) | Some(32)) || e.kind() == std::io::ErrorKind::PermissionDenied
 }
 
-/// The shortcuts the setup recorded in its registry key (only `.lnk` files are ever deleted).
-fn recorded_shortcuts() -> Vec<PathBuf> {
+/// String values `<prefix>0`, `<prefix>1`, ... of the setup's registry key.
+fn recorded(prefix: &str) -> Vec<String> {
     let Ok(key) = RegKey::predef(HKEY_CURRENT_USER).open_subkey(REG_KEY) else { return Vec::new() };
     let mut out = Vec::new();
     for value in key.enum_values() {
         let Ok((name, _)) = value else { continue };
-        if !name.starts_with("Shortcut") {
+        if !name.starts_with(prefix) {
             continue;
         }
-        if let Ok(path) = key.get_value::<String, _>(&name) {
-            let path = PathBuf::from(path);
-            if path.extension().map_or(false, |e| e.eq_ignore_ascii_case("lnk")) {
-                out.push(path);
-            }
+        if let Ok(text) = key.get_value::<String, _>(&name) {
+            out.push(text);
         }
     }
     out
+}
+
+/// The shortcuts the setup recorded (only `.lnk` files are ever deleted).
+fn recorded_shortcuts() -> Vec<PathBuf> {
+    recorded("Shortcut")
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|p| p.extension().map_or(false, |e| e.eq_ignore_ascii_case("lnk")))
+        .collect()
+}
+
+/// The files to remove from the app folder, `radiant.exe` first (if it is running, nothing else is touched).
+/// The fallback list plus every plain file name the setup recorded; the uninstaller itself is removed last, separately.
+fn program_files() -> Vec<String> {
+    let mut files: Vec<String> = APP_FILES.iter().filter(|n| **n != UNINSTALLER_NAME).map(|n| n.to_string()).collect();
+    for name in recorded("File") {
+        let plain = !name.is_empty() && Path::new(&name).file_name().map_or(false, |n| n == std::ffi::OsStr::new(&name));
+        if plain && !name.eq_ignore_ascii_case(UNINSTALLER_NAME) && !files.iter().any(|f| f.eq_ignore_ascii_case(&name)) {
+            files.push(name);
+        }
+    }
+    files
 }
 
 /// Removes everything. `report(text, bar 0..1)`. `Ok(notes)` = removed; the notes are leftovers worth telling.
 pub fn run(app_dir: &Path, remove_data: bool, report: &mut dyn FnMut(&str, f32)) -> Result<Vec<String>, RemoveError> {
     let mut notes: Vec<String> = Vec::new();
     let links = recorded_shortcuts();
+    let files = program_files();
 
     // The program first: if it is running, this fails before anything else is touched and the user can retry.
     report("Removing the program…", 0.1);
-    for name in APP_FILES.iter().filter(|n| **n != UNINSTALLER_NAME) {
+    for name in &files {
         let path = app_dir.join(name);
         match fs::remove_file(&path) {
             Ok(()) => {}
