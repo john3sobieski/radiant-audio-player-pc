@@ -1,17 +1,16 @@
 // Installer / uninstaller window. Same look as the app's Black (OLED) theme: pure #000 background, barely lifted
-// surfaces, violet accent. Pages: 0..3 setup steps, 4 installing, 5 done, 9 fatal error,
+// surfaces, white accent (only black and white/light grey, no colors). Pages: 0..3 setup steps, 4 installing, 5 done, 9 fatal error,
 // 10 uninstall question, 11 removing, 12 removed. Rust owns the logic (src/main.rs), this file only draws.
 
-// Colors of the app's Black theme (see `Theme` in crates/radiant-ui/ui/main.slint).
+// Black (OLED) base of the app's theme (see `Theme` in crates/radiant-ui/ui/main.slint), but the accent is white.
 global T {
     out property <color> bg: #000000;
     out property <color> surface: #0c0c0e;
     out property <color> hover: #19191d;
     out property <color> text: #ececf2;
     out property <color> muted: #8d8d9b;
-    out property <color> accent: #9376ff;
-    out property <color> on-accent: #ffffff;
-    out property <color> bad: #ff6166;
+    out property <color> accent: #f2f2f5;
+    out property <color> on-accent: #000000;
 }
 
 component PillButton inherits Rectangle {
@@ -53,7 +52,7 @@ component AccentButton inherits Rectangle {
     width: 130px;
     height: 40px;
     border-radius: 20px;
-    background: (ta.has-hover && root.enabled) ? T.accent.brighter(0.15) : T.accent;
+    background: (ta.has-hover && root.enabled) ? T.accent.darker(0.12) : T.accent;
     opacity: root.enabled ? 1 : 0.4;
 
     Text {
@@ -373,13 +372,6 @@ export component SetupWindow inherits Window {
         height: root.height;
         clip: true;
 
-        Rectangle {
-            x: -100px;
-            y: 250px;
-            width: 400px;
-            height: 400px;
-            background: @radial-gradient(circle, T.accent.with-alpha(0.22) 0%, T.accent.with-alpha(0) 70%);
-        }
         Image {
             x: 28px;
             y: 30px;
@@ -672,7 +664,7 @@ export component SetupWindow inherits Window {
         width: 416px;
         height: root.page == 9 ? 290px : 44px;
         text: root.error;
-        color: T.bad;
+        color: T.text;
         font-size: 12px;
         wrap: word-wrap;
         vertical-alignment: top;
