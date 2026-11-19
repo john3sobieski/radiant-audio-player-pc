@@ -62,30 +62,23 @@ La plupart des lecteurs veulent que vous vous connectiez, fassiez du streaming o
 
 Configuration requise : **Windows 10 ou 11**, 64 bits.
 
-1. Ouvrez la **[dernière version](../../releases/latest)** et téléchargez la version pour Windows.
-2. Extrayez le `.zip` dans un dossier de votre choix (par exemple `C:\Apps\Radiant`).
-3. Lancez `radiant.exe`. Il n'y a pas d'installateur et rien à configurer ; le runtime Visual C++ est intégré.
-4. Ouvrez **Paramètres → Bibliothèque** et choisissez votre dossier de musique.
+1. Ouvrez la **[dernière version](../../releases/latest)** et téléchargez l'installateur (`Radiant-Setup.exe`).
+2. Lancez-le et suivez les étapes : dossier d'installation, dossier de musique (facultatif), langue de l'application et options supplémentaires (raccourcis, téléchargement immédiat du modèle pour les stems par IA). Radiant s'installe uniquement pour l'utilisateur Windows actuel, aucun droit d'administrateur n'est donc nécessaire ; le runtime Visual C++ est intégré. L'installateur n'existe pour l'instant qu'en anglais.
+3. Sur la dernière page, cliquez sur **Launch Radiant**, ou lancez le programme plus tard avec le raccourci choisi.
+4. Si vous avez laissé le dossier de musique vide dans l'installateur, ouvrez **Paramètres → Bibliothèque** et choisissez-le.
 
 Windows peut afficher un message *« Windows a protégé votre ordinateur »* (SmartScreen), car le programme n'est pas signé avec un certificat payant. Cliquez sur **Informations complémentaires → Exécuter quand même**. Le code source est public, et chaque version est construite à partir de celui-ci par GitHub Actions.
 
-Les paramètres, les playlists et les modèles sont stockés dans `%APPDATA%\Radiant`. Pour supprimer Radiant, supprimez le dossier du programme et (facultatif) celui-ci.
+Pour mettre à jour, lancez l'installateur de la nouvelle version (fermez d'abord Radiant) : il remplace les fichiers du programme dans le dossier existant, et vos playlists et modèles restent en place.
+
+Les paramètres, les playlists et les modèles sont stockés dans `%APPDATA%\Radiant`. Pour supprimer Radiant, ouvrez **Paramètres Windows → Applications**, trouvez Radiant et cliquez sur **Désinstaller** (ou lancez `uninstall.exe` depuis le dossier du programme). Cochez **Also delete my settings and data** pour supprimer aussi `%APPDATA%\Radiant`. Vos fichiers de musique ne sont jamais touchés.
 
 ### Configuration des stems par IA (facultatif)
 
-Les stems nécessitent deux fichiers supplémentaires qui ne sont pas fournis, afin de garder le programme léger. Le reste de l'application fonctionne sans eux.
+Les deux fichiers nécessaires aux stems (`onnxruntime.dll` et `DirectML.dll`) sont installés avec Radiant, il n'y a donc rien à copier à la main. Seul le modèle Demucs est téléchargé séparément, afin de garder le programme léger. Vous pouvez cocher son téléchargement dans l'installateur ou le faire plus tard. Le reste de l'application fonctionne sans le modèle.
 
-*(par défaut, ils sont déjà inclus dans le zip de la version.)*
-
-1. **`onnxruntime.dll`**
-   - Téléchargez <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (un fichier `.nupkg`).
-   - Un `.nupkg` est un zip : renommez-le en `.zip` (ou ouvrez-le avec 7-Zip) et récupérez `runtimes/win-x64/native/onnxruntime.dll`.
-2. **`DirectML.dll`**
-   - Téléchargez <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>.
-   - Ouvrez-le de la même façon et récupérez `bin/x64-win/DirectML.dll`.
-3. Placez les deux fichiers **à côté de `radiant.exe`**.
-4. Dans Radiant, ouvrez **Paramètres → IA et stems** et appuyez sur **Télécharger** pour le **Modèle Demucs** (une seule fois, le fichier est vérifié après le téléchargement). Vous pouvez aussi importer le fichier du modèle à la main.
-5. Facultatif : activez-y **Carte graphique (GPU)** pour un traitement bien plus rapide. Si votre carte n'en est pas capable, Radiant utilise discrètement le processeur.
+1. Dans Radiant, ouvrez **Paramètres → IA et stems** et appuyez sur **Télécharger** pour le **Modèle Demucs** (une seule fois, le fichier est vérifié après le téléchargement). Vous pouvez aussi importer le fichier du modèle à la main.
+2. Facultatif : activez-y **Carte graphique (GPU)** pour un traitement bien plus rapide. Si votre carte n'en est pas capable, Radiant utilise discrètement le processeur.
 
 Ensuite, clic droit sur un morceau → **Créer les stems**, ou utilisez l'onglet **Stems** du lecteur. Les résultats sont enregistrés dans `Stems/<Artiste - Titre>/` à l'intérieur de votre dossier de musique et ajoutés à une playlist du dossier « Stems ».
 

@@ -1,5 +1,6 @@
-# Windows CI: runs tests, builds the release exe and the installer, uploads both as artifacts.
-# TODO: add a release job (zip + GitHub Release) when the app is usable.
+# Windows CI: runs tests, builds the release exe and packs it (with the two DLLs) into the installer.
+# The installer is the only artifact: there is no standalone radiant.exe or portable zip.
+# TODO: add a release job (installer + GitHub Release) when the app is usable.
 # TODO: separate legacy workflow for Windows 7/8.1 only if that stretch goal is pursued.
 name: build
 on:
@@ -22,6 +23,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Test
         run: cargo test --workspace --target x86_64-pc-windows-msvc
+      # radiant.exe is only an input for the installer (it is packed into it), it is not uploaded on its own.
       - name: Build release
         run: cargo build --release -p radiant-ui --target x86_64-pc-windows-msvc
 
@@ -95,10 +97,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "pack.exe failed with code $LASTEXITCODE" }
           Get-ChildItem dist | ForEach-Object { Write-Host ("{0}: {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: radiant-windows-x64
-          path: target/x86_64-pc-windows-msvc/release/radiant.exe
       - uses: actions/upload-artifact@v7
         with:
           name: radiant-setup-windows-x64

@@ -62,30 +62,23 @@ Většina přehrávačů chce, abyste se přihlásili, streamovali nebo se díva
 
 Požadavky: **Windows 10 nebo 11**, 64bitový.
 
-1. Otevřete **[nejnovější verzi](../../releases/latest)** a stáhněte sestavení pro Windows.
-2. Rozbalte `.zip` do libovolné složky (například `C:\Apps\Radiant`).
-3. Spusťte `radiant.exe`. Žádný instalátor ani nic k nastavování; běhové prostředí Visual C++ je vestavěné.
-4. Otevřete **Nastavení → Knihovna** a vyberte svou hudební složku.
+1. Otevřete **[nejnovější verzi](../../releases/latest)** a stáhněte instalátor (`Radiant-Setup.exe`).
+2. Spusťte ho a postupujte podle kroků: složka instalace, hudební složka (volitelně), jazyk aplikace a další volby (zástupci, okamžité stažení modelu pro AI stopy). Radiant se instaluje jen pro aktuálního uživatele Windows, takže nejsou potřeba práva správce; běhové prostředí Visual C++ je vestavěné. Instalátor je zatím jen v angličtině.
+3. Na poslední stránce klikněte na **Launch Radiant** nebo program později spusťte zvoleným zástupcem.
+4. Pokud jste v instalátoru nechali hudební složku prázdnou, otevřete **Nastavení → Knihovna** a vyberte ji.
 
 Windows může zobrazit zprávu *„Windows ochránil váš počítač“* (SmartScreen), protože program není podepsán placeným certifikátem. Klikněte na **Další informace → Přesto spustit**. Zdrojový kód je veřejný a každé sestavení z něj vytváří GitHub Actions.
 
-Nastavení, playlisty a modely jsou uloženy v `%APPDATA%\Radiant`. Chcete-li Radiant odstranit, smažte složku s programem a (volitelně) tuto složku.
+Chcete-li aktualizovat, spusťte instalátor novější verze (nejprve zavřete Radiant): nahradí soubory programu ve stávající složce a vaše playlisty a modely zůstanou na místě.
+
+Nastavení, playlisty a modely jsou uloženy v `%APPDATA%\Radiant`. Chcete-li Radiant odstranit, otevřete **Nastavení Windows → Aplikace**, najděte Radiant a klikněte na **Odinstalovat** (nebo spusťte `uninstall.exe` ze složky programu). Zaškrtněte **Also delete my settings and data**, aby se smazala i složka `%APPDATA%\Radiant`. Vaše hudební soubory zůstanou nedotčeny.
 
 ### Nastavení AI stop (volitelné)
 
-Pro stopy jsou potřeba dva další soubory, které nejsou součástí balíčku, aby program zůstal malý. Zbytek aplikace funguje i bez nich.
+Oba soubory, které stopy potřebují (`onnxruntime.dll` a `DirectML.dll`), se instalují spolu s Radiantem, takže není třeba nic kopírovat ručně. Samostatně se stahuje jen model Demucs, aby program zůstal malý. Stažení můžete zaškrtnout už v instalátoru, nebo ho provést později. Zbytek aplikace funguje i bez modelu.
 
-*(ve výchozím stavu jsou už zahrnuty v zipu vydání.)*
-
-1. **`onnxruntime.dll`**
-   - Stáhněte <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (soubor `.nupkg`).
-   - `.nupkg` je zip: přejmenujte ho na `.zip` (nebo otevřete v 7-Zip) a vezměte `runtimes/win-x64/native/onnxruntime.dll`.
-2. **`DirectML.dll`**
-   - Stáhněte <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>.
-   - Otevřete stejným způsobem a vezměte `bin/x64-win/DirectML.dll`.
-3. Oba soubory umístěte **vedle `radiant.exe`**.
-4. V Radiantu otevřete **Nastavení → AI a stopy** a u **Model Demucs** stiskněte **Stáhnout** (jednou, soubor se po stažení zkontroluje). Soubor modelu můžete také importovat ručně.
-5. Volitelně tam zapněte **Grafická karta (GPU)** pro mnohem rychlejší zpracování. Pokud to vaše karta nezvládne, Radiant tiše použije procesor.
+1. V Radiantu otevřete **Nastavení → AI a stopy** a u **Model Demucs** stiskněte **Stáhnout** (jednou, soubor se po stažení zkontroluje). Soubor modelu můžete také importovat ručně.
+2. Volitelně tam zapněte **Grafická karta (GPU)** pro mnohem rychlejší zpracování. Pokud to vaše karta nezvládne, Radiant tiše použije procesor.
 
 Potom klikněte pravým tlačítkem na skladbu → **Vytvořit stopy** nebo použijte kartu **Stopy** v přehrávači. Výsledky se ukládají do `Stems/<Interpret - Název>/` uvnitř vaší hudební složky a přidávají se do playlistu ve složce „Stopy“.
 

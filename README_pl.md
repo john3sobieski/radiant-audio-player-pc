@@ -62,30 +62,23 @@ Większość odtwarzaczy chce, żebyś się zalogował, korzystał ze streamingu
 
 Wymagania: **Windows 10 lub 11**, 64-bitowy.
 
-1. Otwórz **[najnowszą wersję](../../releases/latest)** i pobierz kompilację dla Windows.
-2. Rozpakuj `.zip` do dowolnego folderu (na przykład `C:\Apps\Radiant`).
-3. Uruchom `radiant.exe`. Nie ma instalatora ani niczego do konfigurowania; środowisko uruchomieniowe Visual C++ jest wbudowane.
-4. Otwórz **Ustawienia → Biblioteka** i wybierz swój folder z muzyką.
+1. Otwórz **[najnowszą wersję](../../releases/latest)** i pobierz instalator (`Radiant-Setup.exe`).
+2. Uruchom go i postępuj zgodnie z krokami: folder instalacji, folder z muzyką (opcjonalnie), język aplikacji i dodatkowe opcje (skróty, natychmiastowe pobranie modelu do stemów AI). Radiant instaluje się tylko dla bieżącego użytkownika Windows, więc uprawnienia administratora nie są potrzebne; środowisko uruchomieniowe Visual C++ jest wbudowane. Instalator jest na razie tylko po angielsku.
+3. Na ostatniej stronie kliknij **Launch Radiant** albo uruchom program później z wybranego skrótu.
+4. Jeśli w instalatorze folder z muzyką został pusty, otwórz **Ustawienia → Biblioteka** i wybierz go.
 
 Windows może wyświetlić komunikat *„System Windows ochronił Twój komputer”* (SmartScreen), ponieważ program nie jest podpisany płatnym certyfikatem. Kliknij **Więcej informacji → Uruchom mimo to**. Kod źródłowy jest publiczny, a każda kompilacja jest z niego budowana przez GitHub Actions.
 
-Ustawienia, playlisty i modele są przechowywane w `%APPDATA%\Radiant`. Aby usunąć Radiant, usuń folder programu i (opcjonalnie) ten folder.
+Aby zaktualizować, uruchom instalator nowszej wersji (najpierw zamknij Radiant): podmieni pliki programu w istniejącym folderze, a Twoje playlisty i modele pozostaną na miejscu.
+
+Ustawienia, playlisty i modele są przechowywane w `%APPDATA%\Radiant`. Aby usunąć Radiant, otwórz **Ustawienia systemu Windows → Aplikacje**, znajdź Radiant i kliknij **Odinstaluj** (albo uruchom `uninstall.exe` z folderu programu). Zaznacz **Also delete my settings and data**, aby usunąć także `%APPDATA%\Radiant`. Twoje pliki muzyczne nigdy nie są ruszane.
 
 ### Konfiguracja stemów AI (opcjonalnie)
 
-Stemy wymagają dwóch dodatkowych plików, które nie są dołączone, aby program pozostał mały. Reszta aplikacji działa bez nich.
+Dwa pliki potrzebne do stemów (`onnxruntime.dll` i `DirectML.dll`) są instalowane razem z Radiantem, więc nie trzeba niczego kopiować ręcznie. Osobno pobierany jest tylko model Demucs, aby program pozostał mały. Pobieranie możesz zaznaczyć już w instalatorze albo zrobić to później. Reszta aplikacji działa bez modelu.
 
-*(domyślnie są już dołączone do archiwum zip wydania.)*
-
-1. **`onnxruntime.dll`**
-   - Pobierz <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (plik `.nupkg`).
-   - `.nupkg` to archiwum zip: zmień rozszerzenie na `.zip` (lub otwórz w 7-Zip) i weź `runtimes/win-x64/native/onnxruntime.dll`.
-2. **`DirectML.dll`**
-   - Pobierz <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>.
-   - Otwórz w ten sam sposób i weź `bin/x64-win/DirectML.dll`.
-3. Umieść oba pliki **obok `radiant.exe`**.
-4. W Radiancie otwórz **Ustawienia → AI i stemy** i naciśnij **Pobierz** przy **Model Demucs** (jednorazowo, plik jest sprawdzany po pobraniu). Plik modelu można też zaimportować ręcznie.
-5. Opcjonalnie włącz tam **Karta graficzna (GPU)**, aby przetwarzanie było znacznie szybsze. Jeśli Twoja karta sobie z tym nie poradzi, Radiant po cichu użyje procesora.
+1. W Radiancie otwórz **Ustawienia → AI i stemy** i naciśnij **Pobierz** przy **Model Demucs** (jednorazowo, plik jest sprawdzany po pobraniu). Plik modelu można też zaimportować ręcznie.
+2. Opcjonalnie włącz tam **Karta graficzna (GPU)**, aby przetwarzanie było znacznie szybsze. Jeśli Twoja karta sobie z tym nie poradzi, Radiant po cichu użyje procesora.
 
 Następnie kliknij utwór prawym przyciskiem myszy → **Utwórz stemy** lub użyj karty **Stemy** w odtwarzaczu. Wyniki są zapisywane w `Stems/<Wykonawca - Tytuł>/` wewnątrz folderu z muzyką i dodawane do playlisty w folderze „Stemy”.
 

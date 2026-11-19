@@ -62,30 +62,23 @@ La mayoría de los reproductores quieren que inicies sesión, hagas streaming o 
 
 Requisitos: **Windows 10 u 11**, 64 bits.
 
-1. Abre la **[última versión](../../releases/latest)** y descarga la compilación para Windows.
-2. Extrae el `.zip` en cualquier carpeta (por ejemplo `C:\Apps\Radiant`).
-3. Ejecuta `radiant.exe`. No hay instalador ni nada que configurar; el runtime de Visual C++ está incluido.
-4. Abre **Ajustes → Biblioteca** y elige tu carpeta de música.
+1. Abre la **[última versión](../../releases/latest)** y descarga el instalador (`Radiant-Setup.exe`).
+2. Ejecútalo y sigue los pasos: carpeta de instalación, tu carpeta de música (opcional), idioma de la aplicación y opciones adicionales (accesos directos, descargar ya el modelo de stems con IA). Radiant se instala solo para el usuario actual de Windows, así que no hacen falta permisos de administrador; el runtime de Visual C++ está incluido. Por ahora el instalador solo está en inglés.
+3. En la última página pulsa **Launch Radiant**, o inicia el programa más tarde con el acceso directo que elegiste.
+4. Si dejaste vacía la carpeta de música en el instalador, abre **Ajustes → Biblioteca** y elígela.
 
 Windows puede mostrar el mensaje *«Windows protegió su PC»* (SmartScreen), porque el programa no está firmado con un certificado de pago. Haz clic en **Más información → Ejecutar de todas formas**. El código fuente es público, y cada compilación la genera GitHub Actions a partir de él.
 
-Los ajustes, las listas y los modelos se guardan en `%APPDATA%\Radiant`. Para desinstalar Radiant, borra la carpeta del programa y (opcionalmente) esa.
+Para actualizar, ejecuta el instalador de la nueva versión (cierra Radiant antes): sustituye los archivos del programa en la carpeta existente, y tus listas y modelos se quedan donde están.
+
+Los ajustes, las listas y los modelos se guardan en `%APPDATA%\Radiant`. Para desinstalar Radiant, abre **Configuración de Windows → Aplicaciones**, busca Radiant y pulsa **Desinstalar** (o ejecuta `uninstall.exe` desde la carpeta del programa). Marca **Also delete my settings and data** para borrar también `%APPDATA%\Radiant`. Tus archivos de música nunca se tocan.
 
 ### Configuración de los stems con IA (opcional)
 
-Los stems necesitan dos archivos adicionales que no se incluyen, para mantener el programa pequeño. El resto de la aplicación funciona sin ellos.
+Los dos archivos que necesitan los stems (`onnxruntime.dll` y `DirectML.dll`) se instalan junto con Radiant, así que no hay que copiar nada a mano. Solo el modelo Demucs se descarga aparte, para mantener el programa pequeño. Puedes marcar su descarga en el instalador o hacerlo más tarde. El resto de la aplicación funciona sin el modelo.
 
-*(por defecto, ya vienen incluidos en el zip de la versión.)*
-
-1. **`onnxruntime.dll`**
-   - Descarga <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (un archivo `.nupkg`).
-   - Un `.nupkg` es un zip: cámbiale la extensión a `.zip` (o ábrelo con 7-Zip) y toma `runtimes/win-x64/native/onnxruntime.dll`.
-2. **`DirectML.dll`**
-   - Descarga <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>.
-   - Ábrelo de la misma manera y toma `bin/x64-win/DirectML.dll`.
-3. Coloca ambos archivos **junto a `radiant.exe`**.
-4. En Radiant abre **Ajustes → IA y stems** y pulsa **Descargar** en el **Modelo Demucs** (una sola vez, el archivo se comprueba tras la descarga). También puedes importar el archivo del modelo a mano.
-5. Opcional: activa allí **Tarjeta gráfica (GPU)** para un procesamiento mucho más rápido. Si tu tarjeta no puede, Radiant usa el procesador sin avisar.
+1. En Radiant abre **Ajustes → IA y stems** y pulsa **Descargar** en el **Modelo Demucs** (una sola vez, el archivo se comprueba tras la descarga). También puedes importar el archivo del modelo a mano.
+2. Opcional: activa allí **Tarjeta gráfica (GPU)** para un procesamiento mucho más rápido. Si tu tarjeta no puede, Radiant usa el procesador sin avisar.
 
 Después, clic derecho en una pista → **Crear stems**, o usa la pestaña **Stems** del reproductor. Los resultados se guardan en `Stems/<Artista - Título>/` dentro de tu carpeta de música y se añaden a una lista de la carpeta «Stems».
 

@@ -62,30 +62,23 @@
 
 系统要求：**Windows 10 或 11**，64 位。
 
-1. 打开**[最新版本](../../releases/latest)**，下载 Windows 版本。
-2. 将 `.zip` 解压到任意文件夹（例如 `C:\Apps\Radiant`）。
-3. 运行 `radiant.exe`。无需安装程序，也无需任何设置；Visual C++ 运行库已内置。
-4. 打开**设置 → 音乐库**，选择你的音乐文件夹。
+1. 打开**[最新版本](../../releases/latest)**，下载安装程序（`Radiant-Setup.exe`）。
+2. 运行它并按提示操作：安装文件夹、音乐文件夹（可选）、应用语言和附加选项（快捷方式、立即下载 AI 分轨模型）。Radiant 仅为当前 Windows 用户安装，因此不需要管理员权限；Visual C++ 运行库已内置。安装程序目前只有英文版。
+3. 在最后一页点击 **Launch Radiant**，或稍后通过你选择的快捷方式启动。
+4. 如果在安装程序中没有选择音乐文件夹，请打开**设置 → 音乐库**并选择你的音乐文件夹。
 
 Windows 可能会显示*“Windows 已保护你的电脑”*（SmartScreen）的提示，因为本程序没有使用付费证书签名。点击**更多信息 → 仍要运行**。源代码是公开的，每个版本都由 GitHub Actions 根据它构建。
 
-设置、播放列表和模型保存在 `%APPDATA%\Radiant`。要卸载 Radiant，请删除程序文件夹，以及（可选）该文件夹。
+要更新，请运行新版本的安装程序（先关闭 Radiant）：它会替换现有文件夹中的程序文件，你的播放列表和模型会保留。
+
+设置、播放列表和模型保存在 `%APPDATA%\Radiant`。要卸载 Radiant，请打开 Windows **设置 → 应用**，找到 Radiant 并点击**卸载**（或运行程序文件夹中的 `uninstall.exe`）。勾选 **Also delete my settings and data** 可同时删除 `%APPDATA%\Radiant`。你的音乐文件不会被改动。
 
 ### AI 分轨设置（可选）
 
-分轨需要两个额外文件，为了让程序保持小巧，它们没有随程序打包。没有它们，应用的其余功能仍可正常使用。
+分轨所需的两个文件（`onnxruntime.dll` 和 `DirectML.dll`）会随 Radiant 一起安装，无需手动复制。为了让程序保持小巧，只有 Demucs 模型需要单独下载。你可以在安装程序中勾选下载，也可以以后再下载。没有模型时，应用的其他功能仍可正常使用。
 
-*（默认情况下，它们已包含在发布版的 zip 中。）*
-
-1. **`onnxruntime.dll`**
-   - 下载 <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1>（一个 `.nupkg` 文件）。
-   - `.nupkg` 本质上是 zip：将其重命名为 `.zip`（或用 7-Zip 打开），取出 `runtimes/win-x64/native/onnxruntime.dll`。
-2. **`DirectML.dll`**
-   - 下载 <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>。
-   - 用同样的方法打开，取出 `bin/x64-win/DirectML.dll`。
-3. 将这两个文件放在 **`radiant.exe` 旁边**。
-4. 在 Radiant 中打开**设置 → AI 与分轨**，点击 **Demucs 模型**旁的**下载**（仅需一次，下载后会校验文件）。你也可以手动导入模型文件。
-5. 可选：在那里开启**显卡（GPU）**，处理速度会快得多。如果你的显卡不支持，Radiant 会悄悄改用处理器。
+1. 在 Radiant 中打开**设置 → AI 与分轨**，点击 **Demucs 模型**旁的**下载**（仅需一次，下载后会校验文件）。你也可以手动导入模型文件。
+2. 可选：在那里开启**显卡（GPU）**，处理速度会快得多。如果你的显卡不支持，Radiant 会悄悄改用处理器。
 
 然后右键点击曲目 → **创建分轨**，或使用播放器中的**分轨**标签页。结果会保存到音乐文件夹内的 `Stems/<艺术家 - 标题>/`，并添加到“分轨”文件夹中的一个播放列表。
 

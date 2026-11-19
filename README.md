@@ -62,30 +62,23 @@ Most players want you to sign in, stream, or look at ads. Radiant is the opposit
 
 Requirements: **Windows 10 or 11**, 64-bit.
 
-1. Open the **[latest release](../../releases/latest)** and download the Windows build.
-2. Extract `.zip` to any folder (for example `C:\Apps\Radiant`).
-3. Run `radiant.exe`. There is no installer and nothing to set up; the Visual C++ runtime is built in.
-4. Open **Settings → Library** and choose your music folder.
+1. Open the **[latest release](../../releases/latest)** and download the installer (`Radiant-Setup.exe`).
+2. Run it and follow the steps: install folder, your music folder (optional), app language and extra options (shortcuts, downloading the AI stem model right away). Radiant installs for the current Windows user only, so no administrator rights are needed; the Visual C++ runtime is built in. The installer is in English only for now.
+3. On the last page press **Launch Radiant**, or start it later from the shortcut you chose.
+4. If you left the music folder empty in the installer, open **Settings → Library** and choose it.
 
 Windows may show a *"Windows protected your PC"* (SmartScreen) message, because the program is not signed with a paid certificate. Click **More info → Run anyway**. The source code is public, and every build is made by GitHub Actions from it.
 
-Settings, playlists and models are stored in `%APPDATA%\Radiant`. To remove Radiant, delete the program folder and (optionally) that one.
+To update, run the installer of the newer version (close Radiant first): it replaces the program files in the existing folder, and your playlists and models stay in place.
+
+Settings, playlists and models are stored in `%APPDATA%\Radiant`. To remove Radiant, open Windows **Settings → Apps**, find Radiant and click **Uninstall** (or run `uninstall.exe` from the program folder). Tick **Also delete my settings and data** to remove `%APPDATA%\Radiant` too. Your music files are never touched.
 
 ### AI stem separation setup (optional)
 
-Stems need two extra files that are not bundled, to keep the program small. The rest of the app works without them.
+The two files that stems need (`onnxruntime.dll` and `DirectML.dll`) are installed together with Radiant, so there is nothing to copy by hand. Only the Demucs model is downloaded separately, to keep the program small. You can tick its download in the installer, or do it later. The rest of the app works without the model.
 
-*(by default, they are already included in the release zip.)*
-
-1. **`onnxruntime.dll`**
-   - Download <https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.DirectML/1.22.1> (a `.nupkg` file).
-   - A `.nupkg` is a zip: rename it to `.zip` (or open it with 7-Zip) and take `runtimes/win-x64/native/onnxruntime.dll`.
-2. **`DirectML.dll`**
-   - Download <https://www.nuget.org/api/v2/package/Microsoft.AI.DirectML/1.15.4>.
-   - Open it the same way and take `bin/x64-win/DirectML.dll`.
-3. Put both files **next to `radiant.exe`**.
-4. In Radiant open **Settings → AI & stems** and press **Download** on the Demucs model (one time, the file is checked after downloading). You can also import the model file by hand.
-5. Optional: turn on **Graphics card (GPU)** there for much faster processing. If your card cannot do it, Radiant quietly uses the CPU.
+1. In Radiant open **Settings → AI & stems** and press **Download** on the Demucs model (one time, the file is checked after downloading). You can also import the model file by hand.
+2. Optional: turn on **Graphics card (GPU)** there for much faster processing. If your card cannot do it, Radiant quietly uses the CPU.
 
 Then right-click a track → **Create stems**, or use the **Stems** tab in the player. Results are saved to `Stems/<Artist - Title>/` inside your music folder and added to a playlist in the "Stems" folder.
 
