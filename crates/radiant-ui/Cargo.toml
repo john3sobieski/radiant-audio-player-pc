@@ -16,10 +16,10 @@ radiant-stems = { path = "../radiant-stems" }
 radiant-cloud = { path = "../radiant-cloud" }
 # TODO: wire radiant-dsp settings here.
 
-# Slint with default features for now.
+# Slint with default features for now. `unstable-winit-030`: window drag / edge resize for the custom title bar (window_chrome.rs).
 # TODO: test the software renderer / lightest backend and pick by measuring RAM and CPU (README 2).
 # Slint license: the Royalty-free option; the attribution is the "Made with Slint" badge in README.md (PROGRESS.md, section 10).
-slint = { version = "1", features = ["raw-window-handle-06"] }
+slint = { version = "1", features = ["raw-window-handle-06", "unstable-winit-030"] }
 # Native folder dialog.
 rfd = "0.18"
 # Decodes cover art (embedded or cover.jpg/png) into small thumbnails for the track list.

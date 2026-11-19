@@ -3037,8 +3037,55 @@ component SettingsPage inherits Rectangle {
     }
 }
 
+// Minimize / maximize / restore / close button of the custom title bar.
+component WindowButton inherits Rectangle {
+    /// 0 minimize, 1 maximize, 2 restore, 3 close.
+    in property <int> kind;
+    callback clicked();
+
+    width: 40px;
+    height: 22px;
+    border-radius: 8px;
+    background: !ta.has-hover ? transparent : (root.kind == 3 ? #e5484d : Theme.surface-hover);
+    animate background { duration: Theme.low-power ? 0ms : 120ms; }
+
+    Path {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 10px;
+        height: 10px;
+        viewbox-width: 10;
+        viewbox-height: 10;
+        commands: root.kind == 0 ? "M 1 5 H 9"
+            : root.kind == 1 ? "M 1.5 1.5 H 8.5 V 8.5 H 1.5 Z"
+            : root.kind == 2 ? "M 3 3 V 1 H 9 V 7 H 7 M 1 3 H 7 V 9 H 1 Z"
+            : "M 1 1 L 9 9 M 9 1 L 1 9";
+        stroke: !ta.has-hover ? Theme.muted : (root.kind == 3 ? #ffffff : Theme.text);
+        stroke-width: 1.2px;
+        stroke-line-cap: round;
+        fill: transparent;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Invisible strip on a window edge / corner: pressing it starts a native resize (`dir` is passed to Rust).
+component ResizeEdge inherits TouchArea {
+    in property <int> dir;
+    in property <MouseCursor> shape: MouseCursor.default;
+    callback start(int);
+    mouse-cursor: root.shape;
+    pointer-event(e) => {
+        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) { root.start(root.dir); }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Radiant";
+    // No Windows frame: the title bar at the top of this window is drawn below (see `window_chrome.rs`).
+    no-frame: true;
     icon: @image-url("../assets/logo.svg");
     preferred-width: 900px;
     preferred-height: 640px;
@@ -3084,6 +3131,18 @@ export component MainWindow inherits Window {
             return reject;
         }
     }
+    // ---- Custom title bar (the window is `no-frame`): everything else lives in `app-body` below it. Rust: `window_chrome.rs`. ----
+    private property <length> titlebar-h: 30px;
+    private property <length> body-h: root.height - root.titlebar-h;
+    private property <bool> titlebar-drag-sent: false;
+    /// Shown as the "restore" icon and hides the resize edges. Synced from Rust (`window-state-changed`).
+    in-out property <bool> window-maximized: false;
+    callback window-minimize();
+    callback window-toggle-maximize();
+    callback window-close();
+    callback window-drag();
+    callback window-resize(int);
+    callback window-state-changed();
     function seek-by(secs: float) {
         if (root.duration-secs > 0) {
             root.seek(Math.max(0, Math.min(1, root.progress + secs / root.duration-secs)));
@@ -3417,7 +3476,7 @@ export component MainWindow inherits Window {
 
     private property <length> header-h: 48px;
     private property <length> bar-h: 112px;
-    private property <length> player-h: root.height - root.bar-h;
+    private property <length> player-h: root.body-h - root.bar-h;
     private property <bool> wide: root.width >= 820px;
     private property <length> side-w: root.wide ? 380px : root.width;
     private property <length> side-x: root.width - root.side-w;
@@ -3541,7 +3600,7 @@ export component MainWindow inherits Window {
         root.menu-in-pl = false;
         root.menu-in-queue = false;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
-        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.menu-y = (my - root.titlebar-h + root.menu-h + 8px > root.body-h) ? max(8px, my - root.titlebar-h - root.menu-h) : my - root.titlebar-h;
         root.show-menu = true;
     }
     function open-pl-menu(mx: length, my: length, row: int) {
@@ -3550,7 +3609,7 @@ export component MainWindow inherits Window {
         root.menu-in-pl = true;
         root.menu-in-queue = false;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
-        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.menu-y = (my - root.titlebar-h + root.menu-h + 8px > root.body-h) ? max(8px, my - root.titlebar-h - root.menu-h) : my - root.titlebar-h;
         root.show-menu = true;
     }
     function open-queue-menu(mx: length, my: length, row: int) {
@@ -3559,7 +3618,7 @@ export component MainWindow inherits Window {
         root.menu-in-pl = false;
         root.menu-in-queue = true;
         root.menu-x = max(8px, min(mx, root.width - root.menu-w - 8px));
-        root.menu-y = (my + root.menu-h + 8px > root.height) ? max(8px, my - root.menu-h) : my;
+        root.menu-y = (my - root.titlebar-h + root.menu-h + 8px > root.body-h) ? max(8px, my - root.titlebar-h - root.menu-h) : my - root.titlebar-h;
         root.show-menu = true;
     }
 
@@ -3623,7 +3682,7 @@ export component MainWindow inherits Window {
     callback sec-save-file();
     callback sec-cancel();
     private property <int> sec-cur-kind: root.sec-step == 0 ? root.lock-kind : root.sec-kind;
-    private property <bool> sec-pad: root.height >= 600px;
+    private property <bool> sec-pad: root.body-h >= 600px;
     private property <length> sec-entry-h: root.sec-cur-kind == 2 ? 100px : (root.sec-pad ? 38px + 4 * 46px + 30px : 20px);
     private property <length> sec-h: root.sec-step == 3 ? 380px : 44px + 40px + root.sec-entry-h + 36px + 40px + 44px + 4px + (root.sec-step == 1 ? 42px : 0px);
     /// The settings page section that is open (0 = first); Rust remembers it between launches.
@@ -3753,9 +3812,9 @@ export component MainWindow inherits Window {
 
     /// Views 3 (rename) and 4 (delete) are small dialogs; the others use the big window.
     private property <length> pl-w: root.pl-view >= 3 ? min(420px, root.width - 32px) : min(640px, root.width - 32px);
-    private property <length> pl-h: root.pl-view == 3 ? min(236px, root.height - 32px)
-        : root.pl-view == 4 ? min(224px, root.height - 32px)
-        : min(580px, root.height - 32px);
+    private property <length> pl-h: root.pl-view == 3 ? min(236px, root.body-h - 32px)
+        : root.pl-view == 4 ? min(224px, root.body-h - 32px)
+        : min(580px, root.body-h - 32px);
     private property <length> pl-inner-w: min(640px, root.width - 32px) - 44px;
     private property <length> sl-w: 176px;
     private property <length> sl-h: 196px;
@@ -3778,6 +3837,13 @@ export component MainWindow inherits Window {
     changed show-q-popup => {
         if (self.show-q-popup) { q-fs.focus(); } else { main-fs.focus(); }
     }
+
+    // ---- Everything below the title bar ----
+    app-body := Rectangle {
+        x: 0px;
+        y: root.titlebar-h;
+        width: root.width;
+        height: root.body-h;
 
     VerticalLayout {
         // ---- header ----
@@ -6097,14 +6163,14 @@ export component MainWindow inherits Window {
     // ---- sort panel (overlay): click outside to close ----
     if root.show-sort : TouchArea {
         y: 64px;
-        height: root.height - 64px;
+        height: root.body-h - 64px;
         clicked => { root.show-sort = false; }
     }
     if root.show-sort : Rectangle {
         x: root.width - self.width - 20px;
         y: 68px;
         width: root.sort-panel-w;
-        height: min(root.height - 78px, root.section == 1 ? 226px : root.section == 2 ? 256px : 290px);
+        height: min(root.body-h - 78px, root.section == 1 ? 226px : root.section == 2 ? 256px : 290px);
         background: Theme.surface;
         border-radius: 12px;
         border-width: 1px;
@@ -6162,7 +6228,7 @@ export component MainWindow inherits Window {
     // ---- sound panel (overlay): click outside to close ----
     if root.show-sound && !root.show-player : TouchArea {
         y: 64px;
-        height: root.height - 64px;
+        height: root.body-h - 64px;
         clicked => { root.show-sound = false; root.show-presets = false; }
     }
     if root.sound-visible : Rectangle {
@@ -6170,7 +6236,7 @@ export component MainWindow inherits Window {
         x: root.show-player ? root.card-x : root.width - self.width - 20px;
         y: root.show-player ? root.header-h : 68px;
         width: root.show-player ? root.card-w : 360px;
-        height: root.show-player ? root.card-h : min(root.height - 78px, 640px);
+        height: root.show-player ? root.card-h : min(root.body-h - 78px, 640px);
         background: Theme.surface;
         border-radius: root.show-player ? 14px : 12px;
         border-width: root.show-player ? 0px : 1px;
@@ -6566,7 +6632,7 @@ export component MainWindow inherits Window {
         x: 0px;
         y: 0px;
         width: root.width;
-        height: root.height;
+        height: root.body-h;
         background: #000000b0;
         opacity: root.show-q-popup ? 1 : 0;
         visible: self.opacity > 0.01;
@@ -6579,9 +6645,9 @@ export component MainWindow inherits Window {
 
         Rectangle {
             x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2 + (root.show-q-popup ? 0px : 18px);
+            y: (root.body-h - self.height) / 2 + (root.show-q-popup ? 0px : 18px);
             width: min(420px, root.width - 32px);
-            height: min(434px, root.height - 32px);
+            height: min(434px, root.body-h - 32px);
             background: Theme.surface;
             border-radius: 18px;
             border-width: 1px;
@@ -6748,7 +6814,7 @@ export component MainWindow inherits Window {
         x: 0px;
         y: 0px;
         width: root.width;
-        height: root.height;
+        height: root.body-h;
         background: #000000b0;
         opacity: root.show-pl-popup ? 1 : 0;
         visible: self.opacity > 0.01;
@@ -6761,7 +6827,7 @@ export component MainWindow inherits Window {
 
         Rectangle {
             x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2 + (root.show-pl-popup ? 0px : 18px);
+            y: (root.body-h - self.height) / 2 + (root.show-pl-popup ? 0px : 18px);
             width: root.pl-w;
             height: root.pl-h;
             background: Theme.surface;
@@ -7140,7 +7206,7 @@ export component MainWindow inherits Window {
         x: 0px;
         y: 0px;
         width: root.width;
-        height: root.height;
+        height: root.body-h;
         background: #000000b0;
         opacity: root.show-stems-popup ? 1 : 0;
         visible: self.opacity > 0.01;
@@ -7153,9 +7219,9 @@ export component MainWindow inherits Window {
 
         Rectangle {
             x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
+            y: (root.body-h - self.height) / 2;
             width: min(400px, root.width - 32px);
-            height: min(430px, root.height - 32px);
+            height: min(430px, root.body-h - 32px);
             background: Theme.surface;
             border-radius: 18px;
             border-width: 1px;
@@ -7232,7 +7298,7 @@ export component MainWindow inherits Window {
         x: 0px;
         y: 0px;
         width: root.width;
-        height: root.height;
+        height: root.body-h;
         background: #000000b0;
         opacity: root.show-sec-popup ? 1 : 0;
         visible: self.opacity > 0.01;
@@ -7243,9 +7309,9 @@ export component MainWindow inherits Window {
 
         Rectangle {
             x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
+            y: (root.body-h - self.height) / 2;
             width: min(380px, root.width - 32px);
-            height: min(root.sec-h, root.height - 32px);
+            height: min(root.sec-h, root.body-h - 32px);
             background: Theme.surface;
             border-radius: 18px;
             border-width: 1px;
@@ -7383,7 +7449,7 @@ export component MainWindow inherits Window {
         x: 0px;
         y: 0px;
         width: root.width;
-        height: root.height;
+        height: root.body-h;
         kind: root.lock-kind;
         message: root.lock-message;
         blocked: root.lock-blocked;
@@ -7395,4 +7461,49 @@ export component MainWindow inherits Window {
         recover-file() => { root.lock-recover-file(); }
         view-changed() => { root.lock-view-changed(); }
     }
+    }
+
+    // ---- Custom title bar: drag area + minimize / maximize / close. Above the dialogs and the lock screen. ----
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.titlebar-h;
+        background: Theme.bg;
+
+        TouchArea {
+            pointer-event(e) => {
+                if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) { root.titlebar-drag-sent = false; }
+            }
+            moved => {
+                if (self.pressed && !root.titlebar-drag-sent
+                    && (abs(self.mouse-x - self.pressed-x) > 3px || abs(self.mouse-y - self.pressed-y) > 3px)) {
+                    root.titlebar-drag-sent = true;
+                    root.window-drag();
+                }
+            }
+            double-clicked => { root.window-toggle-maximize(); }
+            changed has-hover => { if (self.has-hover) { root.window-state-changed(); } }
+        }
+        HorizontalLayout {
+            alignment: end;
+            padding-right: 8px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 2px;
+            WindowButton { kind: 0; clicked => { root.window-minimize(); } }
+            WindowButton { kind: root.window-maximized ? 2 : 1; clicked => { root.window-toggle-maximize(); } }
+            WindowButton { kind: 3; clicked => { root.window-close(); } }
+        }
+    }
+
+    // ---- Window edges for resizing (0 N, 1 S, 2 W, 3 E, 4 NW, 5 NE, 6 SW, 7 SE) ----
+    if !root.window-maximized : ResizeEdge { x: 8px; y: 0px; width: root.width - 16px; height: 4px; dir: 0; shape: MouseCursor.ns-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: 8px; y: root.height - 5px; width: root.width - 16px; height: 5px; dir: 1; shape: MouseCursor.ns-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: 0px; y: 8px; width: 5px; height: root.height - 16px; dir: 2; shape: MouseCursor.ew-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: root.width - 5px; y: 8px; width: 5px; height: root.height - 16px; dir: 3; shape: MouseCursor.ew-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: 0px; y: 0px; width: 8px; height: 8px; dir: 4; shape: MouseCursor.nwse-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: root.width - 8px; y: 0px; width: 8px; height: 8px; dir: 5; shape: MouseCursor.nesw-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: 0px; y: root.height - 8px; width: 8px; height: 8px; dir: 6; shape: MouseCursor.nesw-resize; start(d) => { root.window-resize(d); } }
+    if !root.window-maximized : ResizeEdge { x: root.width - 8px; y: root.height - 8px; width: 8px; height: 8px; dir: 7; shape: MouseCursor.nwse-resize; start(d) => { root.window-resize(d); } }
 }

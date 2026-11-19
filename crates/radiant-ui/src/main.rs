@@ -19,6 +19,7 @@ mod eq_curve;
 mod i18n;
 mod media;
 mod rays;
+mod window_chrome;
 
 use radiant_core::models::{AudioInfo, Playlist, PlaylistFolder, SortKey, SortState, Track, FAVORITES_ID, STEMS_FOLDER_ID};
 use radiant_core::playlists::{self, ListEntry, PlaylistSort, PlaylistSortKey, PlaylistStore};
@@ -2172,6 +2173,7 @@ fn wire_app_lock(ui: &MainWindow, ctl: &Rc<LockCtl>) {
 
 fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
+    window_chrome::wire(&ui);
 
     // Paths of the tracks shown in the list, in the same order (shared with the scan thread).
     let library: Arc<Mutex<Vec<Track>>> = Arc::default();

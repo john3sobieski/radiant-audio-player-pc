@@ -139,6 +139,7 @@ UI work is marked 🟡 because it was edited after the last known CI run. After 
 ### Этап 13б. Дополнительные функции
 - ✅ Очистка кэша не нужна: у приложения нет кэша на диске. Обложки (`COVER_CACHE`, `ALBUM_COVERS`) живут только в оперативной памяти, лимит 64 МБ, при выходе исчезают. `Stems/` (результаты), `Dropbox/` (скачанная музыка) и `models/` (модель; своя кнопка Delete) кэшем не считаются; решение владельца
 - ✅ Подёргивание списка альбомов при прокрутке (не проверено вживую): плитка больше не поднимается под курсором, пока сетка движется (`album-scrolling` + `album-scroll-timer`, `AlbumTile.hover-lift`), тень обложки постоянная (раньше при наведении менялись blur и сдвиг, и закэшированный слой перерисовывался). Если лаги остались: замерить, какой рендерер используется (femtovg / skia / software), и проверить скругленный `clip` с `drop-shadow` у каждой плитки
+- 🟡 Свой заголовок окна вместо системного (написано, не компилировалось): `no-frame: true`, полоса `titlebar-h` (30 px) сверху с перетаскиванием, двойным кликом (развернуть) и кнопками свернуть / развернуть / закрыть; всё остальное окно лежит в `app-body` ниже неё (поэтому в `MainWindow` вместо `root.height` теперь `root.body-h`, а меню трека вычитает `titlebar-h`). Края окна (`ResizeEdge`) запускают нативный ресайз. Код: `window_chrome.rs`, в `Cargo.toml` фича `unstable-winit-030`. Проверить вручную: перетаскивание и снап, ресайз за края, развёрнутое окно не закрывает панель задач, тень/граница окна
 - ✅ Перевести `README.md` на языки cs, de, es, fr, ja, pl, ru (обновить), uk, zh
 - ⬜ Добавить подробные скриншоты из готового приложения в каждый `README.md` каждого перевода (ещё не сделаны)
 
@@ -522,20 +523,5 @@ The owner builds through **GitHub Actions** and pastes build logs when something
 - Third-party code stays under its own licenses: `symphonia` (MPL-2.0), `cpal` (Apache-2.0), `ort` and ONNX Runtime (MIT / Apache-2.0), `rustfft`/`realfft`/`rubato` (MIT/Apache-2.0),
   Slint (see the license note in section 2), Open-Unmix (MIT, © 2019 Inria) with weights trained on MUSDB18-HQ (check the data/weights terms for any use beyond personal). Check each crate's current
   license and list them in a *Third-party components* section of the final README.
-
----
-
-### 11. Suggested order of work
-
-1. Investigate the Windows 7/8.1 question quickly (toolchain target, `ort`, Slint backend) and report what is realistic; confirm with the owner which Android features are must-have for version 1.
-2. Skeleton workspace + Windows CI that produces a runnable binary.
-3. Playback engine: folder scan, decode, `cpal` output, play/pause/seek/next/prev/shuffle/repeat, fades. Measure CPU.
-4. Slint UI for the library (Playlists / Albums / Tracks / Queues), search, sorting, drag reorder, player view with cover and quality badge.
-5. `AudioFx` chain (EQ, bass, treble, subsonic, normalization, mono, limiter) with unit tests; then the phase-vocoder speed control.
-6. Lyrics (tags + `.lrc`), track details, themes, languages.
-7. App lock.
-8. Stems (`ort`), model manager.
-9. Dropbox one-way download.
-10. Windows media integration (SMTC / media keys), portable zip and installer, user-facing README, release.
 
 Keep this file updated as decisions are made (platforms, crate versions, deviations from Android), so the next session starts from the current state.
