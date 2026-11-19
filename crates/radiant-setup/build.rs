@@ -1,7 +1,7 @@
 fn main() {
     // The window of the installer / uninstaller (ui/setup.slint). The logo is embedded into the exe.
     println!("cargo:rerun-if-changed=ui");
-    println!("cargo:rerun-if-changed=../radiant-ui/assets/logo.png");
+    println!("cargo:rerun-if-changed=../radiant-ui/assets/logo.svg");
     slint_build::compile("ui/setup.slint").unwrap();
 
     // Icon of the setup exe (Explorer, taskbar): the same icon as radiant.exe.
