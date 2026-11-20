@@ -3,6 +3,7 @@
 
 README.md / README_ru.md = the USER-facing readme (features, install, privacy). Do not put development notes there; they live here.
 The Android app (README_ru.md in the owner's repo) is the target: the PC version is done when it has the same features.
+Linux (Ubuntu, Mint, Debian, Fedora, Arch; AppImage, Flatpak, .deb/.rpm, AUR): see PROGRESS_Linux.md.
 
 ## Rules for the assistant
 - Owner writes Russian: reply in Russian. Code and comments in English. The owner does not write Rust: explain briefly and concretely.
