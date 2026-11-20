@@ -70,13 +70,16 @@ jobs:
             Write-Host "$($d.Name) SHA-256: $((Get-FileHash $dest -Algorithm SHA256).Hash.ToLower())"
 
             # License texts of the package -> the app folder (LICENSE-<name>.txt, ThirdPartyNotices-<name>.txt).
-            foreach ($f in @('LICENSE.txt', 'ThirdPartyNotices.txt')) {
-              $src = Join-Path $dir $f
-              $target = Join-Path 'payload' ($f -replace '\.txt$', "-$($d.Short).txt")
-              if (Test-Path $src) {
-                Copy-Item $src $target
+            foreach ($f in @('LICENSE', 'ThirdPartyNotices')) {
+              # Any extension (LICENSE, LICENSE.txt, LICENSE.md): packages are not consistent.
+              $src = Get-ChildItem $dir -File -Filter "$f*" | Select-Object -First 1
+              $target = Join-Path 'payload' "$f-$($d.Short).txt"
+              if ($src) {
+                Copy-Item $src.FullName $target
+                Write-Host "$($src.Name) -> $(Split-Path $target -Leaf)"
               } else {
                 Write-Warning "$f was not found in $($d.Package) $($d.Version): the installer will not contain it."
+                Get-ChildItem $dir -File | ForEach-Object { Write-Host "  in the package root: $($_.Name)" }
               }
             }
           }
