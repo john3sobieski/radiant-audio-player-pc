@@ -95,11 +95,9 @@ Radiant wird aktiv weiterentwickelt. Pläne, in keiner bestimmten Reihenfolge:
 - Verbesserungen an der Oberfläche;
 - mehr Oberflächensprachen;
 - Windows-Medientasten und System-Wiedergabesteuerung;
-- optionaler Einweg-Download deiner Musik aus dem Cloud-Speicher (Dropbox);
 - möglicherweise das direkte Herunterladen von Titeln von anderen Diensten;
 - Unterstützung eines NFC-Schlüssels zum Entsperren der App;
-- eine Linux-Version;
-- ein Installationsprogramm und mehr.
+- eine Linux-Version und mehr.
 
 Ideen und Fehlermeldungen sind in den [Issues](../../issues) willkommen.
 

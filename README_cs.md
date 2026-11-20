@@ -95,11 +95,9 @@ Radiant se aktivně vyvíjí. Plány, v libovolném pořadí:
 - vylepšení rozhraní;
 - více jazyků rozhraní;
 - multimediální klávesy Windows a systémové ovládání přehrávání;
-- volitelné jednosměrné stahování vaší hudby z cloudového úložiště (Dropbox);
 - případně stahování skladeb přímo z jiných služeb;
 - podpora NFC klíče pro odemykání aplikace;
-- verze pro Linux;
-- instalátor a další.
+- verze pro Linux a další.
 
 Nápady a hlášení chyb uvítáme v [Issues](../../issues).
 

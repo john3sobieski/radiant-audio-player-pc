@@ -95,11 +95,9 @@ Radiant est activement développé. Projets, sans ordre particulier :
 - améliorations de l'interface ;
 - plus de langues d'interface ;
 - touches multimédia de Windows et contrôles de lecture du système ;
-- téléchargement unidirectionnel facultatif de votre musique depuis un stockage cloud (Dropbox) ;
 - peut-être le téléchargement direct de morceaux depuis d'autres services ;
 - prise en charge d'une clé NFC pour déverrouiller l'application ;
-- une version Linux ;
-- un installateur et plus encore.
+- une version Linux et plus encore.
 
 Les idées et les rapports de bugs sont les bienvenus dans les [Issues](../../issues).
 

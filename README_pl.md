@@ -95,11 +95,9 @@ Radiant jest aktywnie rozwijany. Plany, bez określonej kolejności:
 - usprawnienia interfejsu;
 - więcej języków interfejsu;
 - klawisze multimedialne Windows i systemowe sterowanie odtwarzaniem;
-- opcjonalne jednokierunkowe pobieranie muzyki z magazynu w chmurze (Dropbox);
 - być może pobieranie utworów bezpośrednio z innych serwisów;
 - obsługa klucza NFC do odblokowywania aplikacji;
-- wersja na Linuksa;
-- instalator i więcej.
+- wersja na Linuksa i więcej.
 
 Pomysły i zgłoszenia błędów są mile widziane w [Issues](../../issues).
 

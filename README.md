@@ -95,11 +95,9 @@ Radiant is actively developed. Plans, in no particular order:
 - interface improvements;
 - more interface languages;
 - Windows media keys and system playback controls;
-- optional one-way download of your music from cloud storage (Dropbox);
 - possibly downloading tracks directly from other services;
 - support for an NFC key as a way to unlock the app;
-- a Linux version;
-- an installer and more.
+- a Linux version and more.
 
 Ideas and bug reports are welcome in the [Issues](../../issues).
 
