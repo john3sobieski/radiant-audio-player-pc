@@ -3,6 +3,7 @@ name = "radiant-ui"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
+authors.workspace = true
 build = "build.rs"
 
 [[bin]]

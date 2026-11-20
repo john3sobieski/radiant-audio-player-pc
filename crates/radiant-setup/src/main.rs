@@ -338,10 +338,6 @@ fn run_uninstaller(app_dir: PathBuf) {
                             ui.set_error(message.into());
                             ui.set_page(10);
                         }
-                        Err(uninstall::RemoveError::Other(message)) => {
-                            ui.set_notes(message.into());
-                            ui.set_page(12);
-                        }
                     }
                 });
             });

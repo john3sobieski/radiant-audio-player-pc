@@ -4089,8 +4089,8 @@ export component MainWindow inherits Window {
                         wrap: word-wrap;
                     }
                     if root.albums.length > 0 : ListView {
-                        changed viewport-y => {
-                            root.album-scroll-y = self.viewport-y;
+                        changed content-y => {
+                            root.album-scroll-y = self.content-y;
                             root.album-scrolling = true;
                         }
                         for r in root.album-rows : Rectangle {

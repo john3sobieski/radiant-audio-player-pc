@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::AtomicBool;
 
 use radiant_core::settings::{self, LANGUAGE_CODES, LANGUAGE_SYSTEM};
-use radiant_stems::{ModelState, ModelStore, Progress, StemError, MODEL};
+use radiant_stems::{ModelState, ModelStore, Progress, StemError};
 use winreg::enums::HKEY_CURRENT_USER;
 use winreg::RegKey;
 

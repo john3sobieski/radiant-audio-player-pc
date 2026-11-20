@@ -21,7 +21,6 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub enum RemoveError {
     /// Radiant (or a file of it) is in use: the user can close it and try again, nothing else was removed yet.
     InUse(String),
-    Other(String),
 }
 
 /// `%APPDATA%\Radiant`: settings, playlists, queues, app lock, Dropbox sign-in, the AI model.
