@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.john3sobieski.Radiant</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>PolyForm-Noncommercial-1.0.0</project_license>
+  <name>Radiant</name>
+  <developer id="io.github.john3sobieski">
+    <name>john3sobieski</name>
+  </developer>
+  <summary>Private music player for your local audio files</summary>
+  <description>
+    <p>Radiant plays the music stored on your computer. No ads, no accounts, no tracking: the network is used only for the optional Dropbox download and for downloading the AI model.</p>
+    <p>Features:</p>
+    <ul>
+      <li>MP3, FLAC, OGG, Opus, AAC, ALAC and WAV with accurate seeking and a Hi-Res / Lossless badge</li>
+      <li>12-band equalizer, presets, bass, treble, normalization and pitch-preserving speed from 0.5x to 3x</li>
+      <li>Albums, playlists and four queues, synced lyrics and a spectrum visualizer</li>
+      <li>Optional AI stem separation (vocals, drums, bass, other)</li>
+      <li>App lock with a code and a recovery phrase</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.john3sobieski.Radiant.desktop</launchable>
+  <url type="homepage">https://github.com/john3sobieski</url>
+  <provides>
+    <binary>radiant</binary>
+  </provides>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.0.0" date="2026-11-22"/>
+  </releases>
+</component>

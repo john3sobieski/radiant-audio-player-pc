@@ -51,6 +51,11 @@ fn walk(dir: &Path, out: &mut Vec<Track>, seen: &mut HashSet<PathBuf>) {
         Err(_) => return,
     }
     let Ok(entries) = fs::read_dir(dir) else { return };
+    let mut audio: Vec<PathBuf> = Vec::new();
+    let mut folders: Vec<PathBuf> = Vec::new();
+    // Lyrics files of this folder by (lower-case name without extension, "lrc" / "txt"): names are matched without
+    // regard to case (`Song.mp3` + `song.LRC`), which a case-sensitive Linux file system would not do by itself.
+    let mut lyrics: HashMap<(String, &'static str), PathBuf> = HashMap::new();
     for entry in entries.flatten() {
         // `DirEntry::file_type` does not follow symlinks (no loops on Windows).
         let Ok(ft) = entry.file_type() else { continue };
@@ -66,14 +71,37 @@ fn walk(dir: &Path, out: &mut Vec<Track>, seen: &mut HashSet<PathBuf>) {
             ft
         };
         if ft.is_dir() {
-            walk(&path, out, seen);
-        } else if ft.is_file() && is_audio_file(&path) {
-            out.push(track_from_path(&path));
+            folders.push(path);
+        } else if ft.is_file() {
+            if is_audio_file(&path) {
+                audio.push(path);
+            } else if let Some(kind) = lyrics_kind(&path) {
+                let stem = path.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+                lyrics.entry((stem, kind)).or_insert(path);
+            }
         }
+    }
+    for path in audio {
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let sidecar = lyrics.get(&(stem.clone(), "lrc")).or_else(|| lyrics.get(&(stem, "txt"))).cloned();
+        out.push(track_from_path(&path, sidecar));
+    }
+    for folder in folders {
+        walk(&folder, out, seen);
     }
 }
 
-fn track_from_path(path: &Path) -> Track {
+/// "lrc" or "txt" for a lyrics file (any letter case of the extension), else None.
+fn lyrics_kind(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_string_lossy().to_lowercase();
+    match ext.as_str() {
+        "lrc" => Some("lrc"),
+        "txt" => Some("txt"),
+        _ => None,
+    }
+}
+
+fn track_from_path(path: &Path, lyrics_path: Option<PathBuf>) -> Track {
     let meta = fs::metadata(path).ok();
     let format = path
         .extension()
@@ -92,7 +120,7 @@ fn track_from_path(path: &Path) -> Track {
             ..Default::default()
         },
         modified: meta.as_ref().and_then(|m| m.modified().ok()),
-        lyrics_path: sidecar_lyrics(path),
+        lyrics_path,
         ..Default::default()
     };
     read_audio_metadata(path, &mut track);
@@ -314,13 +342,6 @@ fn folder_cover(path: &Path) -> Option<Vec<u8>> {
 }
 
 /// `.lrc` wins over `.txt` (synced lyrics are better).
-fn sidecar_lyrics(track: &Path) -> Option<PathBuf> {
-    ["lrc", "txt"]
-        .iter()
-        .map(|ext| track.with_extension(ext))
-        .find(|p| p.is_file())
-}
-
 /// Groups by (album artist or artist, album). Unknown values stay `None`.
 pub fn group_albums(tracks: &[Track]) -> Vec<Album> {
     let mut map: BTreeMap<(Option<String>, Option<String>), Vec<PathBuf>> = BTreeMap::new();

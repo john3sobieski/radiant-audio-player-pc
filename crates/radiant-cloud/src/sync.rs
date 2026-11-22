@@ -1,6 +1,7 @@
 //! One-way download: the app folder in Dropbox -> `<music folder>/Dropbox`. Files that already exist are never
 //! touched (no overwrite, no delete); nothing in the cloud is changed.
 
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -82,6 +83,37 @@ fn part_path(target: &Path) -> PathBuf {
     target.with_file_name(name)
 }
 
+/// Is the file already here? Dropbox names are not case-sensitive, a Linux file system is: `Song.mp3` on the disk
+/// counts as `song.mp3` from Dropbox (otherwise the same song would be downloaded twice). Only the file name is
+/// compared this way, not the folders. Folder listings are read once.
+#[cfg_attr(windows, allow(dead_code))]
+#[derive(Default)]
+struct LocalNames {
+    dirs: HashMap<PathBuf, HashSet<String>>,
+}
+
+impl LocalNames {
+    fn has(&mut self, target: &Path) -> bool {
+        if target.exists() {
+            return true;
+        }
+        #[cfg(windows)]
+        {
+            false
+        }
+        #[cfg(not(windows))]
+        {
+            let (Some(dir), Some(name)) = (target.parent(), target.file_name()) else { return false };
+            let names = self.dirs.entry(dir.to_path_buf()).or_insert_with(|| {
+                fs::read_dir(dir)
+                    .map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_lowercase()).collect())
+                    .unwrap_or_default()
+            });
+            names.contains(&name.to_string_lossy().to_lowercase())
+        }
+    }
+}
+
 /// Copies the new files from Dropbox into `dest`. Blocks: run it on a worker thread. `cancel` stops it between
 /// reads (the half-written file is removed); the result then has `cancelled` set.
 pub fn sync(
@@ -102,9 +134,10 @@ pub fn sync(
 
     let mut summary = Summary::default();
     let mut todo: Vec<(RemoteFile, PathBuf)> = Vec::new();
+    let mut local = LocalNames::default();
     for file in remote.into_iter().filter(|f| wanted(&f.path)) {
         let Some(target) = local_path(dest, &file.path) else { continue };
-        if target.exists() {
+        if local.has(&target) {
             summary.present += 1;
         } else {
             todo.push((file, target));

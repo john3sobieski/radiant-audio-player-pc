@@ -115,7 +115,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential pkg-config cmake libasound2-dev libfontconfig1-dev
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config cmake libasound2-dev libfontconfig1-dev desktop-file-utils appstream
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
@@ -131,6 +131,11 @@ jobs:
           objdump -T target/x86_64-unknown-linux-gnu/release/radiant | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -n 1
       - name: Test
         run: cargo test --workspace --exclude radiant-setup --target x86_64-unknown-linux-gnu
+      # Package resources (PROGRESS_Linux.md stage L3): the checks print what a distribution or a software center would say.
+      - name: Validate desktop file and AppStream metadata
+        run: |
+          desktop-file-validate packaging/linux/io.github.john3sobieski.Radiant.desktop
+          appstreamcli validate --no-net packaging/linux/io.github.john3sobieski.Radiant.metainfo.xml
       - uses: actions/upload-artifact@v7
         with:
           name: radiant-linux-x86_64

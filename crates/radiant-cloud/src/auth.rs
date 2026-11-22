@@ -58,10 +58,30 @@ fn parse_callback(target: &str, state: &str) -> Callback {
 
 fn open_browser(url: &str) -> bool {
     #[cfg(windows)]
-    let started = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", url]).spawn();
+    {
+        std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok()
+    }
     #[cfg(not(windows))]
-    let started = std::process::Command::new("xdg-open").arg(url).spawn();
-    started.is_ok()
+    {
+        use std::process::Stdio;
+        // `xdg-open` itself may be missing (no xdg-utils) or fail at once (no browser / handler set up): both count as
+        // "could not open". A browser that is still starting after a second is taken as success.
+        let Ok(mut child) = std::process::Command::new("xdg-open").arg(url).stdout(Stdio::null()).stderr(Stdio::null()).spawn()
+        else {
+            return false;
+        };
+        for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(100));
+            if let Ok(Some(status)) = child.try_wait() {
+                return status.success();
+            }
+        }
+        // Still running: reap it in the background so no zombie process is left.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        true
+    }
 }
 
 fn reply(stream: &mut TcpStream, status: &str, body: &str) {
