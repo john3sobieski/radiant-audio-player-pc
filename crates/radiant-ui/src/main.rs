@@ -1921,10 +1921,12 @@ fn start_lock_watch(ctl: &Rc<LockCtl>, weak: &slint::Weak<MainWindow>) {
         return;
     }
     ctl.was_min.set(false);
+    window_chrome::take_minimize_click(); // an old click must not lock the app at once
     let (ctl2, weak2) = (ctl.clone(), weak.clone());
     ctl.watch.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(500), move || {
         let Some(ui) = weak2.upgrade() else { return };
-        let minimized = slint::ComponentHandle::window(&ui).is_minimized();
+        // On Wayland the compositor never reports "minimized", so the title bar button is counted too.
+        let minimized = slint::ComponentHandle::window(&ui).is_minimized() || window_chrome::take_minimize_click();
         if minimized && !ctl2.was_min.get() {
             lock_now(&ctl2, &weak2, &ui);
         }
@@ -2171,6 +2173,9 @@ fn wire_app_lock(ui: &MainWindow, ctl: &Rc<LockCtl>) {
 }
 
 fn main() -> Result<(), slint::PlatformError> {
+    // Wayland / X11: the app id ties the window to `io.github.john3sobieski.Radiant.desktop` (dock icon, grouping).
+    #[cfg(target_os = "linux")]
+    let _ = slint::set_xdg_app_id("io.github.john3sobieski.Radiant");
     let ui = MainWindow::new()?;
     window_chrome::wire(&ui);
 

@@ -1,10 +1,28 @@
 //! Custom title bar glue. The window has no Windows frame (`no-frame` in main.slint), so dragging, edge resizing
-//! and the minimize / maximize / close buttons are handled here. Drag and resize use winit through Slint.
+//! and the minimize / maximize / close buttons are handled here. Drag and resize use winit through Slint
+//! (native move / resize requests: they work on Windows, X11 and Wayland).
 
 use crate::MainWindow;
 use slint::winit_030::{winit, WinitWindowAccessor};
 use slint::ComponentHandle;
 use winit::window::ResizeDirection;
+
+/// Set when the minimize button of the title bar was pressed (not on Windows, where `is_minimized` is reliable).
+/// Wayland cannot tell an application that its window is minimized, so the app lock reads this flag instead.
+#[cfg(not(windows))]
+static MINIMIZE_CLICKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True once after the minimize button was pressed.
+pub fn take_minimize_click() -> bool {
+    #[cfg(not(windows))]
+    {
+        MINIMIZE_CLICKED.swap(false, std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(windows)]
+    {
+        false
+    }
+}
 
 pub fn wire(ui: &MainWindow) {
     let weak = ui.as_weak();
@@ -13,6 +31,8 @@ pub fn wire(ui: &MainWindow) {
         let weak = weak.clone();
         move || {
             if let Some(ui) = weak.upgrade() {
+                #[cfg(not(windows))]
+                MINIMIZE_CLICKED.store(true, std::sync::atomic::Ordering::Relaxed);
                 ui.window().set_minimized(true);
             }
         }
