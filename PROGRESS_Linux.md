@@ -66,11 +66,38 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 ## ROADMAP
 
 ### Этап L1. Сборка на Linux
-- ⬜ Список системных зависимостей для сборки и запуска (ALSA, xkbcommon, Wayland, fontconfig, D-Bus и т.д.), по сообщениям первой сборки
-- ⬜ Job `build-linux` в `.github/workflows/build.yml` на Ubuntu 22.04 (`cargo build --release -p radiant-ui`), артефакт — бинарник
+- 🟡 Список системных зависимостей для сборки и запуска: составлен по `Cargo.toml` и документации крейтов (таблица ниже), не по реальной сборке. После первой Linux-сборки сверить с её сообщениями и поставить ✅
+- ⬜ Job `build-linux` в `.github/workflows/build.yml` на Ubuntu 22.04 (`cargo build --release -p radiant-ui`), артефакт — бинарник. Только `-p radiant-ui`, а тесты `cargo test --workspace --exclude radiant-setup`: установщик на `winreg` и собирается только на Windows (проверить)
 - ⬜ `directml` только на Windows: `radiant-stems` с `default-features = false` на Linux (как именно, решить при правке `Cargo.toml`)
 - ⬜ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
 - ⬜ `cargo test` на Linux (тесты core, audio, dsp, stems)
+
+#### Системные зависимости (🟡 по документации крейтов; названия пакетов дистрибутивов проверить)
+Для сборки (нужны `-dev`/`-devel` пакеты, найденные через `pkg-config`):
+| Что | Зачем | Debian/Ubuntu / Fedora / Arch (проверить) |
+|---|---|---|
+| C/C++ компилятор, make | `ring` (rustls), `opusic-sys` | `build-essential` / `gcc gcc-c++ make` / `base-devel` |
+| `pkg-config` | поиск ALSA и fontconfig | `pkg-config` / `pkgconf-pkg-config` / `pkgconf` |
+| `cmake` | `opusic-sys` (libopus собирается из исходников, фича `bundled` включена по умолчанию) | `cmake` / `cmake` / `cmake` |
+| ALSA (заголовки) | `cpal` → `alsa-sys` | `libasound2-dev` / `alsa-lib-devel` / `alsa-lib` |
+| fontconfig (заголовки) | `fontique` (Slint) → `yeslogic-fontconfig-sys`, фича `dlopen` не включена, значит линкуется при сборке | `libfontconfig1-dev` / `fontconfig-devel` / `fontconfig` |
+
+Для запуска (X11/Wayland-библиотеки подгружаются через `dlopen`, на сборку не влияют, но должны быть в системе):
+| Что | Зачем |
+|---|---|
+| `libasound2` + звуковой сервер (PipeWire/PulseAudio с ALSA-слоем) | вывод звука (`cpal`) |
+| `libfontconfig1` и хотя бы один шрифт с кириллицей и CJK | текст интерфейса |
+| `libwayland-client`, `libxkbcommon` | Wayland (`winit`, `wayland-dlopen`) |
+| `libX11`, `libXcursor`, `libXi`, `libXrandr`, `libxkbcommon-x11`, `libxcb` | X11 (`x11-dl`, `xkbcommon-dl`) |
+| `libEGL` / `libGL` (Mesa) | рендерер `femtovg` (OpenGL) через `glutin` |
+| D-Bus сессии | трей Slint (`ksni`), портал (`ashpd`), позже MPRIS; Rust-реализация `zbus`, `libdbus` не нужна |
+| `xdg-desktop-portal` + бэкенд (gtk/gnome/kde) | диалог папки (`rfd`) |
+| `xdg-utils` (`xdg-open`) | браузер для входа в Dropbox |
+| `libonnxruntime.so` 1.22.x (CPU; позже CUDA/ROCm) | только стемы |
+
+Не нужны (проверить по первой сборке): `libseat`, `libinput`, `libgbm`, `libdrm`, `libudev` — это бэкенд `linuxkms`, в Slint он по умолчанию выключен. `ort` с `load-dynamic` ничего не линкует и не скачивает.
+
+Замечание: `Cargo.lock` в архиве устарел (там `rfd` 0.15.4 при `0.18` в `Cargo.toml`, у `radiant-ui` нет `radiant-cloud` и `souvlaki`, есть `skia-bindings`). Первая Linux-сборка пересоздаст его, итоговый список зависимостей может слегка измениться.
 
 ### Этап L2. Код под Linux
 - ⬜ **MPRIS**: медиа-клавиши и виджет плеера в GNOME/KDE (`media.rs`, ветка не-Windows; проверить, что `souvlaki` даёт MPRIS без HWND; метаданные, обложка, позиция)
