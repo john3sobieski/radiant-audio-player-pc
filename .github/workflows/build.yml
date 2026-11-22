@@ -149,7 +149,7 @@ jobs:
       - name: Collect the files for the AppImage
         env:
           ORT_VERSION: '1.22.1'
-          ORT_SHA256: ''
+          ORT_SHA256: '3907398e408dae083deb3439e8f643d9e26180ed614b29cc7d5ec342ce5ce06f'
         run: |
           set -euo pipefail
           mkdir -p payload ort
