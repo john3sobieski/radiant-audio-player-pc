@@ -11,6 +11,7 @@ pub mod id3;
 pub mod library;
 pub mod lyrics;
 pub mod models;
+pub mod path_serde;
 pub mod playlists;
 pub mod queues;
 pub mod settings;

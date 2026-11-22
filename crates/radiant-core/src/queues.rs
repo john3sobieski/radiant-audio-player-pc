@@ -15,6 +15,7 @@ const QUEUES_FILE: &str = "queues.json";
 #[serde(default)]
 pub struct QueueStore {
     /// Always `QUEUE_COUNT` lists after `normalize`.
+    #[serde(with = "crate::path_serde::vecvec")]
     pub queues: Vec<Vec<PathBuf>>,
 }
 

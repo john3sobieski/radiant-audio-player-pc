@@ -66,6 +66,7 @@ pub struct Album {
 pub struct Playlist {
     pub id: String,
     pub name: String,
+    #[serde(with = "crate::path_serde::vec")]
     pub track_paths: Vec<PathBuf>,
     pub created_at: u64,
     pub updated_at: u64,

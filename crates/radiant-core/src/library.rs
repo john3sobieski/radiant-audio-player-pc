@@ -6,7 +6,7 @@
 //! Paths are `PathBuf` everywhere: never assume UTF-8 file names (README section 4).
 
 use crate::models::{Album, AudioInfo, Track};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use symphonia::core::codecs::{
@@ -32,19 +32,41 @@ pub fn is_audio_file(path: &Path) -> bool {
 /// Recursively scans `root`. Run it off the UI thread. Result is sorted by path.
 pub fn scan(root: &Path) -> Vec<Track> {
     let mut out = Vec::new();
-    walk(root, &mut out);
+    walk(root, &mut out, &mut HashSet::new());
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out
 }
 
-fn walk(dir: &Path, out: &mut Vec<Track>) {
+/// `seen` holds the real paths of the folders already walked: on Linux symlinks are followed, and a link back to a
+/// parent folder must not make a loop.
+#[cfg_attr(windows, allow(unused_variables))]
+fn walk(dir: &Path, out: &mut Vec<Track>, seen: &mut HashSet<PathBuf>) {
+    #[cfg(not(windows))]
+    match fs::canonicalize(dir) {
+        Ok(real) => {
+            if !seen.insert(real) {
+                return;
+            }
+        }
+        Err(_) => return,
+    }
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
-        // `DirEntry::file_type` does not follow symlinks, so no loops.
+        // `DirEntry::file_type` does not follow symlinks (no loops on Windows).
         let Ok(ft) = entry.file_type() else { continue };
         let path = entry.path();
+        // Linux: a symlink to a file or folder counts as that file or folder (broken links are skipped).
+        #[cfg(not(windows))]
+        let ft = if ft.is_symlink() {
+            match fs::metadata(&path) {
+                Ok(m) => m.file_type(),
+                Err(_) => continue,
+            }
+        } else {
+            ft
+        };
         if ft.is_dir() {
-            walk(&path, out);
+            walk(&path, out, seen);
         } else if ft.is_file() && is_audio_file(&path) {
             out.push(track_from_path(&path));
         }

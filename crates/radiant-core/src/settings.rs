@@ -81,6 +81,7 @@ pub const LANGUAGE_CODES: [&str; 10] = ["en", "de", "ru", "uk", "zh", "ja", "fr"
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
+    #[serde(with = "crate::path_serde::opt")]
     pub music_folder: Option<PathBuf>,
     pub volume: f32,
     pub shuffle: bool,
@@ -95,6 +96,7 @@ pub struct AppSettings {
     /// Own speed / bass / treble / subsonic by track path (used in `EqMode::PerTrack`); default values are not stored.
     pub track_sound: BTreeMap<String, TrackSound>,
     /// Track order set by hand (dragging) in the "Manual order" sort mode.
+    #[serde(with = "crate::path_serde::vec")]
     pub manual_order: Vec<PathBuf>,
     /// Open section: 0 = Tracks, 1 = Albums, 2 = Playlists, 3 = Queues.
     pub section: u8,
