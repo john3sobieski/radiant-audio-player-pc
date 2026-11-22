@@ -127,7 +127,7 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 **1. AppImage**
 - ✅ Сборка в CI (job `linux`, шаги «Collect the files for the AppImage», «Build the AppImage», «Check the AppImage»; артефакт `radiant-linux-appimage-x86_64`, файл `Radiant-<версия>-x86_64.AppImage`). Внутри: `radiant`, `libonnxruntime.so` (рядом с бинарником, как ищет `runtime_library_path()`), `.desktop`, иконки, AppStream, лицензии. Не бандлим `libasound` и `libfontconfig`: они читают настройки системы (звуковой сервер, шрифты), берутся из системы.
 - ✅ `libonnxruntime.so` 1.22.1 закреплён по SHA-256 в `ORT_SHA256` (`build.yml`); источник: NuGet-пакет `Microsoft.ML.OnnxRuntime` (github.com/microsoft/onnxruntime был недоступен с 17–18.11.2026), файл `runtimes/linux-x64/native/libonnxruntime.so` в пакете найден, шаг «Collect the files» прошёл
-- 🟡 `appimagetool` 1.9.1 закреплён по SHA-256, но хеш взят не у разработчиков, а из двух сторонних страниц, которые его цитируют: при несовпадении сверить с хешем на странице релиза. Статический runtime, который `appimagetool` качает при сборке, пока не закреплён
+- ✅ `appimagetool` 1.9.1 закреплён по SHA-256, но хеш взят не у разработчиков, а из двух сторонних страниц, которые его цитируют: при несовпадении сверить с хешем на странице релиза. Статический runtime, который `appimagetool` качает при сборке, пока не закреплён
 - ⬜ Проверка на Ubuntu, Mint, Debian, Fedora, Arch; без FUSE (`--appimage-extract-and-run`). Статический runtime не требует `libfuse2` (по документации AppImage; проверить на Ubuntu 24.04+)
 - ⬜ Значок в доке на Wayland появится только после интеграции (AppImageLauncher и подобные): AppImage сам по себе `.desktop` в систему не кладёт
 
