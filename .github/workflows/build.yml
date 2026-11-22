@@ -1,4 +1,4 @@
-# Windows CI (job `windows`) and Linux CI (job `linux`, PROGRESS_Linux.md stage L1).
+# Windows CI (job `windows`) and Linux CI (job `linux`, PROGRESS_Linux.md stages L1 and L4).
 # Windows: runs tests, builds the release exe and packs it (with the two DLLs) into the installer.
 # The installer is the only artifact: there is no standalone radiant.exe or portable zip.
 # TODO: add a release job (installer + GitHub Release) when the app is usable.
@@ -115,7 +115,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential pkg-config cmake libasound2-dev libfontconfig1-dev desktop-file-utils appstream
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config cmake libasound2-dev libfontconfig1-dev desktop-file-utils appstream squashfs-tools
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
@@ -140,3 +140,122 @@ jobs:
         with:
           name: radiant-linux-x86_64
           path: target/x86_64-unknown-linux-gnu/release/radiant
+
+      # ---- AppImage (PROGRESS_Linux.md stage L4, item 1) ----
+      # libonnxruntime.so (CPU) comes from Microsoft's NuGet package, like the Windows DLLs: github.com/microsoft/onnxruntime
+      # was unreachable in mid-November 2026, NuGet was not. ORT_SHA256 is the SHA-256 of the exact libonnxruntime.so the app
+      # was tested with. While it is empty the step only prints the hash (and the job summary shows it): put it here after
+      # the first run. To update the library: change ORT_VERSION (the `ort` crate needs 1.22.x) and ORT_SHA256.
+      - name: Collect the files for the AppImage
+        env:
+          ORT_VERSION: '1.22.1'
+          ORT_SHA256: ''
+        run: |
+          set -euo pipefail
+          mkdir -p payload ort
+          curl -fsSL --retry 3 -o ort/ort.nupkg "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/${ORT_VERSION}"
+          unzip -q -o ort/ort.nupkg -d ort/pkg
+          lib=$(find ort/pkg -path '*runtimes/linux-x64/native/libonnxruntime.so' | head -n 1)
+          if [ -z "$lib" ]; then
+            echo "::error::libonnxruntime.so for linux-x64 was not found in the NuGet package. Package contents:"
+            find ort/pkg -type f | sort
+            exit 1
+          fi
+          cp "$lib" payload/libonnxruntime.so
+          # Not needed for the CPU provider, but it sits next to the library in the package: keep them together.
+          shared="$(dirname "$lib")/libonnxruntime_providers_shared.so"
+          if [ -f "$shared" ]; then cp "$shared" payload/libonnxruntime_providers_shared.so; fi
+          actual=$(sha256sum payload/libonnxruntime.so | cut -d' ' -f1)
+          echo "libonnxruntime.so ${ORT_VERSION} SHA-256: $actual"
+          echo "libonnxruntime.so ${ORT_VERSION} SHA-256: \`$actual\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$ORT_SHA256" ]; then
+            echo "::warning::ORT_SHA256 is empty, so libonnxruntime.so is not pinned. Put the SHA-256 printed above into build.yml."
+          elif [ "$actual" != "$ORT_SHA256" ]; then
+            echo "::error::libonnxruntime.so from NuGet has SHA-256 $actual, expected $ORT_SHA256. Update ORT_VERSION and ORT_SHA256 in build.yml together."
+            exit 1
+          fi
+          # License texts of the package: they travel with the library (the MIT license asks for it).
+          for f in LICENSE ThirdPartyNotices; do
+            src=$(find ort/pkg -maxdepth 1 -type f -iname "$f*" | head -n 1)
+            if [ -n "$src" ]; then
+              cp "$src" "payload/$f-ONNXRuntime.txt"
+            else
+              echo "::warning::$f was not found in the ONNX Runtime package."
+              find ort/pkg -maxdepth 1 -type f
+            fi
+          done
+
+      # appimagetool is pinned by version and SHA-256 (the hash was taken from two third-party pages that quote the release
+      # asset, not from upstream: if the check fails, compare with the digest on the release page before changing it).
+      # The static AppImage runtime that appimagetool downloads at build time is NOT pinned yet.
+      - name: Build the AppImage
+        env:
+          APPIMAGETOOL_VERSION: '1.9.1'
+          APPIMAGETOOL_SHA256: 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0'
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          set -euo pipefail
+          ID=io.github.john3sobieski.Radiant
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Radiant version: $VERSION"
+
+          curl -fsSL --retry 3 -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          echo "${APPIMAGETOOL_SHA256}  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+
+          # Only the program and libonnxruntime.so are bundled. ALSA and fontconfig stay the system's: they read the
+          # machine's own configuration (sound server plugins, fonts), and a bundled copy can break that.
+          A=Radiant.AppDir
+          rm -rf "$A"
+          install -Dm755 target/x86_64-unknown-linux-gnu/release/radiant "$A/usr/bin/radiant"
+          install -Dm755 payload/libonnxruntime.so "$A/usr/bin/libonnxruntime.so"
+          if [ -f payload/libonnxruntime_providers_shared.so ]; then
+            install -Dm755 payload/libonnxruntime_providers_shared.so "$A/usr/bin/libonnxruntime_providers_shared.so"
+          fi
+          install -Dm644 packaging/linux/$ID.desktop "$A/usr/share/applications/$ID.desktop"
+          install -Dm644 packaging/linux/$ID.metainfo.xml "$A/usr/share/metainfo/$ID.metainfo.xml"
+          mkdir -p "$A/usr/share/icons"
+          cp -r packaging/linux/icons/hicolor "$A/usr/share/icons/"
+          mkdir -p "$A/usr/share/doc/radiant"
+          cp LICENSE.md packaging/linux/THIRD-PARTY-NOTICES.md "$A/usr/share/doc/radiant/"
+          cp payload/LICENSE-ONNXRuntime.txt payload/ThirdPartyNotices-ONNXRuntime.txt "$A/usr/share/doc/radiant/" 2>/dev/null || true
+          # appimagetool wants the desktop file and the icon in the root of the AppDir, plus AppRun.
+          cp "$A/usr/share/applications/$ID.desktop" "$A/$ID.desktop"
+          cp packaging/linux/icons/hicolor/256x256/apps/$ID.png "$A/$ID.png"
+          cp packaging/linux/icons/hicolor/256x256/apps/$ID.png "$A/.DirIcon"
+          ln -s usr/bin/radiant "$A/AppRun"
+
+          mkdir -p dist
+          # -n: AppStream is already checked by the validate step above (appimagetool would run its own, stricter pass).
+          ARCH=x86_64 VERSION="$VERSION" ./appimagetool -n "$A" "dist/Radiant-${VERSION}-x86_64.AppImage"
+          ls -l dist
+
+      # No FUSE and no display on the runner: unpack the image and inspect it. Checks that nothing is missing next to the
+      # program and that neither file needs a glibc newer than the 2.35 of Ubuntu 22.04.
+      - name: Check the AppImage
+        run: |
+          set -euo pipefail
+          cd dist
+          chmod +x Radiant-*-x86_64.AppImage
+          ./Radiant-*-x86_64.AppImage --appimage-extract > /dev/null
+          find squashfs-root -maxdepth 3 | sort
+          desktop-file-validate squashfs-root/io.github.john3sobieski.Radiant.desktop
+          for f in squashfs-root/usr/bin/radiant squashfs-root/usr/bin/libonnxruntime.so; do
+            echo "== $f"
+            ldd "$f"
+            if ldd "$f" | grep -q 'not found'; then
+              echo "::error::$f has libraries that are not found (see the list above)"
+              exit 1
+            fi
+            max=$(objdump -T "$f" | { grep -oE 'GLIBC_[0-9.]+' || true; } | sort -Vu | tail -n 1 | sed 's/GLIBC_//')
+            echo "highest glibc symbol version in $f: ${max:-none}"
+            if [ -n "$max" ] && [ "$(printf '%s\n%s\n' "$max" 2.35 | sort -V | tail -n 1)" != "2.35" ]; then
+              echo "::error::$f needs glibc $max, newer than 2.35 (Ubuntu 22.04)"
+              exit 1
+            fi
+            objdump -T "$f" | { grep -oE 'GLIBCXX_[0-9.]+' || true; } | sort -Vu | tail -n 1
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: radiant-linux-appimage-x86_64
+          path: dist/Radiant-*-x86_64.AppImage
