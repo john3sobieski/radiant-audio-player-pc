@@ -95,10 +95,9 @@ fn save_settings(weak: &slint::Weak<MainWindow>, settings: &RefCell<AppSettings>
 // settings card is driven. `stem-state`: 0 not downloaded, 1 downloading, 2 checking the file, 3 ready,
 // 4 this build has no verified model address (download off).
 
-/// The models folder: `%APPDATA%/Radiant/models` (next to `settings.json`).
+/// The models folder: `%APPDATA%/Radiant/models` on Windows, `~/.local/share/Radiant/models` on Linux.
 fn stem_store() -> radiant_stems::ModelStore {
-    let dir = settings::settings_path().parent().map(|p| p.join("models")).unwrap_or_else(|| PathBuf::from("models"));
-    radiant_stems::ModelStore::new(dir)
+    radiant_stems::ModelStore::new(settings::models_dir())
 }
 
 /// Bytes -> whole megabytes (decimal, as file managers show them).

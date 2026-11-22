@@ -69,8 +69,8 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 - ✅ Список системных зависимостей для сборки и запуска (таблица ниже); сверен с реальной сборкой: бинарник напрямую требует только `libfontconfig.so.1`, `libasound.so.2`, `libgcc_s`, `libm`, `libc` (остальное из `ldd` — зависимости fontconfig), X11/Wayland/EGL подгружаются через `dlopen`
 - ✅ Job `linux` в `.github/workflows/build.yml` на Ubuntu 22.04: ставит пакеты из таблицы, собирает, печатает `ldd`/`NEEDED` и максимальную версию glibc, гонит тесты, артефакт `radiant-linux-x86_64` — бинарник. Сборка прошла. В CI собирается только `radiant-ui`, тесты идут без `radiant-setup`: установщик на `winreg` и собирается только на Windows
 - ✅ `directml` только на Windows: в `radiant-stems` фича больше не в `default`, `radiant-ui` включает её через `[target.'cfg(windows)'.dependencies.radiant-stems]`. На Windows результат тот же (проверить, что CI Windows зелёный). GPU на Linux (CUDA/ROCm, решение владельца: нужно) — отдельная задача в L2, пункт про стемы
-- ✅ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
-- ✅ Тесты на Linux в CI (core, audio, dsp, stems)
+- ⬜ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
+- ⬜ Тесты на Linux в CI (core, audio, dsp, stems)
 
 #### Системные зависимости (список подтверждён сборкой в CI; названия пакетов Fedora и Arch проверить)
 Для сборки (нужны `-dev`/`-devel` пакеты, найденные через `pkg-config`):
@@ -101,8 +101,8 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 
 ### Этап L2. Код под Linux
 - 🟡 **MPRIS** (написано, ждёт CI и проверки на системе: `playerctl status`, виджет GNOME/KDE, медиа-клавиши; `souvlaki` 0.8 с `use_zbus`, имя шины `org.mpris.MediaPlayer2.io.github.john3sobieski.Radiant`; если `zbus`-бэкенд капризничает, запасной вариант — бэкенд `libdbus`, но тогда нужен `libdbus-1-dev`; осталось: обложка через `file://`): медиа-клавиши и виджет плеера в GNOME/KDE (`media.rs`, ветка не-Windows; проверить, что `souvlaki` даёт MPRIS без HWND; метаданные, обложка, позиция)
-- ⬜ Папки данных: настройки в `~/.config`, модель (~90 МБ) и результаты стемов, возможно, в `~/.local/share` (решить вместе с владельцем); миграции не нужны, Linux-версия новая
-- ⬜ Стемы (в том числе GPU на Linux через CUDA/ROCm, владелец ответил «нужно»): `libonnxruntime.so` (CPU-сборка) там, где его ищет `runtime_library_path()` (рядом с бинарником) или через переменную окружения `ORT_DYLIB_PATH` (проверить, поддерживает ли её `ort` rc.10); замерить скорость на CPU и честно написать в README
+- 🟡 Папки данных: настройки, плейлисты, очереди, блокировка и токен Dropbox в `~/.config/Radiant` (или `$XDG_CONFIG_HOME`), модель Demucs в `~/.local/share/Radiant/models` (или `$XDG_DATA_HOME`), результаты стемов и скачанное из Dropbox рядом с музыкой, как на Windows (`settings::data_dir` / `models_dir`, тест на правила XDG); миграции не нужны
+- 🟡 Стемы: поиск `libonnxruntime.so` — сначала `ORT_DYLIB_PATH` (если файл есть; так можно подставить свою сборку с CUDA/ROCm), потом рядом с бинарником (`runtime_library_path()`). ⬜ Осталось: GPU на Linux (CUDA/ROCm: фича `ort`, `ExecutionProvider`, проверка результата как у DirectML; решить, какой именно провайдер и как поставлять), замерить скорость на CPU и честно написать в README
 - ⬜ Свой заголовок: перетаскивание, ресайз, развернуть на X11 и на Wayland (GNOME, KDE); на GNOME рамок и теней от системы нет
 - ⬜ Шрифты: кириллица, CJK (zh, ja) отрисовываются без «квадратиков» (зависит от системных шрифтов; во Flatpak от runtime)
 - ⬜ Иконка окна и `app_id`, чтобы док и панель задач показывали значок (как задать в Slint/winit, проверить)

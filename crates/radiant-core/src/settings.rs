@@ -300,6 +300,36 @@ pub fn settings_path() -> PathBuf {
     config_root().join(APP_DIR).join(SETTINGS_FILE)
 }
 
+/// Folder for big downloaded data (the Demucs model). Windows: next to `settings.json` (`%APPDATA%/Radiant`).
+/// Linux: `$XDG_DATA_HOME/Radiant`, by default `~/.local/share/Radiant`.
+pub fn data_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        config_root().join(APP_DIR)
+    }
+    #[cfg(not(windows))]
+    {
+        data_root(env::var_os("XDG_DATA_HOME"), env::var_os("HOME")).join(APP_DIR)
+    }
+}
+
+/// The Demucs model folder.
+pub fn models_dir() -> PathBuf {
+    data_dir().join("models")
+}
+
+/// XDG rule: `XDG_DATA_HOME` counts only when it is an absolute path.
+#[cfg(not(windows))]
+fn data_root(xdg: Option<std::ffi::OsString>, home: Option<std::ffi::OsString>) -> PathBuf {
+    if let Some(dir) = xdg.map(PathBuf::from).filter(|p| p.is_absolute()) {
+        return dir;
+    }
+    match home {
+        Some(home) => PathBuf::from(home).join(".local").join("share"),
+        None => PathBuf::from("."),
+    }
+}
+
 pub fn load() -> Result<AppSettings, String> {
     read_at(&settings_path())
 }
@@ -735,5 +765,17 @@ mod tests {
         assert!(read_at(&path).is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), "{not json");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn data_root_follows_xdg() {
+        use std::ffi::OsString;
+        let o = |s: &str| Some(OsString::from(s));
+        assert_eq!(data_root(o("/x/data"), o("/home/u")), PathBuf::from("/x/data"));
+        assert_eq!(data_root(o("relative"), o("/home/u")), PathBuf::from("/home/u/.local/share"));
+        assert_eq!(data_root(o(""), o("/home/u")), PathBuf::from("/home/u/.local/share"));
+        assert_eq!(data_root(None, o("/home/u")), PathBuf::from("/home/u/.local/share"));
+        assert_eq!(data_root(None, None), PathBuf::from("."));
     }
 }

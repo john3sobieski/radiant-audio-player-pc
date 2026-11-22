@@ -81,8 +81,13 @@ pub const RUNTIME_LIBRARY: &str = "onnxruntime.dll";
 #[cfg(not(windows))]
 pub const RUNTIME_LIBRARY: &str = "libonnxruntime.so";
 
-/// Full path where the program looks for the runtime library (next to the exe).
+/// Full path where the program looks for the runtime library: next to the exe. On Linux an existing file named by
+/// `ORT_DYLIB_PATH` wins (a user's own build, for example with CUDA or ROCm).
 pub fn runtime_library_path() -> Option<PathBuf> {
+    #[cfg(not(windows))]
+    if let Some(custom) = std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from).filter(|p| p.is_file()) {
+        return Some(custom);
+    }
     Some(std::env::current_exe().ok()?.parent()?.join(RUNTIME_LIBRARY))
 }
 
