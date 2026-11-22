@@ -67,8 +67,8 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 
 ### Этап L1. Сборка на Linux
 - 🟡 Список системных зависимостей для сборки и запуска: составлен по `Cargo.toml` и документации крейтов (таблица ниже), не по реальной сборке. После первой Linux-сборки сверить с её сообщениями и поставить ✅
-- ⬜ Job `build-linux` в `.github/workflows/build.yml` на Ubuntu 22.04 (`cargo build --release -p radiant-ui`), артефакт — бинарник. Только `-p radiant-ui`, а тесты `cargo test --workspace --exclude radiant-setup`: установщик на `winreg` и собирается только на Windows (проверить)
-- ⬜ `directml` только на Windows: `radiant-stems` с `default-features = false` на Linux (как именно, решить при правке `Cargo.toml`)
+- 🟡 Job `linux` (названа так, не `build-linux`) в `.github/workflows/build.yml` на Ubuntu 22.04: ставит пакеты из таблицы, собирает, печатает `ldd`/`NEEDED` и максимальную версию glibc (чтобы сверить таблицу и проверить 22.04), гонит тесты, артефакт `radiant-linux-x86_64` — бинарник. Сборка только `-p radiant-ui`, а тесты `cargo test --workspace --exclude radiant-setup`: установщик на `winreg` и собирается только на Windows (проверить)
+- 🟡 `directml` только на Windows: в `radiant-stems` фича больше не в `default`, `radiant-ui` включает её через `[target.'cfg(windows)'.dependencies.radiant-stems]`. На Windows результат тот же (проверить, что CI Windows зелёный). GPU на Linux (CUDA/ROCm, решение владельца: нужно) — отдельная задача в L2, пункт про стемы
 - ⬜ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
 - ⬜ `cargo test` на Linux (тесты core, audio, dsp, stems)
 
@@ -102,7 +102,7 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 ### Этап L2. Код под Linux
 - ⬜ **MPRIS**: медиа-клавиши и виджет плеера в GNOME/KDE (`media.rs`, ветка не-Windows; проверить, что `souvlaki` даёт MPRIS без HWND; метаданные, обложка, позиция)
 - ⬜ Папки данных: настройки в `~/.config`, модель (~90 МБ) и результаты стемов, возможно, в `~/.local/share` (решить вместе с владельцем); миграции не нужны, Linux-версия новая
-- ⬜ Стемы: `libonnxruntime.so` (CPU-сборка) там, где его ищет `runtime_library_path()` (рядом с бинарником) или через переменную окружения `ORT_DYLIB_PATH` (проверить, поддерживает ли её `ort` rc.10); замерить скорость на CPU и честно написать в README
+- ⬜ Стемы (в том числе GPU на Linux через CUDA/ROCm, владелец ответил «нужно»): `libonnxruntime.so` (CPU-сборка) там, где его ищет `runtime_library_path()` (рядом с бинарником) или через переменную окружения `ORT_DYLIB_PATH` (проверить, поддерживает ли её `ort` rc.10); замерить скорость на CPU и честно написать в README
 - ⬜ Свой заголовок: перетаскивание, ресайз, развернуть на X11 и на Wayland (GNOME, KDE); на GNOME рамок и теней от системы нет
 - ⬜ Шрифты: кириллица, CJK (zh, ja) отрисовываются без «квадратиков» (зависит от системных шрифтов; во Flatpak от runtime)
 - ⬜ Иконка окна и `app_id`, чтобы док и панель задач показывали значок (как задать в Slint/winit, проверить)

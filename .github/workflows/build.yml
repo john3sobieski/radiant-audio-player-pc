@@ -1,4 +1,5 @@
-# Windows CI: runs tests, builds the release exe and packs it (with the two DLLs) into the installer.
+# Windows CI (job `windows`) and Linux CI (job `linux`, PROGRESS_Linux.md stage L1).
+# Windows: runs tests, builds the release exe and packs it (with the two DLLs) into the installer.
 # The installer is the only artifact: there is no standalone radiant.exe or portable zip.
 # TODO: add a release job (installer + GitHub Release) when the app is usable.
 # TODO: separate legacy workflow for Windows 7/8.1 only if that stretch goal is pursued.
@@ -104,3 +105,33 @@ jobs:
         with:
           name: radiant-setup-windows-x64
           path: dist/Radiant-Setup.exe
+
+  # Linux build on the oldest supported Ubuntu LTS, so the binary runs on newer glibc (PROGRESS_Linux.md stage L1).
+  # The installer crate (radiant-setup) is Windows-only and is left out.
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config cmake libasound2-dev libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release
+        run: cargo build --release -p radiant-ui --target x86_64-unknown-linux-gnu
+      # The list of shared libraries the binary needs at run time: used to check the dependency table in PROGRESS_Linux.md.
+      - name: Show linked libraries
+        run: |
+          ls -l target/x86_64-unknown-linux-gnu/release/radiant
+          ldd target/x86_64-unknown-linux-gnu/release/radiant
+          objdump -p target/x86_64-unknown-linux-gnu/release/radiant | grep -E 'NEEDED' || true
+          objdump -T target/x86_64-unknown-linux-gnu/release/radiant | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -n 1
+      - name: Test
+        run: cargo test --workspace --exclude radiant-setup --target x86_64-unknown-linux-gnu
+      - uses: actions/upload-artifact@v7
+        with:
+          name: radiant-linux-x86_64
+          path: target/x86_64-unknown-linux-gnu/release/radiant

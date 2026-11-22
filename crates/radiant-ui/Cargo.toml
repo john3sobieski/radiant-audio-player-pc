@@ -31,6 +31,11 @@ slint-build = "1"
 # Puts assets/icon.ico into radiant.exe (Windows only, see build.rs).
 winresource = "0.1"
 
+# GPU stems through DirectML exist on Windows only (Linux: CPU, see PROGRESS_Linux.md).
+[target.'cfg(windows)'.dependencies.radiant-stems]
+path = "../radiant-stems"
+features = ["directml"]
+
 # Stage 13: Windows media controls (SMTC) and the window handle they need.
 [target.'cfg(windows)'.dependencies]
 souvlaki = "0.8"
