@@ -1,21 +1,20 @@
-//! Stage 13: Windows media controls (SMTC): media keys of the keyboard, the volume flyout, the lock screen and
+//! Stage 13: system media controls (Windows: SMTC; Linux: MPRIS over D-Bus): media keys of the keyboard, the volume flyout, the lock screen and
 //! Bluetooth headsets show the playing track and drive Radiant (play / pause / next / previous / seek).
 //!
 //! Everything lives on the UI thread: `init` is called once after the window exists, `set_track` / `set_state` are
 //! called from the engine-status handler (already on the UI thread). Button presses arrive on a Windows thread and
 //! are forwarded to the UI thread, where they call the same callbacks as the buttons on the screen (`invoke_*`).
-//! Not covered (yet): cover art in the Windows panel (needs a file or http URL, embedded covers have none).
-//! Other systems: empty stubs, nothing happens.
+//! Not covered (yet): cover art in the system panel (needs a file or http URL, embedded covers have none).
+//! Other systems (macOS): empty stubs, nothing happens.
 
 use crate::MainWindow;
 use radiant_audio::PlayState;
 use radiant_core::models::Track;
 use std::path::Path;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod imp {
     use super::*;
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use slint::ComponentHandle;
     use souvlaki::{
         MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig, SeekDirection,
@@ -35,16 +34,28 @@ mod imp {
         static MEDIA: RefCell<Option<Media>> = const { RefCell::new(None) };
     }
 
-    /// Creates the controls. Needs the window handle, so call it after the window is shown (see `start`).
-    /// Returns false when the handle is not there yet (the caller may try again).
-    fn init(ui: &MainWindow) -> bool {
+    /// Windows: SMTC needs the window handle, which exists only once the window is shown (None = try again later).
+    #[cfg(windows)]
+    fn platform_config(ui: &MainWindow) -> Option<PlatformConfig<'static>> {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         let handle = ui.window().window_handle();
         let hwnd = match handle.window_handle().map(|h| h.as_raw()) {
             Ok(RawWindowHandle::Win32(h)) => h.hwnd.get() as *mut std::ffi::c_void,
-            _ => return false,
+            _ => return None,
         };
-        let config = PlatformConfig { dbus_name: "radiant", display_name: "Radiant", hwnd: Some(hwnd) };
-        let Ok(mut controls) = MediaControls::new(config) else { return true }; // no SMTC (old Windows): keys only in the window
+        Some(PlatformConfig { dbus_name: "radiant", display_name: "Radiant", hwnd: Some(hwnd) })
+    }
+
+    /// Linux: MPRIS needs no window; the bus name is org.mpris.MediaPlayer2.<dbus_name> (the app-id, as Flatpak wants).
+    #[cfg(target_os = "linux")]
+    fn platform_config(_ui: &MainWindow) -> Option<PlatformConfig<'static>> {
+        Some(PlatformConfig { dbus_name: "io.github.john3sobieski.Radiant", display_name: "Radiant", hwnd: None })
+    }
+
+    /// Creates the controls. Returns false when the platform is not ready yet (the caller may try again).
+    fn init(ui: &MainWindow) -> bool {
+        let Some(config) = platform_config(ui) else { return false };
+        let Ok(mut controls) = MediaControls::new(config) else { return true }; // no SMTC / no D-Bus session: keys only in the window
         let weak = ui.as_weak();
         let attached = controls.attach(move |event| {
             let _ = weak.upgrade_in_event_loop(move |ui| handle_event(&ui, event));
@@ -58,7 +69,7 @@ mod imp {
         true
     }
 
-    /// Button of Windows -> the same action as the button on the screen.
+    /// Button of the system panel -> the same action as the button on the screen.
     fn handle_event(ui: &MainWindow, event: MediaControlEvent) {
         let playing = ui.get_is_playing();
         let secs = ui.get_duration_secs();
@@ -88,7 +99,7 @@ mod imp {
     }
 
     pub fn start(ui: &MainWindow) {
-        // The window handle exists only once the window is shown: try on the first loop turns, then give up quietly.
+        // Windows: the window handle exists only once the window is shown: try on the first loop turns, then give up quietly.
         let weak = ui.as_weak();
         let tries = std::rc::Rc::new(std::cell::Cell::new(0_u32));
         let timer = std::rc::Rc::new(slint::Timer::default());
@@ -125,7 +136,7 @@ mod imp {
         MEDIA.with(|m| {
             let mut m = m.borrow_mut();
             let Some(m) = m.as_mut() else { return };
-            // The status comes many times a second: tell Windows on a change, on a jump (seek) and every ~3 s.
+            // The status comes many times a second: tell the system on a change, on a jump (seek) and every ~3 s.
             let jumped = position_ms < m.last_pos_ms || position_ms > m.last_pos_ms + 6000;
             if m.last_state == Some(state) && !jumped && m.last_sent.elapsed() < Duration::from_secs(3) {
                 return;
@@ -144,7 +155,7 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 mod imp {
     use super::*;
     pub fn start(_ui: &MainWindow) {}

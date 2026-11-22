@@ -23,7 +23,7 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 | Fedora | .rpm | AppImage, Flatpak |
 | Arch | AUR | AppImage, Flatpak |
 
-Минимальная glibc: бинарник собирается на самом старом поддерживаемом Ubuntu LTS (22.04, проверить), чтобы AppImage и пакеты запускались и на более новых. Debian 11 и старше не поддерживаются (проверить, хватает ли им glibc, если понадобятся).
+Минимальная glibc: бинарник собирается на самом старом поддерживаемом Ubuntu LTS (22.04; по логу CI бинарнику нужна glibc не новее 2.35), чтобы AppImage и пакеты запускались и на более новых. Debian 11 и старше не поддерживаются (проверить, хватает ли им glibc, если понадобятся).
 
 ---
 
@@ -66,13 +66,13 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 ## ROADMAP
 
 ### Этап L1. Сборка на Linux
-- 🟡 Список системных зависимостей для сборки и запуска: составлен по `Cargo.toml` и документации крейтов (таблица ниже), не по реальной сборке. После первой Linux-сборки сверить с её сообщениями и поставить ✅
-- 🟡 Job `linux` (названа так, не `build-linux`) в `.github/workflows/build.yml` на Ubuntu 22.04: ставит пакеты из таблицы, собирает, печатает `ldd`/`NEEDED` и максимальную версию glibc (чтобы сверить таблицу и проверить 22.04), гонит тесты, артефакт `radiant-linux-x86_64` — бинарник. В CI собирается только `radiant-ui`, тесты идут без `radiant-setup`: установщик на `winreg` и собирается только на Windows (проверить)
-- 🟡 `directml` только на Windows: в `radiant-stems` фича больше не в `default`, `radiant-ui` включает её через `[target.'cfg(windows)'.dependencies.radiant-stems]`. На Windows результат тот же (проверить, что CI Windows зелёный). GPU на Linux (CUDA/ROCm, решение владельца: нужно) — отдельная задача в L2, пункт про стемы
-- ⬜ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
-- ⬜ Тесты на Linux в CI (core, audio, dsp, stems)
+- ✅ Список системных зависимостей для сборки и запуска (таблица ниже); сверен с реальной сборкой: бинарник напрямую требует только `libfontconfig.so.1`, `libasound.so.2`, `libgcc_s`, `libm`, `libc` (остальное из `ldd` — зависимости fontconfig), X11/Wayland/EGL подгружаются через `dlopen`
+- ✅ Job `linux` в `.github/workflows/build.yml` на Ubuntu 22.04: ставит пакеты из таблицы, собирает, печатает `ldd`/`NEEDED` и максимальную версию glibc, гонит тесты, артефакт `radiant-linux-x86_64` — бинарник. Сборка прошла. В CI собирается только `radiant-ui`, тесты идут без `radiant-setup`: установщик на `winreg` и собирается только на Windows
+- ✅ `directml` только на Windows: в `radiant-stems` фича больше не в `default`, `radiant-ui` включает её через `[target.'cfg(windows)'.dependencies.radiant-stems]`. На Windows результат тот же (проверить, что CI Windows зелёный). GPU на Linux (CUDA/ROCm, решение владельца: нужно) — отдельная задача в L2, пункт про стемы
+- ✅ Предупреждения и ошибки первой Linux-сборки: починить, не трогая Windows-ветки
+- ✅ Тесты на Linux в CI (core, audio, dsp, stems)
 
-#### Системные зависимости (🟡 по документации крейтов; названия пакетов дистрибутивов проверить)
+#### Системные зависимости (список подтверждён сборкой в CI; названия пакетов Fedora и Arch проверить)
 Для сборки (нужны `-dev`/`-devel` пакеты, найденные через `pkg-config`):
 | Что | Зачем | Debian/Ubuntu / Fedora / Arch (проверить) |
 |---|---|---|
@@ -90,7 +90,7 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 | `libwayland-client`, `libxkbcommon` | Wayland (`winit`, `wayland-dlopen`) |
 | `libX11`, `libXcursor`, `libXi`, `libXrandr`, `libxkbcommon-x11`, `libxcb` | X11 (`x11-dl`, `xkbcommon-dl`) |
 | `libEGL` / `libGL` (Mesa) | рендерер `femtovg` (OpenGL) через `glutin` |
-| D-Bus сессии | трей Slint (`ksni`), портал (`ashpd`), позже MPRIS; Rust-реализация `zbus`, `libdbus` не нужна |
+| D-Bus сессии | трей Slint (`ksni`), портал (`ashpd`), MPRIS (`souvlaki` с бэкендом `use_zbus`); всё на Rust (`zbus`), `libdbus` не нужна |
 | `xdg-desktop-portal` + бэкенд (gtk/gnome/kde) | диалог папки (`rfd`) |
 | `xdg-utils` (`xdg-open`) | браузер для входа в Dropbox |
 | `libonnxruntime.so` 1.22.x (CPU; позже CUDA/ROCm) | только стемы |
@@ -100,7 +100,7 @@ Radiant работает на **Ubuntu, Linux Mint, Debian, Fedora и Arch**. В
 Замечание: `Cargo.lock` в архиве устарел (там `rfd` 0.15.4 при `0.18` в `Cargo.toml`, у `radiant-ui` нет `radiant-cloud` и `souvlaki`, есть `skia-bindings`). Первая Linux-сборка пересоздаст его, итоговый список зависимостей может слегка измениться.
 
 ### Этап L2. Код под Linux
-- ⬜ **MPRIS**: медиа-клавиши и виджет плеера в GNOME/KDE (`media.rs`, ветка не-Windows; проверить, что `souvlaki` даёт MPRIS без HWND; метаданные, обложка, позиция)
+- 🟡 **MPRIS** (написано, ждёт CI и проверки на системе: `playerctl status`, виджет GNOME/KDE, медиа-клавиши; `souvlaki` 0.8 с `use_zbus`, имя шины `org.mpris.MediaPlayer2.io.github.john3sobieski.Radiant`; если `zbus`-бэкенд капризничает, запасной вариант — бэкенд `libdbus`, но тогда нужен `libdbus-1-dev`; осталось: обложка через `file://`): медиа-клавиши и виджет плеера в GNOME/KDE (`media.rs`, ветка не-Windows; проверить, что `souvlaki` даёт MPRIS без HWND; метаданные, обложка, позиция)
 - ⬜ Папки данных: настройки в `~/.config`, модель (~90 МБ) и результаты стемов, возможно, в `~/.local/share` (решить вместе с владельцем); миграции не нужны, Linux-версия новая
 - ⬜ Стемы (в том числе GPU на Linux через CUDA/ROCm, владелец ответил «нужно»): `libonnxruntime.so` (CPU-сборка) там, где его ищет `runtime_library_path()` (рядом с бинарником) или через переменную окружения `ORT_DYLIB_PATH` (проверить, поддерживает ли её `ort` rc.10); замерить скорость на CPU и честно написать в README
 - ⬜ Свой заголовок: перетаскивание, ресайз, развернуть на X11 и на Wayland (GNOME, KDE); на GNOME рамок и теней от системы нет
