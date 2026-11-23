@@ -8,7 +8,7 @@ license-file.workspace = true
 # Whole-file decode + resample to 44.1 kHz stereo (the same decoder as playback).
 radiant-audio = { path = "../radiant-audio" }
 # Streaming SHA-256 for the model file (the whole file never sits in memory).
-sha2 = "0.10"
+sha2 = "0.11"
 # Blocking HTTPS client for the one-time model download (rustls, no system TLS needed).
 ureq = { version = "2", default-features = false, features = ["tls"] }
 # STFT / iSTFT around the network (4096-point real FFT).
